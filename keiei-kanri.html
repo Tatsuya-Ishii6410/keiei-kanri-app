@@ -974,10 +974,24 @@ function projectHasMonth(p,mi){
   return false;
 }
 
-// その月に計上される金額。年次継続は12等分。全期間のときは案件の全額。
+// 開始月から終了月までの月数（両端を含む）。日付が無い・不正なら1ヶ月とみなす。
+// 例: 2026-04-01〜2027-02-28 → (2027-2026)*12 + (1-3) + 1 = 11ヶ月
+function projectMonthCount(p){
+  if(!p.start||!p.end)return 1;
+  const s=new Date(p.start),e=new Date(p.end);
+  if(isNaN(s.getTime())||isNaN(e.getTime()))return 1;
+  const n=(e.getFullYear()-s.getFullYear())*12+(e.getMonth()-s.getMonth())+1;
+  return n>0?n:1;
+}
+
+// その月に計上される金額。
+//   月別   : 月次継続と単発はその金額、年次継続は12等分
+//   全期間 : 単発と年次継続（年額）はそのまま、月次継続は金額×契約月数
 function projectMonthAmount(p,mi){
   const amount=p.amount||0;
-  if(mi===null)return amount;
+  if(mi===null){
+    return p.contract==='monthly'?amount*projectMonthCount(p):amount;
+  }
   return p.contract==='annual'?Math.round(amount/12):amount;
 }
 
