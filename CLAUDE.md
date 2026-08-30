@@ -14,7 +14,14 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 
 ## ファイル構成
 - keiei-kanri.html：アプリ本体（全機能がこの1ファイルに集約）
+- gas-code.js：Google Apps Script用のコード（GASエディタに貼り付けて使う。ブラウザからは読み込まれない）
+
+## データ保存
+- 保存先は Google スプレッドシート（projects / quotes / ledger / settings の4シート）
+  https://docs.google.com/spreadsheets/d/1gdtg7q3NwG3FQmWGc7lMpNEKROyvyRwuoIRKNSPsi4k/edit
+- keiei-kanri.html 先頭の定数 GAS_URL にGASウェブアプリのURLを設定して連携する
+- localStorageはバックアップ。GASの読み込みに失敗したときのフォールバックとして使う
+- gas-code.js を修正したら、GAS側で「デプロイを管理」→新バージョンとしてデプロイし直すこと
 
 ## 注意事項
-- データはブラウザのlocalStorageに保存されるため、HTMLの変更でデータは消えない
 - pushすればNetlifyが自動でデプロイする（1〜2分）

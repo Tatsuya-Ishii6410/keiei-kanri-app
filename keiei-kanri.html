@@ -39,8 +39,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .nav-btn:hover{background:var(--bg-secondary);color:var(--text-primary)}
 .nav-btn.active{background:var(--bg-secondary);color:var(--text-primary);font-weight:500}
 .topbar-right{display:flex;align-items:center;gap:10px}
-.save-indicator{font-size:12px;color:var(--green);opacity:0;transition:opacity 0.3s}
-.save-indicator.show{opacity:1}
+.save-indicator{font-size:12px;color:var(--text-muted);display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:color 0.2s}
+.save-indicator.ok{color:var(--green)}
+.save-indicator.sync{color:var(--text-secondary)}
+.save-indicator.err{color:var(--red)}
+.sync-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;margin-bottom:12px}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--text-muted);flex:none}
+.sync-dot.ok{background:var(--green)}
+.sync-dot.sync{background:var(--amber)}
+.sync-dot.err{background:var(--red)}
 .content{flex:1;padding:24px 20px}
 .page{display:none}
 .page.active{display:block}
@@ -164,6 +171,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   .form-row{grid-template-columns:1fr}
   .form-row.three{grid-template-columns:1fr 1fr}
   .nav-btn span{display:none}
+  .si-text{display:none}
   .topbar{padding:0 12px}
   .content{padding:16px 12px}
   .col-grid{grid-template-columns:1fr}
@@ -187,7 +195,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <button class="nav-btn" onclick="showPage('settings',this)">⚙️ <span>設定</span></button>
   </nav>
   <div class="topbar-right">
-    <span class="save-indicator" id="save-indicator">✓ 保存済み</span>
+    <span class="save-indicator" id="save-indicator" title="データの保存状態"></span>
   </div>
 </header>
 
@@ -430,6 +438,22 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div id="settings-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
   </div>
   <div class="card">
+    <div class="card-header"><span class="card-title">データ保存先（Google Sheets）</span></div>
+    <div class="sync-row">
+      <span class="sync-dot" id="gas-dot"></span>
+      <span id="gas-status">確認中...</span>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <button class="btn" onclick="reloadFromGAS()">🔄 スプレッドシートから再読み込み</button>
+      <button class="btn" onclick="pushToGAS(true)">☁️ 今すぐスプレッドシートへ保存</button>
+      <a class="btn" id="gas-sheet-link" href="https://docs.google.com/spreadsheets/d/1gdtg7q3NwG3FQmWGc7lMpNEKROyvyRwuoIRKNSPsi4k/edit" target="_blank" rel="noopener" style="text-decoration:none">📗 スプレッドシートを開く</a>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:10px">
+      データは Google スプレッドシート（projects / quotes / ledger / settings の4シート）に保存されます。<br>
+      同時に、このブラウザのlocalStorageにも控えを保存しています。読み込みに失敗したときは自動でそちらを使います。
+    </div>
+  </div>
+  <div class="card">
     <div class="card-header"><span class="card-title">データ管理</span></div>
     <div style="display:flex;gap:12px;flex-wrap:wrap">
       <button class="btn" onclick="exportData()">📥 データをエクスポート（JSON）</button>
@@ -437,7 +461,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <input type="file" id="import-input" accept=".json" style="display:none" onchange="importData(event)">
       <button class="btn danger" onclick="confirmClearData()">🗑️ 全データをリセット</button>
     </div>
-    <div style="font-size:12px;color:var(--text-muted);margin-top:10px">データはこのブラウザのlocalStorageに保存されます。バックアップはエクスポートで行ってください。</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:10px">エクスポートしたJSONはスプレッドシートとは別のバックアップとして保管できます。</div>
   </div>
 </div>
 
@@ -563,6 +587,19 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </div>
 
 <script>
+/* =====================================================================
+   Google Sheets（GAS）連携の設定
+   ---------------------------------------------------------------------
+   gas-code.js の中身をGASエディタに貼り付け、ウェブアプリとしてデプロイし、
+   発行された URL（https://script.google.com/macros/s/.../exec）を
+   下の GAS_URL に貼り付けてください。
+   空のままでも、これまで通りブラウザのlocalStorageだけで動作します。
+   ===================================================================== */
+const GAS_URL='';
+
+// 保存先スプレッドシート（表示用リンク）
+const SHEET_URL='https://docs.google.com/spreadsheets/d/1gdtg7q3NwG3FQmWGc7lMpNEKROyvyRwuoIRKNSPsi4k/edit';
+
 const STORAGE_KEY='bizapp_v1';
 const defaultState={
   company:{name:'',rep:'',zip:'',addr:'',tel:'',email:'',bank:'',account:'',invoice:'',payment:'発行日から30日以内',note:''},
@@ -597,27 +634,175 @@ let csvType='project';
 let csvParsedData=null;
 let csvParsedHeaders=[];
 
+function mergeState(parsed){
+  const base=JSON.parse(JSON.stringify(defaultState));
+  const s=Object.assign(base,parsed||{},{
+    company:Object.assign({},defaultState.company,(parsed&&parsed.company)||{}),
+    plan:Object.assign({},defaultState.plan,(parsed&&parsed.plan)||{})
+  });
+  if(!Array.isArray(s.projects))s.projects=[];
+  if(!Array.isArray(s.quotes))s.quotes=[];
+  if(!Array.isArray(s.ledger))s.ledger=[];
+  if(!Array.isArray(s.monthlyData)||s.monthlyData.length!==12)s.monthlyData=[0,0,0,0,0,0,0,0,0,0,0,0];
+  return s;
+}
+
 function loadState(){
   try{
     const saved=localStorage.getItem(STORAGE_KEY);
-    if(saved){
-      const parsed=JSON.parse(saved);
-      return Object.assign({},defaultState,parsed,{
-        company:Object.assign({},defaultState.company,parsed.company||{}),
-        plan:Object.assign({},defaultState.plan,parsed.plan||{})
-      });
-    }
+    if(saved)return mergeState(JSON.parse(saved));
   }catch(e){}
   return JSON.parse(JSON.stringify(defaultState));
 }
 
+function saveLocal(){
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(S));}catch(e){}
+}
+
+// データを変更したら必ずこれを呼ぶ。localStorageに控えを取り、GASへ書き込む。
 function saveState(){
+  saveLocal();
+  scheduleGasSave();
+}
+
+/* ===== Google Sheets 同期 ========================================== */
+
+let gasSaveTimer=null;
+let gasSaving=false;
+let gasPendingSave=false;
+
+function gasEnabled(){return typeof GAS_URL==='string'&&/^https:\/\/script\.google\.com\//.test(GAS_URL)}
+
+// state: 'off' | 'sync' | 'ok' | 'err'
+function setSyncStatus(state,detail){
+  const ind=document.getElementById('save-indicator');
+  const dot=document.getElementById('gas-dot');
+  const txt=document.getElementById('gas-status');
+  const map={
+    off:{cls:'',icon:'💾',short:'ローカル保存',long:'GAS_URLが未設定です。データはこのブラウザのlocalStorageにのみ保存されます。'},
+    sync:{cls:'sync',icon:'⟳',short:'同期中...',long:'スプレッドシートと同期しています...'},
+    ok:{cls:'ok',icon:'✓',short:'同期済み',long:'スプレッドシートと同期済みです。'},
+    err:{cls:'err',icon:'⚠',short:'同期エラー',long:'スプレッドシートに接続できませんでした。localStorageのデータで動作しています。'}
+  };
+  const m=map[state]||map.off;
+  if(ind){
+    ind.className='save-indicator '+m.cls;
+    ind.innerHTML=m.icon+' <span class="si-text">'+m.short+'</span>';
+    ind.title=m.long+(detail?'\n'+detail:'');
+  }
+  if(dot)dot.className='sync-dot '+m.cls;
+  if(txt)txt.textContent=m.long+(detail?'（'+detail+'）':'');
+}
+
+// GASのウェブアプリはCORSで弾かれることがあるため、失敗したらJSONPで取り直す
+function gasJsonp(url){
+  return new Promise((resolve,reject)=>{
+    const cb='gasCb_'+Date.now()+'_'+Math.floor(Math.random()*10000);
+    const s=document.createElement('script');
+    const timer=setTimeout(()=>{cleanup();reject(new Error('タイムアウトしました'))},20000);
+    function cleanup(){clearTimeout(timer);delete window[cb];if(s.parentNode)s.parentNode.removeChild(s);}
+    window[cb]=d=>{cleanup();resolve(d);};
+    s.onerror=()=>{cleanup();reject(new Error('スクリプトの読み込みに失敗しました'));};
+    s.src=url+(url.indexOf('?')>=0?'&':'?')+'callback='+cb;
+    document.body.appendChild(s);
+  });
+}
+
+async function gasLoadRaw(){
+  const url=GAS_URL+'?action=load';
   try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(S));
-    const ind=document.getElementById('save-indicator');
-    ind.classList.add('show');
-    setTimeout(()=>ind.classList.remove('show'),2000);
-  }catch(e){}
+    const res=await fetch(url,{method:'GET',redirect:'follow'});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    return await res.json();
+  }catch(e){
+    return await gasJsonp(url);
+  }
+}
+
+function isRemoteEmpty(d){
+  if(!d)return true;
+  const n=(d.projects||[]).length+(d.quotes||[]).length+(d.ledger||[]).length;
+  return n===0;
+}
+
+// アプリ起動時にスプレッドシートから読み込む
+async function loadFromGAS(){
+  if(!gasEnabled()){setSyncStatus('off');return;}
+  setSyncStatus('sync');
+  let json;
+  try{
+    json=await gasLoadRaw();
+  }catch(e){
+    setSyncStatus('err',e.message);return;
+  }
+  if(!json||!json.ok){
+    setSyncStatus('err',(json&&json.error)||'応答が不正です');return;
+  }
+  if(isRemoteEmpty(json.data)){
+    // シートがまだ空のときは、手元のデータを初期投入する（消さない）
+    await pushToGAS();
+    refreshAll();
+    return;
+  }
+  S=mergeState(json.data);
+  saveLocal();
+  setSyncStatus('ok');
+  refreshAll();
+}
+
+function reloadFromGAS(){
+  if(!gasEnabled()){alert('GAS_URL が設定されていません。keiei-kanri.html の先頭にウェブアプリURLを貼り付けてください。');return;}
+  if(!confirm('スプレッドシートの内容を読み込み、画面のデータを置き換えます。よろしいですか？'))return;
+  loadFromGAS();
+}
+
+function scheduleGasSave(){
+  if(!gasEnabled()){setSyncStatus('off');return;}
+  setSyncStatus('sync');
+  clearTimeout(gasSaveTimer);
+  gasSaveTimer=setTimeout(()=>{pushToGAS();},600);
+}
+
+// 現在の全データをスプレッドシートへ書き込む
+async function pushToGAS(manual){
+  if(!gasEnabled()){
+    setSyncStatus('off');
+    if(manual)alert('GAS_URL が設定されていません。keiei-kanri.html の先頭にウェブアプリURLを貼り付けてください。');
+    return;
+  }
+  if(gasSaving){gasPendingSave=true;return;}
+  gasSaving=true;
+  setSyncStatus('sync');
+  try{
+    // Content-Type を text/plain にしてプリフライト(OPTIONS)を回避する
+    const res=await fetch(GAS_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'save',data:S}),
+      redirect:'follow'
+    });
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const json=await res.json();
+    if(!json.ok)throw new Error(json.error||'保存に失敗しました');
+    setSyncStatus('ok');
+  }catch(e){
+    setSyncStatus('err',e.message);
+    if(manual)alert('スプレッドシートへの保存に失敗しました。\n'+e.message);
+  }finally{
+    gasSaving=false;
+    if(gasPendingSave){gasPendingSave=false;pushToGAS();}
+  }
+}
+
+// 表示中のページを描画し直す
+function refreshAll(){
+  const active=document.querySelector('.page.active');
+  const id=active?active.id.replace('page-',''):'dashboard';
+  updateDashboard();
+  if(id==='projects')renderProjects();
+  if(id==='quotes')renderQuotes();
+  if(id==='ledger')renderLedger();
+  if(id==='settings')loadSettingsForm();
 }
 
 function showPage(p,btn){
@@ -1027,9 +1212,9 @@ function importData(event){
   reader.onload=function(e){
     try{
       const parsed=JSON.parse(e.target.result);
-      if(!confirm('現在のデータを上書きしてインポートしますか？'))return;
-      S=Object.assign({},defaultState,parsed,{company:Object.assign({},defaultState.company,parsed.company||{}),plan:Object.assign({},defaultState.plan,parsed.plan||{})});
-      saveState();alert('インポートが完了しました。');updateDashboard();
+      if(!confirm('現在のデータを上書きしてインポートしますか？（スプレッドシートも上書きされます）'))return;
+      S=mergeState(parsed);
+      saveState();alert('インポートが完了しました。');refreshAll();
     }catch(err){alert('インポートに失敗しました。');}
     event.target.value='';
   };
@@ -1037,9 +1222,11 @@ function importData(event){
 }
 
 function confirmClearData(){
-  if(!confirm('全データをリセットしますか？この操作は取り消せません。'))return;
-  localStorage.removeItem(STORAGE_KEY);S=JSON.parse(JSON.stringify(defaultState));
-  alert('データをリセットしました。');updateDashboard();
+  if(!confirm('全データをリセットしますか？スプレッドシートの内容も初期状態に上書きされます。この操作は取り消せません。'))return;
+  try{localStorage.removeItem(STORAGE_KEY);}catch(e){}
+  S=JSON.parse(JSON.stringify(defaultState));
+  saveState();
+  alert('データをリセットしました。');refreshAll();
 }
 
 // ===== CSV IMPORT =====
@@ -1260,7 +1447,11 @@ function csvDownloadTemplate(type){
 // INIT
 document.getElementById('month-select').value=new Date().getMonth();
 document.getElementById('l-date').value=today();
+document.getElementById('gas-sheet-link').href=SHEET_URL;
+setSyncStatus(gasEnabled()?'sync':'off');
 updateDashboard();
+// 起動時にスプレッドシートから読み込む（失敗時はlocalStorageのデータのまま動く）
+loadFromGAS();
 </script>
 </body>
 </html>
