@@ -16,6 +16,11 @@
  *     →「デプロイ」を押してウェブアプリURLをコピー
  *  5. keiei-kanri.html の先頭にある GAS_URL にそのURLを貼り付け
  *
+ * 【ドライブ経費取込を使う場合】
+ *  「プロジェクトの設定」→「スクリプト プロパティ」で
+ *  ANTHROPIC_API_KEY に Anthropic の APIキー（sk-ant-...）を登録する。
+ *  キーはこのファイルにも公開HTMLにも書かないこと。
+ *
  * 【コードを直したあと】
  *  必ず「デプロイ」→「デプロイを管理」→ 鉛筆アイコン →
  *  バージョン「新バージョン」→「デプロイ」でURLを更新すること
@@ -76,6 +81,27 @@ function doGet(e) {
  *   アプリ側は Content-Type: text/plain で送っています。
  */
 function doPost(e) {
+  var body;
+  try {
+    var raw = (e && e.postData && e.postData.contents) || (e && e.parameter && e.parameter.payload) || '';
+    if (!raw) throw new Error('リクエストが空です');
+    body = JSON.parse(raw);
+  } catch (err) {
+    return respond_({ ok: false, error: String(err && err.message || err) }, '');
+  }
+  var action = body.action || 'save';
+
+  // ドライブ連携はスプレッドシートに書かないのでロックを取らない
+  try {
+    if (action === 'driveList') return respond_({ ok: true, files: driveList_() }, '');
+    if (action === 'driveExtract') return respond_(driveExtract_(body.fileId), '');
+    if (action === 'driveProcessed') return respond_({ ok: true, renamed: driveMarkProcessed_(body.fileIds) }, '');
+  } catch (err) {
+    return respond_({ ok: false, error: String(err && err.message || err) }, '');
+  }
+
+  if (action !== 'save') return respond_({ ok: false, error: '不明なaction: ' + action }, '');
+
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(25000);
@@ -83,11 +109,6 @@ function doPost(e) {
     return respond_({ ok: false, error: '他の書き込み処理と競合しました。少し待って再試行してください。' }, '');
   }
   try {
-    var raw = (e && e.postData && e.postData.contents) || (e && e.parameter && e.parameter.payload) || '';
-    if (!raw) throw new Error('リクエストが空です');
-    var body = JSON.parse(raw);
-    var action = body.action || 'save';
-    if (action !== 'save') throw new Error('不明なaction: ' + action);
     if (!body.data) throw new Error('dataがありません');
     writeAll_(body.data);
     return respond_({ ok: true, savedAt: new Date().toISOString() }, '');
@@ -352,6 +373,176 @@ function ensureSheets_(ss) {
     sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     sh.setFrozenRows(1);
   });
+}
+
+
+// ===== Google ドライブ経費取込 ==================================
+// 専用フォルダ内のPDF・画像をAIで読み取り、経費データとして返す。
+// Anthropic APIキーはスクリプト プロパティに保存する（コードには書かない）:
+//   GASエディタ左の「プロジェクトの設定」→「スクリプト プロパティ」→
+//   プロパティ名 ANTHROPIC_API_KEY、値に sk-ant-... を設定
+var EXPENSE_FOLDER_ID = '1YLUeZuWj6QAVWaXAOLaKE5sZXz4NQhxA'; // アスリンク_経費取込フォルダ
+var PROCESSED_PREFIX = '処理済み_';
+var ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+var ANTHROPIC_VERSION = '2023-06-01';
+var MAX_FILE_BYTES = 4 * 1024 * 1024; // 1ファイル4MBまで
+
+// AIに選ばせる区分と、アプリ側の区分名の対応
+var CATEGORY_MAP = {
+  '家賃': '家賃（レンタルオフィス利用料）',
+  '家賃（レンタルオフィス利用料）': '家賃（レンタルオフィス利用料）',
+  '通信料': '通信料',
+  'システム利用料': 'システム利用料',
+  '交通費': '交通費',
+  '交際費': '交際費',
+  'その他経費': 'その他経費'
+};
+
+var EXTRACT_PROMPT =
+  'このレシート/領収書/請求書から日付・金額・店名・支払内容を抽出してJSON形式で返してください。\n' +
+  '{"date":"YYYY-MM-DD","amount":数値,"desc":"摘要","category":"区分"}\n' +
+  '区分は家賃/通信料/システム利用料/交通費/交際費/その他経費から最適なものを選んでください。\n' +
+  'JSONのみ返してください。';
+
+/** APIキーが設定されているか確認する（GASエディタから手動実行）。 */
+function checkApiKey() {
+  var key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
+  Logger.log(key ? 'ANTHROPIC_API_KEY は設定済みです（先頭: ' + key.slice(0, 8) + '...）'
+                 : 'ANTHROPIC_API_KEY が未設定です。プロジェクトの設定から追加してください。');
+}
+
+function isSupportedMime_(mime) {
+  return mime === 'application/pdf' || mime === 'image/jpeg' || mime === 'image/png'
+    || mime === 'image/gif' || mime === 'image/webp';
+}
+
+/** 取込フォルダ内の対象ファイル一覧を返す。 */
+function driveList_() {
+  var folder = DriveApp.getFolderById(EXPENSE_FOLDER_ID);
+  var it = folder.getFiles();
+  var out = [];
+  while (it.hasNext()) {
+    var f = it.next();
+    if (!isSupportedMime_(f.getMimeType())) continue;
+    var name = f.getName();
+    out.push({
+      id: f.getId(),
+      name: name,
+      mimeType: f.getMimeType(),
+      size: f.getSize(),
+      url: f.getUrl(),
+      processed: name.indexOf(PROCESSED_PREFIX) === 0
+    });
+  }
+  out.sort(function (a, b) { return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0); });
+  return out;
+}
+
+/** 1ファイルをAIで読み取って経費データにする。 */
+function driveExtract_(fileId) {
+  var key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
+  if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY がスクリプト プロパティに設定されていません' };
+  if (!fileId) return { ok: false, error: 'fileId がありません' };
+
+  var file = DriveApp.getFileById(fileId);
+  var mime = file.getMimeType();
+  if (!isSupportedMime_(mime)) return { ok: false, error: '対応していない形式です: ' + mime };
+
+  var bytes = file.getBlob().getBytes();
+  if (bytes.length > MAX_FILE_BYTES) {
+    return { ok: false, error: 'ファイルが大きすぎます（' + Math.round(bytes.length / 1024 / 1024) + 'MB / 上限4MB）' };
+  }
+
+  var source = { type: 'base64', media_type: mime, data: Utilities.base64Encode(bytes) };
+  var block = (mime === 'application/pdf')
+    ? { type: 'document', source: source }
+    : { type: 'image', source: source };
+
+  var payload = {
+    model: ANTHROPIC_MODEL,
+    max_tokens: 1024,
+    messages: [{ role: 'user', content: [block, { type: 'text', text: EXTRACT_PROMPT }] }]
+  };
+
+  var res;
+  try {
+    res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+  } catch (err) {
+    return { ok: false, error: 'APIに接続できませんでした: ' + (err && err.message || err) };
+  }
+
+  var code = res.getResponseCode();
+  var body;
+  try { body = JSON.parse(res.getContentText()); } catch (err) { body = null; }
+  if (code !== 200) {
+    return { ok: false, error: 'API エラー ' + code + ': ' + (body && body.error && body.error.message || res.getContentText().slice(0, 200)) };
+  }
+
+  var text = '';
+  (body.content || []).forEach(function (c) { if (c.type === 'text') text += c.text; });
+  var parsed = parseJsonLoose_(text);
+  if (!parsed) return { ok: false, error: 'AIの応答をJSONとして読み取れませんでした' };
+
+  return {
+    ok: true,
+    data: {
+      date: normalizeDate_(parsed.date),
+      amount: num_(parsed.amount),
+      desc: str_(parsed.desc),
+      type: normalizeCategory_(parsed.category)
+    }
+  };
+}
+
+/** 登録済みファイルに「処理済み_」を付けてリネームする。 */
+function driveMarkProcessed_(fileIds) {
+  var renamed = 0;
+  (fileIds || []).forEach(function (id) {
+    try {
+      var f = DriveApp.getFileById(id);
+      var name = f.getName();
+      if (name.indexOf(PROCESSED_PREFIX) === 0) return;
+      f.setName(PROCESSED_PREFIX + name);
+      renamed++;
+    } catch (err) {
+      // 1件失敗しても他のリネームは続ける
+    }
+  });
+  return renamed;
+}
+
+/** ```json ... ``` などで囲まれていても中身のJSONを取り出す。 */
+function parseJsonLoose_(text) {
+  if (!text) return null;
+  var s = String(text).replace(/```json/gi, '').replace(/```/g, '').trim();
+  var i = s.indexOf('{'), j = s.lastIndexOf('}');
+  if (i < 0 || j <= i) return null;
+  try { return JSON.parse(s.substring(i, j + 1)); } catch (err) { return null; }
+}
+
+/** いろいろな表記の日付を YYYY-MM-DD に寄せる。読めなければ空文字。 */
+function normalizeDate_(v) {
+  var s = str_(v);
+  var m = /(\d{4})[-\/年.](\d{1,2})[-\/月.](\d{1,2})/.exec(s);
+  if (!m) return '';
+  return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+}
+
+/** AIが返した区分をアプリの区分名に寄せる。該当なしは「その他経費」。 */
+function normalizeCategory_(v) {
+  var s = str_(v);
+  if (CATEGORY_MAP[s]) return CATEGORY_MAP[s];
+  var keys = Object.keys(CATEGORY_MAP);
+  for (var i = 0; i < keys.length; i++) {
+    if (s && s.indexOf(keys[i]) >= 0) return CATEGORY_MAP[keys[i]];
+  }
+  return 'その他経費';
 }
 
 

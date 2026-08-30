@@ -54,3 +54,13 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   ledger シートの fixedCostId 列は消さないこと
 - 自動追加された収支を削除しても、次に反映したとき再作成される。
   止めたいときは固定費を無効にするか終了月を設定する
+
+## ドライブ経費取込
+- 専用フォルダID：1YLUeZuWj6QAVWaXAOLaKE5sZXz4NQhxA（アスリンク_経費取込フォルダ）
+- 処理済みファイルは「処理済み_」プレフィックスでリネーム
+- Drive操作・AI読み取り・リネームはすべてGAS側で実行する
+  （ブラウザからDrive APIやAnthropic APIは呼べない。APIキーが公開されるため）
+- Anthropic APIキーはGASのスクリプト プロパティ ANTHROPIC_API_KEY に保存。
+  gas-code.js にも keiei-kanri.html にも書かないこと
+- 使用モデル：claude-sonnet-4-6（PDFは type:'document'、画像は type:'image'）
+- GASのaction：driveList / driveExtract / driveProcessed

@@ -320,6 +320,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="section-header">
     <h1 class="section-title">収支管理</h1>
     <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn" onclick="openDriveImportModal()">☁️ ドライブから取込</button>
       <button class="btn" onclick="openFixedCostsModal()">🔁 固定費管理</button>
       <button class="btn primary" onclick="openLedgerModal()">+ 入力</button>
     </div>
@@ -584,6 +585,30 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-create-quote')">キャンセル</button>
     <button class="btn primary" onclick="createQuote()">📄 作成してプレビュー</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-drive-import">
+<div class="modal wide">
+  <div class="modal-header"><span class="modal-title">ドライブから経費を取込</span><button class="btn sm" onclick="closeModal('modal-drive-import')">✕</button></div>
+  <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
+    取込フォルダ <a href="https://drive.google.com/drive/folders/1YLUeZuWj6QAVWaXAOLaKE5sZXz4NQhxA" target="_blank" rel="noopener">アスリンク_経費取込フォルダ</a> の
+    PDF・画像をAIで読み取り、経費として登録します。<br>
+    登録したファイルは「処理済み_」を付けてリネームされ、次回以降は初期状態で選択されません。
+  </div>
+  <div class="actions-row" style="justify-content:flex-start;margin-top:0">
+    <button class="btn primary" id="drive-load-btn" onclick="driveLoadFiles()">📂 フォルダを確認する</button>
+  </div>
+  <div id="drive-msg" style="margin:12px 0"></div>
+  <div id="drive-file-list"></div>
+  <div class="actions-row" style="justify-content:flex-start">
+    <button class="btn primary" id="drive-extract-btn" onclick="driveExtractSelected()" style="display:none">🤖 選択したファイルをAIで読み取る</button>
+  </div>
+  <div id="drive-result"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-drive-import')">閉じる</button>
+    <button class="btn success" id="drive-register-btn" onclick="driveRegister()" style="display:none">✓ 収支に登録する</button>
   </div>
 </div>
 </div>
@@ -1485,6 +1510,171 @@ function deleteQuote(id){
 function previewQuoteById(id){
   const q=S.quotes.find(x=>x.id===id);if(!q)return;
   currentQuoteData=q;showPreviewModal();
+}
+
+/* ===== Googleドライブからの経費取込 ==================================
+   専用フォルダ内のPDF・画像をGAS経由でAIに読み取らせ、経費として登録する。
+   Driveの操作もAI呼び出しもGAS側で行う（APIキーをブラウザに置かないため）。
+   ===================================================================== */
+
+let driveFiles=[];    // フォルダ内のファイル一覧
+let driveRows=[];     // 読み取り結果 {fileId,fileName,date,type,desc,amount,error}
+
+// GASへPOSTして応答をそのまま返す（ok判定は呼び出し側で行う）
+async function gasCall(body){
+  if(!gasEnabled())throw new Error('GAS_URL が設定されていません');
+  const res=await fetch(GAS_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(body),
+    redirect:'follow'
+  });
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  return await res.json();
+}
+
+function driveMsg(html){document.getElementById('drive-msg').innerHTML=html||''}
+
+function openDriveImportModal(){
+  driveFiles=[];driveRows=[];
+  document.getElementById('drive-file-list').innerHTML='';
+  document.getElementById('drive-result').innerHTML='';
+  document.getElementById('drive-extract-btn').style.display='none';
+  document.getElementById('drive-register-btn').style.display='none';
+  driveMsg('');
+  openModal('modal-drive-import');
+}
+
+// フォルダ内のファイル一覧を取得する
+async function driveLoadFiles(){
+  const btn=document.getElementById('drive-load-btn');
+  btn.disabled=true;
+  driveMsg('<div class="alert alert-info"><span class="spinner"></span> フォルダを確認しています...</div>');
+  try{
+    const json=await gasCall({action:'driveList'});
+    if(!json.ok)throw new Error(json.error||'一覧を取得できませんでした');
+    driveFiles=json.files||[];
+  }catch(e){
+    driveMsg(`<div class="alert alert-error">❌ フォルダを確認できませんでした<br><small>${e.message}</small></div>`);
+    btn.disabled=false;return;
+  }
+  btn.disabled=false;
+  renderDriveFileList();
+}
+
+function renderDriveFileList(){
+  const el=document.getElementById('drive-file-list');
+  if(driveFiles.length===0){
+    driveMsg('<div class="alert alert-warning">フォルダにファイルがありません</div>');
+    el.innerHTML='';
+    document.getElementById('drive-extract-btn').style.display='none';
+    return;
+  }
+  const yet=driveFiles.filter(f=>!f.processed).length;
+  driveMsg(`<div class="alert alert-info">${driveFiles.length}件のファイルが見つかりました（未処理 ${yet}件）</div>`);
+  el.innerHTML='<div class="table-wrap"><table><thead><tr>'
+    +'<th style="width:36px"></th><th>ファイル名</th><th>種類</th><th style="text-align:right">サイズ</th><th>状態</th>'
+    +'</tr></thead><tbody>'
+    +driveFiles.map((f,i)=>`<tr>
+      <td><input type="checkbox" class="drive-check" value="${i}" ${f.processed?'':'checked'} style="width:auto"></td>
+      <td style="font-size:12px">${f.name}</td>
+      <td style="font-size:12px;color:var(--text-secondary)">${f.mimeType==='application/pdf'?'PDF':'画像'}</td>
+      <td style="text-align:right;font-size:12px">${Math.max(1,Math.round(f.size/1024))} KB</td>
+      <td>${f.processed?'<span class="badge badge-gray">処理済み</span>':'<span class="badge badge-blue">未処理</span>'}</td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+  document.getElementById('drive-extract-btn').style.display='';
+}
+
+function selectedDriveFiles(){
+  return Array.from(document.querySelectorAll('.drive-check'))
+    .filter(c=>c.checked)
+    .map(c=>driveFiles[parseInt(c.value)]);
+}
+
+// 選択したファイルを1件ずつAIで読み取る
+async function driveExtractSelected(){
+  const files=selectedDriveFiles();
+  if(files.length===0){alert('読み取るファイルを選択してください');return;}
+  const btn=document.getElementById('drive-extract-btn');
+  btn.disabled=true;
+  driveRows=[];
+  for(let i=0;i<files.length;i++){
+    const f=files[i];
+    driveMsg(`<div class="alert alert-info"><span class="spinner"></span> AIで読み取り中... ${i+1}/${files.length}　${f.name}</div>`);
+    let row={fileId:f.id,fileName:f.name,date:'',type:'その他経費',desc:f.name,amount:0,error:''};
+    try{
+      const json=await gasCall({action:'driveExtract',fileId:f.id});
+      if(json.ok&&json.data){
+        row.date=json.data.date||today();
+        row.type=json.data.type||'その他経費';
+        row.desc=json.data.desc||f.name;
+        row.amount=json.data.amount||0;
+      }else{
+        row.error=json.error||'読取失敗';
+      }
+    }catch(e){
+      row.error=e.message;
+    }
+    driveRows.push(row);
+  }
+  btn.disabled=false;
+  renderDriveResult();
+}
+
+function renderDriveResult(){
+  const ng=driveRows.filter(r=>r.error).length;
+  driveMsg(ng===0
+    ? `<div class="alert alert-success">✓ ${driveRows.length}件を読み取りました。内容を確認して登録してください。</div>`
+    : `<div class="alert alert-warning">${driveRows.length}件中 ${ng}件が読取失敗です。手入力で補ってから登録してください。</div>`);
+
+  const opts=t=>LEDGER_TYPES.filter(x=>x!=='売上')
+    .map(x=>`<option ${x===t?'selected':''}>${x}</option>`).join('');
+
+  document.getElementById('drive-result').innerHTML='<div class="table-wrap"><table><thead><tr>'
+    +'<th style="width:36px"></th><th>ファイル</th><th style="min-width:130px">日付</th><th style="min-width:150px">区分</th>'
+    +'<th style="min-width:160px">摘要</th><th style="min-width:110px">金額</th>'
+    +'</tr></thead><tbody>'
+    +driveRows.map((r,i)=>`<tr>
+      <td><input type="checkbox" class="drive-row-check" value="${i}" checked style="width:auto"></td>
+      <td style="font-size:11px;color:var(--text-secondary)">${r.fileName}${r.error?`<br><span class="badge badge-red">読取失敗</span>`:''}</td>
+      <td><input type="date" value="${r.date}" oninput="driveRows[${i}].date=this.value" style="font-size:12px"></td>
+      <td><select oninput="driveRows[${i}].type=this.value" onchange="driveRows[${i}].type=this.value" style="font-size:12px">${opts(r.type)}</select></td>
+      <td><input type="text" value="${escAttr(r.desc)}" oninput="driveRows[${i}].desc=this.value" style="font-size:12px"></td>
+      <td><input type="number" value="${r.amount}" oninput="driveRows[${i}].amount=parseInt(this.value)||0" style="font-size:12px"></td>
+    </tr>`).join('')
+    +'</tbody></table></div>'
+    +(ng>0?`<div style="font-size:11px;color:var(--text-muted);margin-top:8px">読取失敗の行: ${driveRows.filter(r=>r.error).map(r=>r.fileName+'（'+r.error+'）').join(' / ')}</div>`:'');
+
+  document.getElementById('drive-register-btn').style.display='';
+}
+
+// 確認した内容を収支に登録し、元ファイルを「処理済み_」にリネームする
+async function driveRegister(){
+  const idx=Array.from(document.querySelectorAll('.drive-row-check'))
+    .filter(c=>c.checked).map(c=>parseInt(c.value));
+  const rows=idx.map(i=>driveRows[i]).filter(r=>r.date&&r.desc&&r.amount);
+  if(rows.length===0){alert('登録できる行がありません。日付・摘要・金額を入力してください。');return;}
+
+  const btn=document.getElementById('drive-register-btn');
+  btn.disabled=true;
+  rows.forEach(r=>{
+    S.ledger.push({id:S.nextLedgerId++,date:r.date,type:r.type,desc:r.desc,amount:r.amount});
+  });
+  saveState();
+
+  let renamed=0;
+  try{
+    const json=await gasCall({action:'driveProcessed',fileIds:rows.map(r=>r.fileId)});
+    if(json.ok)renamed=json.renamed||0;
+  }catch(e){
+    // リネームに失敗しても収支の登録は済んでいるので、続行して警告だけ出す
+    driveMsg(`<div class="alert alert-warning">収支は登録しましたが、ファイルのリネームに失敗しました（次回も一覧に出ます）<br><small>${e.message}</small></div>`);
+  }
+  btn.disabled=false;
+  closeModal('modal-drive-import');
+  alert(rows.length+'件を収支に登録しました'+(renamed>0?`\n（${renamed}件のファイルを「処理済み_」にリネームしました）`:''));
+  refreshAll();
 }
 
 /* ===== 固定費 =========================================================
