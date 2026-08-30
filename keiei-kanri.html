@@ -65,6 +65,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .metric-value.blue{color:var(--blue)}
 .metric-value.green{color:var(--green)}
 .metric-value.red{color:var(--red)}
+.metric-value.amber{color:var(--amber)}
 .metric-sub{font-size:11px;color:var(--text-muted);margin-top:4px}
 .btn{padding:7px 14px;font-size:13px;border:0.5px solid var(--border-hover);border-radius:var(--radius-md);background:transparent;color:var(--text-primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;font-family:inherit;white-space:nowrap}
 .btn:hover{background:var(--bg-secondary)}
@@ -99,6 +100,9 @@ textarea{resize:vertical;min-height:70px}
 input[type=number]{-moz-appearance:textfield}
 input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .chart-container{display:flex;gap:4px;align-items:flex-end;height:130px;margin-top:8px}
+.chart-wrap{position:relative;margin-top:8px}
+.chart-wrap canvas{width:100%;display:block}
+.chart-tooltip{position:absolute;display:none;pointer-events:none;background:var(--bg-primary);border:0.5px solid var(--border);border-radius:var(--radius-md);box-shadow:0 4px 14px rgba(0,0,0,0.12);padding:8px 10px;font-size:12px;line-height:1.7;white-space:nowrap;z-index:10}
 .chart-value{font-size:10px;color:var(--text-secondary);line-height:1.2;white-space:nowrap}
 .chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
 .chart-bar{width:100%;border-radius:3px 3px 0 0;transition:height 0.4s ease;min-height:2px}
@@ -223,6 +227,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="metric-card"><div class="metric-label">役員報酬</div><div class="metric-value" id="d-labor">¥0</div><div class="metric-sub" id="d-labor-year">年間累計: ¥0</div><div class="metric-sub" id="d-labor-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">税金・公課</div><div class="metric-value" id="d-tax">¥0</div><div class="metric-sub" id="d-tax-year">年間累計: ¥0</div><div class="metric-sub" id="d-tax-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">営業利益</div><div class="metric-value green" id="d-profit">¥0</div><div class="metric-sub" id="d-profit-year">年間累計: ¥0</div><div class="metric-sub" id="d-margin">利益率: -%</div></div>
+    <div class="metric-card"><div class="metric-label">営業利益率</div><div class="metric-value" id="d-margin-rate">-%</div><div class="metric-sub" id="d-margin-year">年間累計: -%</div></div>
   </div>
   <div class="two-col">
     <div class="card">
@@ -236,13 +241,23 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <div id="diff-list"></div>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title">月次推移（売上）</span></div>
-      <div class="chart-container" id="monthly-chart"></div>
+      <div class="card-header">
+        <span class="card-title">月次推移</span>
+        <div style="display:flex;gap:12px;font-size:11px;color:var(--text-secondary)">
+          <span><span style="color:#378ADD">●</span> 売上</span>
+          <span><span style="color:#1D9E75">●</span> 営業利益</span>
+          <span><span style="color:#EF9F27">●</span> 利益率</span>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="monthly-chart" onmousemove="chartHover(event)" onmouseleave="chartLeave()"></canvas>
+        <div id="chart-tooltip" class="chart-tooltip"></div>
+      </div>
     </div>
   </div>
   <div class="card">
     <div class="card-header">
-      <span class="card-title">進行中の案件</span>
+      <span class="card-title">進行中の案件 <span class="badge badge-green" id="dash-active-count">0件</span></span>
       <button class="btn sm" onclick="showPage('projects', document.querySelectorAll('.nav-btn')[1])">一覧へ →</button>
     </div>
     <div class="table-wrap"><table><thead><tr><th>案件名・顧客名</th><th>金額</th><th>状態</th><th>期限</th></tr></thead><tbody id="dash-projects"></tbody></table></div>
@@ -1107,6 +1122,149 @@ function sumLedger(mi){
   return t;
 }
 
+// 営業利益率の色分け（20%以上=緑 / 10〜19%=アンバー / 9%以下=赤）
+function marginClass(rate){return rate>=20?'green':rate>=10?'amber':'red'}
+function marginColor(rate){return rate>=20?'#1D9E75':rate>=10?'#EF9F27':'#E24B4A'}
+
+/* ===== 月次推移グラフ（Canvasの折れ線） ==============================
+   売上・営業利益（左軸・円）と利益率（右軸・%）を12ヶ月ぶん描く。
+   ライブラリは使わず、色はテーマに合わせてCSS変数から読む。
+   =================================================================== */
+
+const CHART_COLORS={sales:'#378ADD',profit:'#1D9E75',rate:'#EF9F27'};
+let chartSeries=null;   // 描画中のデータ（ツールチップで参照する）
+let chartPoints=null;   // 月ごとのX座標
+
+// 月ごとの売上・営業利益・利益率・有効案件数
+function monthlySeries(){
+  const rows=[];
+  for(let i=0;i<12;i++){
+    const t=sumLedger(i);
+    const sales=salesByMonth(i);
+    const profit=sales-t.expense-t.labor;
+    const projects=S.projects.filter(p=>
+      (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,i)).length;
+    rows.push({month:i+1,sales,profit,rate:sales>0?profit/sales*100:0,projects});
+  }
+  return rows;
+}
+
+function cssVar(name,fallback){
+  const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v||fallback;
+}
+
+function drawMonthlyChart(){
+  const cv=document.getElementById('monthly-chart');
+  if(!cv)return;
+  const rows=chartSeries=monthlySeries();
+  const mi=getMonth();
+
+  const cssW=cv.clientWidth||600, cssH=180;
+  const dpr=window.devicePixelRatio||1;
+  cv.width=Math.round(cssW*dpr);
+  cv.height=Math.round(cssH*dpr);
+  cv.style.height=cssH+'px';
+  const ctx=cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const line=cssVar('--border','#e5e5e5');
+  const muted=cssVar('--text-muted','#9b9b9b');
+  const L=48,R=44,T=14,B=22;
+  const w=cssW-L-R, h=cssH-T-B;
+
+  // 左軸（金額）と右軸（利益率）のスケール
+  const amts=rows.map(r=>r.sales).concat(rows.map(r=>r.profit));
+  let aMax=Math.max(...amts,1), aMin=Math.min(...amts,0);
+  if(aMax===aMin)aMax=aMin+1;
+  const rates=rows.map(r=>r.rate);
+  let rMax=Math.max(30,...rates), rMin=Math.min(0,...rates);
+  if(rMax===rMin)rMax=rMin+1;
+
+  const y=v=>T+h-(v-aMin)/(aMax-aMin)*h;
+  const yr=v=>T+h-(v-rMin)/(rMax-rMin)*h;
+  const x=i=>L+(w/11)*i;
+  chartPoints=rows.map((_,i)=>x(i));
+
+  // 目盛りとグリッド
+  ctx.font='10px -apple-system,BlinkMacSystemFont,sans-serif';
+  ctx.strokeStyle=line;ctx.lineWidth=1;
+  for(let g=0;g<=4;g++){
+    const yy=Math.round(T+h/4*g)+0.5;
+    ctx.beginPath();ctx.moveTo(L,yy);ctx.lineTo(L+w,yy);ctx.stroke();
+    const av=aMax-(aMax-aMin)/4*g;
+    const rv=rMax-(rMax-rMin)/4*g;
+    ctx.fillStyle=muted;
+    ctx.textAlign='right';ctx.fillText(fmtMan(av)||'0',L-6,yy+3);
+    ctx.textAlign='left';ctx.fillText(Math.round(rv)+'%',L+w+6,yy+3);
+  }
+  // 0円のライン
+  if(aMin<0){
+    const yz=Math.round(y(0))+0.5;
+    ctx.strokeStyle=muted;ctx.beginPath();ctx.moveTo(L,yz);ctx.lineTo(L+w,yz);ctx.stroke();
+  }
+  ctx.fillStyle=muted;ctx.textAlign='center';
+  rows.forEach((r,i)=>ctx.fillText(r.month,x(i),T+h+15));
+
+  // 折れ線。売上が0の月をまたぐ区間は点線にする。
+  const stroke=(vals,color,mapY)=>{
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineJoin='round';
+    for(let i=0;i<vals.length-1;i++){
+      const zero=rows[i].sales===0||rows[i+1].sales===0;
+      ctx.setLineDash(zero?[4,3]:[]);
+      ctx.beginPath();
+      ctx.moveTo(x(i),mapY(vals[i]));
+      ctx.lineTo(x(i+1),mapY(vals[i+1]));
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    vals.forEach((v,i)=>{
+      const cur=i===mi;
+      ctx.beginPath();
+      ctx.arc(x(i),mapY(v),cur?5:3,0,Math.PI*2);
+      ctx.fillStyle=color;ctx.fill();
+      if(cur){ctx.strokeStyle=cssVar('--bg-primary','#fff');ctx.lineWidth=2;ctx.stroke();}
+    });
+  };
+  stroke(rows.map(r=>r.rate),CHART_COLORS.rate,yr);
+  stroke(rows.map(r=>r.profit),CHART_COLORS.profit,y);
+  stroke(rows.map(r=>r.sales),CHART_COLORS.sales,y);
+}
+
+// マウス位置から一番近い月を探してツールチップを出す
+function chartHover(ev){
+  if(!chartSeries||!chartPoints)return;
+  const cv=document.getElementById('monthly-chart');
+  const tip=document.getElementById('chart-tooltip');
+  const rect=cv.getBoundingClientRect();
+  const mx=ev.clientX-rect.left;
+  let best=0;
+  chartPoints.forEach((px,i)=>{if(Math.abs(px-mx)<Math.abs(chartPoints[best]-mx))best=i;});
+  const r=chartSeries[best];
+  tip.innerHTML=`<div style="font-weight:600;margin-bottom:4px">${r.month}月</div>`
+    +`<div><span style="color:${CHART_COLORS.sales}">●</span> 売上: ${fmt(r.sales)}</div>`
+    +`<div><span style="color:${CHART_COLORS.profit}">●</span> 営業利益: ${fmt(r.profit)}</div>`
+    +`<div><span style="color:${CHART_COLORS.rate}">●</span> 利益率: ${r.sales>0?r.rate.toFixed(1)+'%':'-'}</div>`
+    +`<div style="margin-top:3px;color:var(--text-secondary)">有効案件数: ${r.projects}件</div>`;
+  tip.style.display='block';
+  const tw=tip.offsetWidth;
+  let left=chartPoints[best]+10;
+  if(left+tw>rect.width)left=chartPoints[best]-tw-10;
+  tip.style.left=Math.max(0,left)+'px';
+  tip.style.top='8px';
+}
+
+function chartLeave(){
+  const tip=document.getElementById('chart-tooltip');
+  if(tip)tip.style.display='none';
+}
+
+// 幅が変わったら描き直す
+window.addEventListener('resize',()=>{
+  if(document.getElementById('page-dashboard').classList.contains('active'))drawMonthlyChart();
+});
+
 /* ===== 案件ベースの売上 ==============================================
    契約済・進行中・完了の案件から、月ごとの売上を計算する。
      単発（single）  : 開始月のみ金額を計上
@@ -1270,6 +1428,12 @@ function updateDashboard(){
   document.getElementById('d-profit').className='metric-value '+(profit>=0?'green':'red');
   document.getElementById('d-margin').textContent='利益率: '+margin+'%';
 
+  // 営業利益率（20%以上=緑 / 10〜19%=アンバー / 9%以下=赤）
+  const rate=sales>0?profit/sales*100:null;
+  const rateEl=document.getElementById('d-margin-rate');
+  rateEl.textContent=rate===null?'-%':rate.toFixed(1)+'%';
+  rateEl.className='metric-value '+(rate===null?'':marginClass(rate));
+
   // 年間累計（1〜12月の合計）
   const y=sumLedgerYear();
   const ySales=salesYearTotal();
@@ -1278,6 +1442,10 @@ function updateDashboard(){
   document.getElementById('d-expense-year').textContent='年間累計: '+fmt(y.expense);
   document.getElementById('d-labor-year').textContent='年間累計: '+fmt(y.labor);
   document.getElementById('d-tax-year').textContent='年間累計: '+fmt(y.tax);
+  const yRate=ySales>0?yProfit/ySales*100:null;
+  const yRateEl=document.getElementById('d-margin-year');
+  yRateEl.textContent='年間累計: '+(yRate===null?'-%':yRate.toFixed(1)+'%');
+  yRateEl.style.color=yRate===null?'':marginColor(yRate);
   document.getElementById('d-profit-year').textContent='年間累計: '+fmt(yProfit);
 
   const pl=planOf(mi);
@@ -1286,23 +1454,14 @@ function updateDashboard(){
     document.getElementById('d-'+k+'-diff').textContent='計画比: '+(d>=0?'+':'')+fmt(d);
   });
   renderDiffList(mi);
-  const mc=document.getElementById('monthly-chart');
-  const months=['1','2','3','4','5','6','7','8','9','10','11','12'];
-  const series=salesSeries();
-  const maxV=Math.max(...series,1);
-  mc.innerHTML=series.map((v,i)=>
-    `<div class="chart-bar-wrap">
-      <div class="chart-value">${fmtMan(v)}</div>
-      <div class="chart-bar" style="height:${Math.round(v/maxV*92)}px;background:${i===mi?'#378ADD':'#B5D4F4'}"></div>
-      <div class="chart-label">${months[i]}</div>
-    </div>`
-  ).join('');
+  drawMonthlyChart();
   const dp=document.getElementById('dash-projects');
   const active=S.projects.filter(p=>p.status!=='完了'&&p.status!=='失注');
   dp.innerHTML=active.slice(0,5).map(p=>
     `<tr><td><div style="font-weight:500">${p.name}</div><div style="font-size:12px;color:var(--text-secondary)">${p.client||'-'}</div></td><td>${fmt(p.amount)}</td><td>${statusBadge(p.status)}</td><td style="font-size:12px;color:var(--text-secondary)">${p.end}</td></tr>`
   ).join('');
   document.getElementById('dash-projects-empty').style.display=active.length===0?'':'none';
+  document.getElementById('dash-active-count').textContent='進行中 '+active.length+'件';
   renderAlerts();
 }
 
@@ -2349,7 +2508,7 @@ function generateReport(){
     ${repRow('役員報酬',repYen(lab))}
     ${repRow('営業利益',repYen(profit),{bold:true,bg:'#f5f5f5'})}
     ${repRow('税金・公課（営業利益には含めない）',repYen(tax))}
-    ${repRow('営業利益率',(sales>0?margin+'%':'-'),{bold:true})}
+    ${repRow('営業利益率',(sales>0?(profit/sales*100).toFixed(1)+'%':'-'),{bold:true,color:sales>0?marginColor(profit/sales*100):''})}
   </table>
   <div style="font-size:12px;font-weight:bold;margin:18px 0 6px">計画比</div>
   <table style="width:100%;border-collapse:collapse;font-size:12px">
