@@ -616,9 +616,21 @@ const defaultState={
     note:''
   },
   projects:[
-    {id:1,name:'AIコンサル支援',client:'株式会社A',amount:480000,status:'進行中',start:'2026-04-01',end:'2026-06-30',contract:'monthly',memo:''},
-    {id:2,name:'Salesforce移行支援',client:'株式会社B',amount:800000,status:'契約済',start:'2026-06-01',end:'2026-08-31',contract:'single',memo:''},
-    {id:3,name:'IT人材紹介',client:'株式会社C',amount:300000,status:'商談中',start:'2026-07-01',end:'2026-12-31',contract:'annual',memo:''}
+    {id:1,name:'AI活用支援',client:'CORENOVA株式会社',amount:100000,status:'契約済',start:'2026-04-01',end:'2026-04-30',contract:'monthly',memo:''},
+    {id:2,name:'AI活用支援（単月）',client:'アステッキホールディングス株式会社',amount:160000,status:'完了',start:'2026-05-01',end:'2026-05-31',contract:'single',memo:''},
+    {id:3,name:'AI活用支援',client:'アステッキホールディングス株式会社',amount:240000,status:'完了',start:'2026-06-01',end:'2026-07-31',contract:'monthly',memo:''},
+    {id:4,name:'AI活用支援',client:'アステッキホールディングス株式会社',amount:150000,status:'進行中',start:'2026-08-01',end:'2027-02-28',contract:'monthly',memo:''},
+    {id:5,name:'AI活用支援',client:'一般社団法人くらし支援ネット',amount:50000,status:'進行中',start:'2026-04-01',end:'2027-02-28',contract:'monthly',memo:''},
+    {id:6,name:'AI活用支援',client:'株式会社フラックスブルーム',amount:15000,status:'進行中',start:'2026-04-01',end:'2027-02-28',contract:'monthly',memo:''},
+    {id:7,name:'AI活用支援（単月）',client:'株式会社創生アドバイザリー',amount:64000,status:'完了',start:'2026-05-01',end:'2026-05-31',contract:'single',memo:''},
+    {id:8,name:'AI活用支援',client:'株式会社創生アドバイザリー',amount:144000,status:'完了',start:'2026-06-01',end:'2026-06-30',contract:'monthly',memo:''},
+    {id:9,name:'AI活用支援',client:'株式会社創生アドバイザリー',amount:208000,status:'進行中',start:'2026-07-01',end:'2027-02-28',contract:'monthly',memo:''},
+    {id:10,name:'AI活用支援',client:'LIMISH',amount:30000,status:'進行中',start:'2026-05-01',end:'2027-02-28',contract:'monthly',memo:''},
+    {id:11,name:'AI活用支援',client:'株式会社楯菱電産',amount:30000,status:'進行中',start:'2026-05-01',end:'2027-02-28',contract:'monthly',memo:''},
+    {id:12,name:'AI開発支援',client:'株式会社SOARIG',amount:1000000,status:'商談中',start:'2026-07-01',end:'2026-07-31',contract:'single',memo:''},
+    {id:13,name:'AI活用支援',client:'株式会社内海グループ',amount:50000,status:'進行中',start:'2026-09-01',end:'2027-02-28',contract:'monthly',memo:''},
+    {id:14,name:'AI活用支援（単月）',client:'SNACK SAWA',amount:300000,status:'完了',start:'2026-05-01',end:'2026-05-31',contract:'single',memo:''},
+    {id:15,name:'AI活用支援',client:'兵庫明光販売株式会社',amount:50000,status:'進行中',start:'2026-08-01',end:'2026-10-31',contract:'monthly',memo:''}
   ],
   quotes:[
     {id:'Q-001',subject:'AIコンサル支援 4-6月',client:'株式会社A 御中',amount:528000,type:'見積書',date:'2026-03-25',expire:'2026-04-30',items:[{name:'AIコンサルティング（月次）',qty:3,unit:160000,total:480000}],note:''},
@@ -633,7 +645,7 @@ const defaultState={
   ],
   monthlyData:[820000,950000,780000,1100000,900000,560000,0,0,0,0,0,0],
   plan:{sales:1000000,expense:200000,labor:300000},
-  nextProjectId:4,nextQuoteNum:3,nextLedgerId:6
+  nextProjectId:16,nextQuoteNum:3,nextLedgerId:6
 };
 
 let S=loadState();
