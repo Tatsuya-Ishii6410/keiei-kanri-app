@@ -233,7 +233,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <span class="card-title">進行中の案件</span>
       <button class="btn sm" onclick="showPage('projects', document.querySelectorAll('.nav-btn')[1])">一覧へ →</button>
     </div>
-    <div class="table-wrap"><table><thead><tr><th>案件名</th><th>金額</th><th>状態</th><th>期限</th></tr></thead><tbody id="dash-projects"></tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th>案件名・顧客名</th><th>金額</th><th>状態</th><th>期限</th></tr></thead><tbody id="dash-projects"></tbody></table></div>
     <div id="dash-projects-empty" class="empty-state" style="display:none">案件がありません</div>
   </div>
   <div class="card">
@@ -903,7 +903,7 @@ function updateDashboard(){
   const dp=document.getElementById('dash-projects');
   const active=S.projects.filter(p=>p.status!=='完了'&&p.status!=='失注');
   dp.innerHTML=active.slice(0,5).map(p=>
-    `<tr><td style="font-weight:500">${p.name}</td><td>${fmt(p.amount)}</td><td>${statusBadge(p.status)}</td><td style="font-size:12px;color:var(--text-secondary)">${p.end}</td></tr>`
+    `<tr><td><div style="font-weight:500">${p.name}</div><div style="font-size:12px;color:var(--text-secondary)">${p.client||'-'}</div></td><td>${fmt(p.amount)}</td><td>${statusBadge(p.status)}</td><td style="font-size:12px;color:var(--text-secondary)">${p.end}</td></tr>`
   ).join('');
   document.getElementById('dash-projects-empty').style.display=active.length===0?'':'none';
   renderAlerts();
