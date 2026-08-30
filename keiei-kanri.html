@@ -15,6 +15,7 @@
   --amber:#EF9F27;--amber-bg:#FAEEDA;--amber-text:#854F0B;
   --red:#E24B4A;--red-bg:#FCEBEB;--red-text:#A32D2D;
   --gray-bg:#F1EFE8;--gray-text:#5F5E5A;
+  --purple-bg:#EFE9FA;--purple-text:#6B3FA0;
   --radius-md:8px;--radius-lg:12px;
 }
 @media(prefers-color-scheme:dark){
@@ -27,6 +28,7 @@
     --amber-bg:#2e1e05;--amber-text:#f0b865;
     --red-bg:#2e0a0a;--red-text:#f09090;
     --gray-bg:#2a2a2a;--gray-text:#a0a0a0;
+    --purple-bg:#251a3a;--purple-text:#bda3ea;
   }
 }
 body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',Meiryo,sans-serif;color:var(--text-primary);background:var(--bg-tertiary);font-size:14px;line-height:1.6}
@@ -85,6 +87,7 @@ tbody tr:hover{background:var(--bg-secondary)}
 .badge-amber{background:var(--amber-bg);color:var(--amber-text)}
 .badge-red{background:var(--red-bg);color:var(--red-text)}
 .badge-gray{background:var(--gray-bg);color:var(--gray-text)}
+.badge-purple{background:var(--purple-bg);color:var(--purple-text)}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 .form-row.three{grid-template-columns:1fr 1fr 1fr}
 .form-row.single{grid-template-columns:1fr}
@@ -218,6 +221,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="metric-card"><div class="metric-label">売上</div><div class="metric-value blue" id="d-sales">¥0</div><div class="metric-sub" id="d-sales-year">年間累計: ¥0</div><div class="metric-sub" id="d-sales-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">経費合計</div><div class="metric-value" id="d-expense">¥0</div><div class="metric-sub" id="d-expense-year">年間累計: ¥0</div><div class="metric-sub" id="d-expense-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">役員報酬</div><div class="metric-value" id="d-labor">¥0</div><div class="metric-sub" id="d-labor-year">年間累計: ¥0</div><div class="metric-sub" id="d-labor-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">税金・公課</div><div class="metric-value" id="d-tax">¥0</div><div class="metric-sub" id="d-tax-year">年間累計: ¥0</div><div class="metric-sub" id="d-tax-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">営業利益</div><div class="metric-value green" id="d-profit">¥0</div><div class="metric-sub" id="d-profit-year">年間累計: ¥0</div><div class="metric-sub" id="d-margin">利益率: -%</div></div>
   </div>
   <div class="two-col">
@@ -447,7 +451,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">売上・経費・人件費をまとめて登録するためのCSVテンプレートです。</p>
       <div class="col-grid">
         <div class="col-item"><div class="col-name">日付<span class="col-req">必須</span></div><div class="col-note">YYYY-MM-DD形式</div></div>
-        <div class="col-item"><div class="col-name">区分<span class="col-req">必須</span></div><div class="col-note">売上／家賃（レンタルオフィス利用料）／通信料／システム利用料／交通費／交際費／役員報酬／その他経費</div></div>
+        <div class="col-item"><div class="col-name">区分<span class="col-req">必須</span></div><div class="col-note">売上／家賃（レンタルオフィス利用料）／通信料／システム利用料／交通費／交際費／役員報酬／その他経費／社会保険料／住民税（特別徴収）／消費税（納付）／源泉所得税（納付）／法人税・住民税・事業税（納付）／その他税金・公課</div></div>
         <div class="col-item"><div class="col-name">摘要<span class="col-req">必須</span></div><div class="col-note">内容・説明</div></div>
         <div class="col-item"><div class="col-name">金額<span class="col-req">必須</span></div><div class="col-note">数値のみ（税抜）</div></div>
       </div>
@@ -676,7 +680,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="modal-header"><span class="modal-title" id="fc-title">固定費を追加</span><button class="btn sm" onclick="closeModal('modal-fixed-cost-form')">✕</button></div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">区分</label>
-      <select id="fc-type"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option></select>
+      <select id="fc-type"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option><option>社会保険料</option><option>住民税（特別徴収）</option><option>消費税（納付）</option><option>源泉所得税（納付）</option><option>法人税・住民税・事業税（納付）</option><option>その他税金・公課</option></select>
     </div>
     <div class="form-group"><label class="form-label">金額</label><input id="fc-amount" type="number" placeholder="300000"></div>
   </div>
@@ -748,7 +752,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="modal-header"><span class="modal-title" id="modal-ledger-title">収支を入力</span><button class="btn sm" onclick="closeModal('modal-add-ledger')">✕</button></div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">日付</label><input id="l-date" type="date"></div>
-    <div class="form-group"><label class="form-label">区分</label><select id="l-type"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option></select></div>
+    <div class="form-group"><label class="form-label">区分</label><select id="l-type"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option><option>社会保険料</option><option>住民税（特別徴収）</option><option>消費税（納付）</option><option>源泉所得税（納付）</option><option>法人税・住民税・事業税（納付）</option><option>その他税金・公課</option></select></div>
   </div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">摘要</label><input id="l-desc" type="text" placeholder="例: 〇〇案件 6月分"></div>
@@ -773,6 +777,9 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="form-group"><label class="form-label">売上計画</label><input id="plan-sales" type="number"></div>
     <div class="form-group"><label class="form-label">経費合計の計画</label><input id="plan-expense" type="number"></div>
     <div class="form-group"><label class="form-label">役員報酬の計画</label><input id="plan-labor" type="number"></div>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">税金・公課の計画</label><input id="plan-tax" type="number"></div>
   </div>
   <div style="font-size:12px;color:var(--text-muted);margin-top:6px">月を切り替えると、その月の計画値を編集できます。</div>
   <div class="actions-row">
@@ -856,17 +863,17 @@ let csvParsedHeaders=[];
 // 月次計画を必ず12ヶ月分の配列にそろえる（旧形式 {sales,expense,labor} からの移行にも対応）
 function normalizePlan(plan){
   const out=[];
-  for(let i=0;i<12;i++)out.push({sales:0,expense:0,labor:0});
+  for(let i=0;i<12;i++)out.push({sales:0,expense:0,labor:0,tax:0});
   if(!plan)return out;
   if(Array.isArray(plan)){
     for(let i=0;i<12;i++){
       const v=plan[i]||{};
-      out[i]={sales:parseInt(v.sales)||0,expense:parseInt(v.expense)||0,labor:parseInt(v.labor)||0};
+      out[i]={sales:parseInt(v.sales)||0,expense:parseInt(v.expense)||0,labor:parseInt(v.labor)||0,tax:parseInt(v.tax)||0};
     }
     return out;
   }
   // 旧形式（月の区別なし）は、同じ値を全ての月に適用する
-  const legacy={sales:parseInt(plan.sales)||0,expense:parseInt(plan.expense)||0,labor:parseInt(plan.labor)||0};
+  const legacy={sales:parseInt(plan.sales)||0,expense:parseInt(plan.expense)||0,labor:parseInt(plan.labor)||0,tax:parseInt(plan.tax)||0};
   for(let i=0;i<12;i++)out[i]=Object.assign({},legacy);
   return out;
 }
@@ -874,7 +881,7 @@ function normalizePlan(plan){
 // 指定した月（0=1月）の計画を取得する
 function planOf(mi){
   if(!Array.isArray(S.plan))S.plan=normalizePlan(S.plan);
-  return S.plan[mi]||{sales:0,expense:0,labor:0};
+  return S.plan[mi]||{sales:0,expense:0,labor:0,tax:0};
 }
 
 function mergeState(parsed){
@@ -1076,19 +1083,23 @@ document.querySelectorAll('.modal-overlay').forEach(m=>{
    売上 / 経費系 / 役員報酬 の3グループに分けて集計する。
    旧データの「経費」「人件費」も読めるように扱いを残してある。
    =================================================================== */
-const LEDGER_TYPES=['売上','家賃（レンタルオフィス利用料）','通信料','システム利用料','交通費','交際費','役員報酬','その他経費'];
+const LEDGER_TYPES=['売上','家賃（レンタルオフィス利用料）','通信料','システム利用料','交通費','交際費','役員報酬','その他経費',
+  '社会保険料','住民税（特別徴収）','消費税（納付）','源泉所得税（納付）','法人税・住民税・事業税（納付）','その他税金・公課'];
 const LABOR_TYPES=['役員報酬','人件費'];
+// 税金・社会保険料。経費とは分けて集計し、営業利益の計算には含めない。
+const TAX_TYPES=['社会保険料','住民税（特別徴収）','消費税（納付）','源泉所得税（納付）','法人税・住民税・事業税（納付）','その他税金・公課'];
 
 // 区分を集計グループ（sales / expense / labor）に振り分ける
 function ledgerGroup(type){
   if(type==='売上')return'sales';
   if(LABOR_TYPES.indexOf(type)>=0)return'labor';
+  if(TAX_TYPES.indexOf(type)>=0)return'tax';
   return'expense'; // 経費系と、旧「経費」や未知の区分はまとめて経費に含める
 }
 
 // 指定した月（0=1月）の実績をグループごとに集計する
 function sumLedger(mi){
-  const t={sales:0,expense:0,labor:0};
+  const t={sales:0,expense:0,labor:0,tax:0};
   S.ledger.forEach(l=>{
     if(!l.date||new Date(l.date).getMonth()!==mi)return;
     t[ledgerGroup(l.type)]+=l.amount;
@@ -1204,7 +1215,7 @@ function salesSeries(){
 
 // 1〜12月すべての実績をグループごとに集計する（年間累計）
 function sumLedgerYear(){
-  const t={sales:0,expense:0,labor:0};
+  const t={sales:0,expense:0,labor:0,tax:0};
   S.ledger.forEach(l=>{
     if(!l.date)return;
     t[ledgerGroup(l.type)]+=l.amount;
@@ -1214,10 +1225,10 @@ function sumLedgerYear(){
 
 // 1〜12月の計画を合計する（年間計画）
 function planYearTotal(){
-  const t={sales:0,expense:0,labor:0};
+  const t={sales:0,expense:0,labor:0,tax:0};
   for(let i=0;i<12;i++){
     const pl=planOf(i);
-    t.sales+=pl.sales;t.expense+=pl.expense;t.labor+=pl.labor;
+    t.sales+=pl.sales;t.expense+=pl.expense;t.labor+=pl.labor;t.tax+=pl.tax||0;
   }
   return t;
 }
@@ -1232,7 +1243,7 @@ function fmtMan(v){
 // 収支一覧のバッジ（売上=緑 / 役員報酬=アンバー / 経費系=赤）
 function ledgerBadge(type){
   const g=ledgerGroup(type);
-  const cls=g==='sales'?'badge-green':(g==='labor'?'badge-amber':'badge-red');
+  const cls=g==='sales'?'badge-green':g==='labor'?'badge-amber':g==='tax'?'badge-purple':'badge-red';
   return`<span class="badge ${cls}">${type}</span>`;
 }
 
@@ -1248,12 +1259,13 @@ function updateDashboard(){
   const mi=getMonth();
   const t=sumLedger(mi);
   // 売上は「案件ベース + 収支の売上入力」、経費・役員報酬は収支の入力から集計する
-  const sales=salesByMonth(mi),exp=t.expense,lab=t.labor;
+  const sales=salesByMonth(mi),exp=t.expense,lab=t.labor,tax=t.tax;
   const profit=sales-exp-lab;
   const margin=sales>0?Math.round(profit/sales*100):0;
   document.getElementById('d-sales').textContent=fmt(sales);
   document.getElementById('d-expense').textContent=fmt(exp);
   document.getElementById('d-labor').textContent=fmt(lab);
+  document.getElementById('d-tax').textContent=fmt(tax);
   document.getElementById('d-profit').textContent=fmt(profit);
   document.getElementById('d-profit').className='metric-value '+(profit>=0?'green':'red');
   document.getElementById('d-margin').textContent='利益率: '+margin+'%';
@@ -1265,11 +1277,12 @@ function updateDashboard(){
   document.getElementById('d-sales-year').textContent='年間累計: '+fmt(ySales);
   document.getElementById('d-expense-year').textContent='年間累計: '+fmt(y.expense);
   document.getElementById('d-labor-year').textContent='年間累計: '+fmt(y.labor);
+  document.getElementById('d-tax-year').textContent='年間累計: '+fmt(y.tax);
   document.getElementById('d-profit-year').textContent='年間累計: '+fmt(yProfit);
 
   const pl=planOf(mi);
-  ['sales','expense','labor'].forEach(k=>{
-    const d=({sales:sales,expense:exp,labor:lab})[k]-pl[k];
+  ['sales','expense','labor','tax'].forEach(k=>{
+    const d=({sales:sales,expense:exp,labor:lab,tax:tax})[k]-(pl[k]||0);
     document.getElementById('d-'+k+'-diff').textContent='計画比: '+(d>=0?'+':'')+fmt(d);
   });
   renderDiffList(mi);
@@ -1312,7 +1325,8 @@ function renderDiffList(mi){
   const diffs=[
     {label:'売上',actual:actualSales,plan:plan.sales,invert:false},
     {label:'経費合計',actual:actual.expense,plan:plan.expense,invert:true},
-    {label:'役員報酬',actual:actual.labor,plan:plan.labor,invert:true}
+    {label:'役員報酬',actual:actual.labor,plan:plan.labor,invert:true},
+    {label:'税金・公課',actual:actual.tax,plan:plan.tax||0,invert:true}
   ];
   document.getElementById('diff-list').innerHTML=diffs.map(it=>{
     const pct=it.plan>0?Math.min(100,Math.round(it.actual/it.plan*100)):0;
@@ -2264,7 +2278,7 @@ function switchReportTab(name,btn){
    =================================================================== */
 
 // 経費として集計する区分（勘定科目）。役員報酬は別枠なので含めない。
-const EXPENSE_ACCOUNTS=LEDGER_TYPES.filter(t=>t!=='売上'&&LABOR_TYPES.indexOf(t)<0);
+const EXPENSE_ACCOUNTS=LEDGER_TYPES.filter(t=>t!=='売上'&&LABOR_TYPES.indexOf(t)<0&&TAX_TYPES.indexOf(t)<0);
 
 // レポート内の金額。マイナスは赤字にする。
 function repYen(n){
@@ -2320,7 +2334,7 @@ function generateReport(){
   const t=sumLedger(mi);
   const ledgerSales=t.sales;
   const sales=projectSales+ledgerSales;
-  const exp=t.expense, lab=t.labor;
+  const exp=t.expense, lab=t.labor, tax=t.tax;
   const profit=sales-exp-lab;
   const margin=sales>0?Math.round(profit/sales*100):0;
   const pl=planOf(mi);
@@ -2334,6 +2348,7 @@ function generateReport(){
     ${repRow('経費合計',repYen(exp))}
     ${repRow('役員報酬',repYen(lab))}
     ${repRow('営業利益',repYen(profit),{bold:true,bg:'#f5f5f5'})}
+    ${repRow('税金・公課（営業利益には含めない）',repYen(tax))}
     ${repRow('営業利益率',(sales>0?margin+'%':'-'),{bold:true})}
   </table>
   <div style="font-size:12px;font-weight:bold;margin:18px 0 6px">計画比</div>
@@ -2348,6 +2363,7 @@ function generateReport(){
       ${[{k:'売上高',plan:pl.sales,actual:sales},
          {k:'経費合計',plan:pl.expense,actual:exp},
          {k:'役員報酬',plan:pl.labor,actual:lab},
+         {k:'税金・公課',plan:pl.tax||0,actual:tax},
          {k:'営業利益',plan:planProfit,actual:profit}].map(r=>`<tr>
         <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${r.k}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right;color:#666">${fmt(r.plan)}</td>
@@ -2417,7 +2433,23 @@ function generateReport(){
     ${repRow('経費合計',repYen(exp),{bold:true,bg:'#f5f5f5'})}
   </table>`;
 
-  /* --- 5. 請求書発行状況 --- */
+  /* --- 5. 税金・公課明細（勘定科目別） --- */
+  const byTax={};
+  TAX_TYPES.forEach(k=>{byTax[k]=0});
+  S.ledger.forEach(l=>{
+    if(!l.date||new Date(l.date).getMonth()!==mi)return;
+    if(ledgerGroup(l.type)!=='tax')return;
+    if(byTax[l.type]===undefined)byTax[l.type]=0;
+    byTax[l.type]+=l.amount;
+  });
+  const taxKeys=Object.keys(byTax).filter(k=>byTax[k]!==0);
+  const taxTable=taxKeys.length===0?repEmpty('この月の税金・社会保険料の入力はありません。'):
+  `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    ${taxKeys.map(k=>repRow(k,repYen(byTax[k]))).join('')}
+    ${repRow('税金・公課 合計',repYen(tax),{bold:true,bg:'#f5f5f5'})}
+  </table>`;
+
+  /* --- 6. 請求書発行状況 --- */
   const invoices=S.quotes.filter(q=>
     q.type==='請求書'&&q.date&&new Date(q.date).getMonth()===mi);
   const invoiceTotal=invoices.reduce((a,q)=>a+(q.amount||0),0);
@@ -2451,7 +2483,8 @@ function generateReport(){
   ${repSection('【2】案件別売上明細',projectTable)}
   ${repSection('【3】収支入力明細（売上区分のみ）',salesTable)}
   ${repSection('【4】経費明細（勘定科目別）',expenseTable)}
-  ${repSection('【5】請求書発行状況',invoiceTable)}`;
+  ${repSection('【5】税金・公課明細（勘定科目別）',taxTable)}
+  ${repSection('【6】請求書発行状況',invoiceTable)}`;
 }
 
 function printReport(){
@@ -2789,13 +2822,14 @@ function renderLedger(){
   const mi=new Date().getMonth();
   const t=sumLedger(mi);
   // 売上は「案件ベース + 収支の売上入力」、経費・役員報酬は収支の入力から集計する
-  const sales=salesByMonth(mi),exp=t.expense,lab=t.labor;
+  const sales=salesByMonth(mi),exp=t.expense,lab=t.labor,tax=t.tax;
   const pl=planOf(mi);
   document.getElementById('plan-month-label').textContent=(mi+1)+'月';
   document.getElementById('plan-table').innerHTML=[
     {k:'売上',actual:sales,plan:pl.sales},
     {k:'経費合計',actual:exp,plan:pl.expense},
-    {k:'役員報酬',actual:lab,plan:pl.labor}
+    {k:'役員報酬',actual:lab,plan:pl.labor},
+    {k:'税金・公課',actual:tax,plan:pl.tax||0}
   ].map(r=>{
     const d=r.actual-r.plan;const c=d>=0?'#1D9E75':'#E24B4A';
     return`<tr><td>${r.k}</td><td style="color:var(--text-secondary)">${fmt(r.plan)}</td><td style="font-weight:500">${fmt(r.actual)}</td><td style="color:${c};font-weight:500">${d>=0?'+':''}${fmt(d)}</td></tr>`;
@@ -2855,13 +2889,15 @@ function loadPlanForm(){
   document.getElementById('plan-sales').value=p.sales;
   document.getElementById('plan-expense').value=p.expense;
   document.getElementById('plan-labor').value=p.labor;
+  document.getElementById('plan-tax').value=p.tax||0;
 }
 
 function readPlanForm(){
   return {
     sales:parseInt(document.getElementById('plan-sales').value)||0,
     expense:parseInt(document.getElementById('plan-expense').value)||0,
-    labor:parseInt(document.getElementById('plan-labor').value)||0
+    labor:parseInt(document.getElementById('plan-labor').value)||0,
+    tax:parseInt(document.getElementById('plan-tax').value)||0
   };
 }
 
@@ -2956,7 +2992,9 @@ const CSV_TEMPLATES={
       ['2026-07-05','家賃（レンタルオフィス利用料）','7月分オフィス利用料','30000'],
       ['2026-07-08','交通費','客先訪問 交通費','8000'],
       ['2026-07-10','システム利用料','SaaS 月額利用料','5000'],
-      ['2026-07-25','役員報酬','7月分 役員報酬','300000']
+      ['2026-07-25','役員報酬','7月分 役員報酬','300000'],
+      ['2026-07-31','社会保険料','7月分 社会保険料（会社負担）','45000'],
+      ['2026-07-10','源泉所得税（納付）','6月分 源泉所得税','12000']
     ],
     required:['日付','区分','摘要','金額']
   }

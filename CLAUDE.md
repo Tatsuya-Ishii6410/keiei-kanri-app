@@ -72,3 +72,9 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   state の finance:{cash,loan} に保持。settingsシートには finance.cash / finance.loan で保存
 - AIアドバイスはGASの advise アクション経由（claude-sonnet-4-6）。
   ブラウザから直接Anthropic APIは呼ばない
+
+## 収支の区分グループ
+- sales（売上）／ expense（経費系）／ labor（役員報酬・旧人件費）／ tax（税金・社会保険料）
+- 税金・公課は経費合計に含めず、営業利益の計算にも入れない
+- バッジ色：売上=緑／役員報酬=アンバー／経費=赤／税金・公課=紫
+- 区分を増やすときは LEDGER_TYPES と、税金なら TAX_TYPES にも追加する

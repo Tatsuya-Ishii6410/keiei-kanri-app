@@ -50,7 +50,7 @@ var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
   'invoice', 'payment', 'note'];
 // settings シートに保存する計画の項目
 // 月次計画は plan.<月>.<項目> というキーで保存する（例: plan.4.sales）
-var PLAN_FIELDS = ['sales', 'expense', 'labor'];
+var PLAN_FIELDS = ['sales', 'expense', 'labor', 'tax'];
 
 
 // ===== Webアプリのエントリポイント ==============================
@@ -218,7 +218,7 @@ function readFixedCosts_(sh) {
 function readSettings_(sh) {
   var company = {};
   var plan = [];
-  for (var i = 0; i < 12; i++) plan.push({ sales: 0, expense: 0, labor: 0 });
+  for (var i = 0; i < 12; i++) plan.push({ sales: 0, expense: 0, labor: 0, tax: 0 });
   var legacyPlan = null; // 月の区別が無かった頃の形式
   var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1, nextFixedCostId = 1;
   var finance = { cash: 0, loan: 0 };
@@ -259,8 +259,8 @@ function readSettings_(sh) {
   // 旧形式しか無い月には、その値を引き継ぐ
   if (legacyPlan) {
     for (var j = 0; j < 12; j++) {
-      if (!plan[j].sales && !plan[j].expense && !plan[j].labor) {
-        plan[j] = { sales: legacyPlan.sales, expense: legacyPlan.expense, labor: legacyPlan.labor };
+      if (!plan[j].sales && !plan[j].expense && !plan[j].labor && !plan[j].tax) {
+        plan[j] = { sales: legacyPlan.sales, expense: legacyPlan.expense, labor: legacyPlan.labor, tax: legacyPlan.tax || 0 };
       }
     }
   }
@@ -337,18 +337,18 @@ function writeAll_(data) {
 /** 計画データを、どの形式で来ても12ヶ月分の配列に整える。 */
 function normalizePlan_(plan) {
   var out = [];
-  for (var i = 0; i < 12; i++) out.push({ sales: 0, expense: 0, labor: 0 });
+  for (var i = 0; i < 12; i++) out.push({ sales: 0, expense: 0, labor: 0, tax: 0 });
   if (!plan) return out;
   if (Object.prototype.toString.call(plan) === '[object Array]') {
     for (var j = 0; j < 12; j++) {
       var v = plan[j] || {};
-      out[j] = { sales: num_(v.sales), expense: num_(v.expense), labor: num_(v.labor) };
+      out[j] = { sales: num_(v.sales), expense: num_(v.expense), labor: num_(v.labor), tax: num_(v.tax) };
     }
     return out;
   }
   // 旧形式（月の区別なし）は全ての月に同じ値を入れる
-  var legacy = { sales: num_(plan.sales), expense: num_(plan.expense), labor: num_(plan.labor) };
-  for (var k = 0; k < 12; k++) out[k] = { sales: legacy.sales, expense: legacy.expense, labor: legacy.labor };
+  var legacy = { sales: num_(plan.sales), expense: num_(plan.expense), labor: num_(plan.labor), tax: num_(plan.tax) };
+  for (var k = 0; k < 12; k++) out[k] = { sales: legacy.sales, expense: legacy.expense, labor: legacy.labor, tax: legacy.tax };
   return out;
 }
 
