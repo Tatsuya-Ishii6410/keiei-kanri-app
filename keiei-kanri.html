@@ -265,6 +265,10 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <div class="metric-label" id="project-total-label">売上合計</div>
       <div class="metric-value blue" id="project-total">¥0</div>
       <div class="metric-sub" id="project-total-sub">対象: 0件</div>
+      <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border)">
+        <div style="font-size:12px;color:var(--amber-text)">+ 売上見込み <strong id="project-forecast">¥0</strong></div>
+        <div class="metric-sub" id="project-forecast-sub">（商談中 0件）</div>
+      </div>
     </div>
   </div>
   <div class="card">
@@ -1158,11 +1162,17 @@ function renderProjects(){
   // 失注の案件は一覧にも合計にも含めない
   const list=S.projects.filter(p=>p.status!=='失注'&&projectHasMonth(p,mi));
 
-  // 合計カード（失注のみ除外。完了も売上に含める）
-  const total=list.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
+  // 合計カード。確定売上（契約済・進行中・完了）と見込み（商談中）に分ける。
+  // 失注はどちらにも含めない（listの時点で除外済み）。
+  const confirmed=list.filter(p=>p.status!=='商談中');
+  const pipeline=list.filter(p=>p.status==='商談中');
+  const total=confirmed.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
+  const forecast=pipeline.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
   document.getElementById('project-total-label').textContent=(mi===null?'全期間':(mi+1)+'月')+'の売上合計';
   document.getElementById('project-total').textContent=fmt(total);
-  document.getElementById('project-total-sub').textContent='対象: '+list.length+'件（失注を除く）';
+  document.getElementById('project-total-sub').textContent='対象: '+confirmed.length+'件（契約済・進行中・完了）';
+  document.getElementById('project-forecast').textContent=fmt(forecast);
+  document.getElementById('project-forecast-sub').textContent='（商談中 '+pipeline.length+'件）';
 
   if(list.length===0){
     tb.innerHTML='';
