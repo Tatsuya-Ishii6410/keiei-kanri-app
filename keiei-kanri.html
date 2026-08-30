@@ -632,7 +632,6 @@ const defaultState={
   projects:[],
   quotes:[],
   ledger:[],
-  monthlyData:[0,0,0,0,0,0,0,0,0,0,0,0],
   // 月次計画。添字0が1月、11が12月。
   plan:[
     {sales:0,expense:0,labor:0},  // 1月
@@ -696,7 +695,6 @@ function mergeState(parsed){
   if(!Array.isArray(s.projects))s.projects=[];
   if(!Array.isArray(s.quotes))s.quotes=[];
   if(!Array.isArray(s.ledger))s.ledger=[];
-  if(!Array.isArray(s.monthlyData)||s.monthlyData.length!==12)s.monthlyData=[0,0,0,0,0,0,0,0,0,0,0,0];
   return s;
 }
 
@@ -946,10 +944,22 @@ function calcProjectSalesYear(){
   return t;
 }
 
-// 12ヶ月分の案件売上を配列で返す（月次推移グラフ用）
-function projectSalesSeries(){
+/* ダッシュボードで使う売上は、案件ベースの売上と
+   収支ページで区分「売上」として入力した金額の合算とする。 */
+
+// monthIndex: 0=1月 … 11=12月
+function salesByMonth(mi){
+  return calcProjectSalesByMonth(mi)+sumLedger(mi).sales;
+}
+
+function salesYearTotal(){
+  return calcProjectSalesYear()+sumLedgerYear().sales;
+}
+
+// 12ヶ月分の売上を配列で返す（月次推移グラフ用）
+function salesSeries(){
   const a=[];
-  for(let i=0;i<12;i++)a.push(calcProjectSalesByMonth(i));
+  for(let i=0;i<12;i++)a.push(salesByMonth(i));
   return a;
 }
 
@@ -998,8 +1008,8 @@ function statusBadge(s){
 function updateDashboard(){
   const mi=getMonth();
   const t=sumLedger(mi);
-  // 売上は案件から計算し、経費・役員報酬は収支の入力から集計する
-  const sales=calcProjectSalesByMonth(mi),exp=t.expense,lab=t.labor;
+  // 売上は「案件ベース + 収支の売上入力」、経費・役員報酬は収支の入力から集計する
+  const sales=salesByMonth(mi),exp=t.expense,lab=t.labor;
   const profit=sales-exp-lab;
   const margin=sales>0?Math.round(profit/sales*100):0;
   document.getElementById('d-sales').textContent=fmt(sales);
@@ -1011,7 +1021,7 @@ function updateDashboard(){
 
   // 年間累計（1〜12月の合計）
   const y=sumLedgerYear();
-  const ySales=calcProjectSalesYear();
+  const ySales=salesYearTotal();
   const yProfit=ySales-y.expense-y.labor;
   document.getElementById('d-sales-year').textContent='年間累計: '+fmt(ySales);
   document.getElementById('d-expense-year').textContent='年間累計: '+fmt(y.expense);
@@ -1026,7 +1036,7 @@ function updateDashboard(){
   renderDiffList(mi);
   const mc=document.getElementById('monthly-chart');
   const months=['1','2','3','4','5','6','7','8','9','10','11','12'];
-  const series=projectSalesSeries();
+  const series=salesSeries();
   const maxV=Math.max(...series,1);
   mc.innerHTML=series.map((v,i)=>
     `<div class="chart-bar-wrap">
@@ -1058,7 +1068,7 @@ function setDiffMode(mode){
 function renderDiffList(mi){
   const isYear=diffMode==='year';
   const actual=isYear?sumLedgerYear():sumLedger(mi);
-  const actualSales=isYear?calcProjectSalesYear():calcProjectSalesByMonth(mi);
+  const actualSales=isYear?salesYearTotal():salesByMonth(mi);
   const plan=isYear?planYearTotal():planOf(mi);
   const diffs=[
     {label:'売上',actual:actualSales,plan:plan.sales,invert:false},
@@ -1371,8 +1381,8 @@ async function handlePDFUpload(event){
 function renderLedger(){
   const mi=new Date().getMonth();
   const t=sumLedger(mi);
-  // 売上は案件から計算し、経費・役員報酬は収支の入力から集計する
-  const sales=calcProjectSalesByMonth(mi),exp=t.expense,lab=t.labor;
+  // 売上は「案件ベース + 収支の売上入力」、経費・役員報酬は収支の入力から集計する
+  const sales=salesByMonth(mi),exp=t.expense,lab=t.labor;
   const pl=planOf(mi);
   document.getElementById('plan-month-label').textContent=(mi+1)+'月';
   document.getElementById('plan-table').innerHTML=[
@@ -1387,17 +1397,6 @@ function renderLedger(){
   document.getElementById('ledger-list').innerHTML=sorted.slice(0,15).map(l=>{
     return`<tr><td style="font-size:12px;white-space:nowrap">${l.date}</td><td>${ledgerBadge(l.type)}</td><td style="font-size:12px">${l.desc}</td><td style="font-weight:500">${fmt(l.amount)}</td><td><div style="display:flex;gap:4px"><button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button><button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button></div></td></tr>`;
   }).join('');
-}
-
-// 月次売上グラフ用のデータを収支から再計算する（追加・編集・削除のあとに必ず呼ぶ）
-function recalcMonthlyData(){
-  const m=[0,0,0,0,0,0,0,0,0,0,0,0];
-  S.ledger.forEach(l=>{
-    if(l.type!=='売上'||!l.date)return;
-    const i=new Date(l.date).getMonth();
-    if(i>=0&&i<12)m[i]+=l.amount;
-  });
-  S.monthlyData=m;
 }
 
 // id を渡すと編集、省略すると新規入力モードでモーダルを開く
@@ -1427,14 +1426,12 @@ function saveLedger(){
     S.ledger.push({id:S.nextLedgerId++,date,type,desc,amount});
   }
   editLedgerId=null;
-  recalcMonthlyData();
   saveState();closeModal('modal-add-ledger');refreshAll();
 }
 
 function deleteLedger(id){
   if(!confirm('この収支を削除しますか？'))return;
   S.ledger=S.ledger.filter(l=>l.id!==id);
-  recalcMonthlyData();
   saveState();refreshAll();
 }
 
@@ -1715,7 +1712,6 @@ function csvImportLedger(){
     added++;
   });
 
-  recalcMonthlyData();
   saveState();
   csvProgress(100,'取込完了');
   csvLog(`完了: ${added}件の収支を追加しました`,'info');

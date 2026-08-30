@@ -115,7 +115,6 @@ function readAll_() {
     ledger:   readLedger_(ss.getSheetByName('ledger')),
     company:  settings.company,
     plan:     settings.plan,
-    monthlyData:   settings.monthlyData,
     nextProjectId: settings.nextProjectId,
     nextQuoteNum:  settings.nextQuoteNum,
     nextLedgerId:  settings.nextLedgerId
@@ -176,7 +175,6 @@ function readSettings_(sh) {
   var plan = [];
   for (var i = 0; i < 12; i++) plan.push({ sales: 0, expense: 0, labor: 0 });
   var legacyPlan = null; // 月の区別が無かった頃の形式
-  var monthlyData = [0,0,0,0,0,0,0,0,0,0,0,0];
   var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1;
 
   rowObjects_(sh, SHEET_DEFS.settings).forEach(function (o) {
@@ -196,9 +194,6 @@ function readSettings_(sh) {
         if (!legacyPlan) legacyPlan = { sales: 0, expense: 0, labor: 0 };
         legacyPlan[rest] = num_(value);
       }
-    } else if (key.indexOf('monthlyData.') === 0) {
-      var m = parseInt(key.substring(12), 10);
-      if (m >= 1 && m <= 12) monthlyData[m - 1] = num_(value);
     } else if (key === 'nextProjectId') {
       nextProjectId = num_(value) || 1;
     } else if (key === 'nextQuoteNum') {
@@ -221,7 +216,6 @@ function readSettings_(sh) {
   return {
     company: company,
     plan: plan,
-    monthlyData: monthlyData,
     nextProjectId: nextProjectId,
     nextQuoteNum: nextQuoteNum,
     nextLedgerId: nextLedgerId
@@ -263,8 +257,6 @@ function writeAll_(data) {
     var pv = plan[pm];
     PLAN_FIELDS.forEach(function (k) { settings.push(['plan.' + month + '.' + k, pv[k]]); });
   }
-  var monthly = data.monthlyData || [];
-  for (var m = 0; m < 12; m++) settings.push(['monthlyData.' + (m + 1), num_(monthly[m])]);
   settings.push(['nextProjectId', num_(data.nextProjectId) || 1]);
   settings.push(['nextQuoteNum', num_(data.nextQuoteNum) || 1]);
   settings.push(['nextLedgerId', num_(data.nextLedgerId) || 1]);
