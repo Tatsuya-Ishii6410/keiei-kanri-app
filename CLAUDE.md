@@ -64,3 +64,11 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   gas-code.js にも keiei-kanri.html にも書かないこと
 - 使用モデル：claude-sonnet-4-6（PDFは type:'document'、画像は type:'image'）
 - GASのaction：driveList / driveExtract / driveProcessed
+
+## 融資力診断
+- レポートページの「💰 融資力診断」タブ。5項目×20点＝100点で採点
+  （売上の継続性／現預金水準／収益性／借入状況／事業計画の精度）
+- 現預金残高・既存借入残高は設定ページの「財務情報」から入力し、
+  state の finance:{cash,loan} に保持。settingsシートには finance.cash / finance.loan で保存
+- AIアドバイスはGASの advise アクション経由（claude-sonnet-4-6）。
+  ブラウザから直接Anthropic APIは呼ばない

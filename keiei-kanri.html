@@ -159,7 +159,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .report-card-title{font-size:13px;font-weight:bold;color:#1a2e4a;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #e0e0e0}
 @media print{
   body{background:#fff}
-  .topbar,.report-actions,.section-header{display:none!important}
+  .topbar,.report-actions,.section-header,.tab-group,.no-print{display:none!important}
   .app,.content{max-width:none;margin:0;padding:0;background:#fff}
   .page{display:none!important}
   #page-report{display:block!important}
@@ -437,14 +437,23 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <!-- MONTHLY REPORT -->
 <div id="page-report" class="page">
   <div class="section-header">
-    <h1 class="section-title">月次決算レポート</h1>
-    <div class="report-actions" style="display:flex;gap:8px;align-items:center">
+    <h1 class="section-title">レポート</h1>
+  </div>
+  <div class="tab-group no-print">
+    <button class="tab active" onclick="switchReportTab('monthly',this)">📊 月次レポート</button>
+    <button class="tab" onclick="switchReportTab('loan',this)">💰 融資力診断</button>
+  </div>
+  <div id="report-pane-monthly">
+    <div class="report-actions" style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-bottom:16px">
       <select id="report-month" style="width:auto;font-size:13px"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option></select>
       <button class="btn primary" onclick="generateReport()">レポートを生成</button>
       <button class="btn" onclick="printReport()">🖨️ 印刷する</button>
     </div>
+    <div class="report-sheet"><div id="report-body"></div></div>
   </div>
-  <div class="report-sheet"><div id="report-body"></div></div>
+  <div id="report-pane-loan" style="display:none">
+    <div id="loan-body"></div>
+  </div>
 </div>
 
 <!-- SETTINGS -->
@@ -483,6 +492,17 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <button class="btn primary" onclick="saveSettings()">✓ 保存する</button>
     </div>
     <div id="settings-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">財務情報（融資力診断に使用）</span></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">現預金残高（円）</label><input id="f-cash" type="number" placeholder="1500000"></div>
+      <div class="form-group"><label class="form-label">既存借入残高（円）</label><input id="f-loan" type="number" placeholder="0"></div>
+    </div>
+    <div class="actions-row">
+      <button class="btn primary" onclick="saveFinance()">✓ 保存する</button>
+    </div>
+    <div id="finance-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
   </div>
   <div class="card">
     <div class="card-header"><span class="card-title">データ保存先（Google Sheets）</span></div>
@@ -790,6 +810,8 @@ const defaultState={
     {sales:0,expense:0,labor:0},  // 11月
     {sales:0,expense:0,labor:0}  // 12月
   ],
+  // 財務情報（融資力診断で使う）
+  finance:{cash:0,loan:0},
   // 固定費: {id,type,desc,amount,startMonth,endMonth,enabled}
   fixedCosts:[],
   nextProjectId:1,nextQuoteNum:1,nextLedgerId:1,nextFixedCostId:1
@@ -841,6 +863,9 @@ function mergeState(parsed){
   if(!Array.isArray(s.quotes))s.quotes=[];
   if(!Array.isArray(s.ledger))s.ledger=[];
   if(!Array.isArray(s.fixedCosts))s.fixedCosts=[];
+  s.finance=Object.assign({cash:0,loan:0},(parsed&&parsed.finance)||{});
+  s.finance.cash=parseInt(s.finance.cash)||0;
+  s.finance.loan=parseInt(s.finance.loan)||0;
   if(!s.nextFixedCostId)s.nextFixedCostId=1;
   return s;
 }
@@ -1850,6 +1875,301 @@ function deleteFixedCost(id){
   renderFixedCostList();
 }
 
+/* ===== 融資力診断 =====================================================
+   アプリ内のデータから、融資審査でよく見られる5項目を採点して表示する。
+   AIによるアドバイスはGAS経由で取得する（APIキーをブラウザに置かないため）。
+   ===================================================================== */
+
+// 直近nヶ月の月インデックス（0=1月）。年をまたぐ場合は12で折り返す。
+function recentMonths(n){
+  const c=new Date().getMonth();
+  const a=[];
+  for(let i=n-1;i>=0;i--)a.push((c-i+12)%12);
+  return a;
+}
+
+// その月の営業利益
+function profitOfMonth(mi){
+  const t=sumLedger(mi);
+  return salesByMonth(mi)-t.expense-t.labor;
+}
+
+// その月の「安定売上」＝継続契約（月次・年次）から生まれる金額
+function recurringSalesOfMonth(mi){
+  let total=0;
+  S.projects.forEach(p=>{
+    if(p.status!=='契約済'&&p.status!=='進行中'&&p.status!=='完了')return;
+    if(p.contract!=='monthly'&&p.contract!=='annual')return;
+    if(!projectHasMonth(p,mi))return;
+    total+=projectMonthAmount(p,mi);
+  });
+  return total;
+}
+
+// 診断に使う数字をまとめて作る
+function loanMetrics(){
+  const mi=new Date().getMonth();
+  const months=recentMonths(3);
+  const sales3=months.map(m=>salesByMonth(m));
+  const profit3=months.map(m=>profitOfMonth(m));
+  const avgSales=Math.round(sales3.reduce((a,b)=>a+b,0)/months.length);
+  const avgProfit=Math.round(profit3.reduce((a,b)=>a+b,0)/months.length);
+  const recurring=recurringSalesOfMonth(mi);
+  const monthSales=salesByMonth(mi);
+
+  // 計画の入力状況と、計画に対する売上の乖離率
+  let plannedMonths=0;
+  for(let i=0;i<12;i++){
+    const p=planOf(i);
+    if(p.sales||p.expense||p.labor)plannedMonths++;
+  }
+  const gaps=[];
+  months.forEach(m=>{
+    const p=planOf(m);
+    if(p.sales>0)gaps.push(Math.abs(salesByMonth(m)-p.sales)/p.sales);
+  });
+  const gapRate=gaps.length?gaps.reduce((a,b)=>a+b,0)/gaps.length:null;
+
+  const fin=S.finance||{cash:0,loan:0};
+  return {
+    monthIndex:mi,
+    months,
+    avgSales,
+    avgProfit,
+    marginRate:avgSales>0?Math.round(avgProfit/avgSales*100):0,
+    monthSales,
+    recurring,
+    recurringRate:monthSales>0?Math.round(recurring/monthSales*100):0,
+    yearSales:salesYearTotal(),
+    cash:fin.cash||0,
+    loan:fin.loan||0,
+    cashMonths:avgSales>0?Math.round((fin.cash||0)/avgSales*10)/10:0,
+    plannedMonths,
+    gapRate
+  };
+}
+
+// 5項目の採点（各20点・合計100点）
+function loanScores(m){
+  // ①売上の継続性
+  const r=m.recurringRate;
+  const s1=r>=70?20:r>=50?16:r>=30?12:r>0?8:2;
+  // ②現預金水準（月商の何ヶ月分か）
+  const cm=m.cashMonths;
+  const s2=cm>=6?20:cm>=3?16:cm>=2?12:cm>=1?8:cm>0?4:0;
+  // ③収益性（営業利益率）
+  const mg=m.marginRate;
+  const s3=mg>=20?20:mg>=10?16:mg>=5?12:mg>0?8:2;
+  // ④借入状況（年商に対する借入残高の比率。少ないほど余力がある）
+  const lev=m.yearSales>0?m.loan/m.yearSales:(m.loan>0?2:0);
+  const s4=m.loan<=0?20:lev<=0.3?18:lev<=0.5?14:lev<=1?10:5;
+  // ⑤事業計画の精度（入力済み月数12点＋計画との乖離8点）
+  const sPlan=Math.round(m.plannedMonths/12*12);
+  const g=m.gapRate;
+  const sGap=g===null?0:(g<=0.1?8:g<=0.2?6:g<=0.3?4:2);
+  const s5=sPlan+sGap;
+
+  return [
+    {key:'sales',label:'売上の継続性',score:s1},
+    {key:'cash',label:'現預金水準',score:s2},
+    {key:'profit',label:'収益性',score:s3},
+    {key:'loan',label:'借入状況',score:s4},
+    {key:'plan',label:'事業計画の精度',score:s5}
+  ];
+}
+
+function scoreColor(pct){return pct>=80?'#1D9E75':pct>=60?'#EF9F27':'#E24B4A'}
+
+function scoreBadge(score){
+  if(score>=16)return'<span class="badge badge-green">◎良好</span>';
+  if(score>=12)return'<span class="badge badge-amber">○普通</span>';
+  return'<span class="badge badge-red">△要改善</span>';
+}
+
+// 5項目のレーダーチャート（SVG）
+function loanRadar(items){
+  const cx=125,cy=120,R=88;
+  const pt=(i,ratio)=>{
+    const a=(-90+i*72)*Math.PI/180;
+    return[cx+Math.cos(a)*R*ratio,cy+Math.sin(a)*R*ratio];
+  };
+  const poly=ratio=>items.map((_,i)=>pt(i,ratio).map(Math.round).join(',')).join(' ');
+  const grid=[0.25,0.5,0.75,1]
+    .map(r=>`<polygon points="${poly(r)}" fill="none" stroke="var(--border)" stroke-width="1"/>`).join('');
+  const axes=items.map((_,i)=>{
+    const[x,y]=pt(i,1);
+    return`<line x1="${cx}" y1="${cy}" x2="${Math.round(x)}" y2="${Math.round(y)}" stroke="var(--border)" stroke-width="1"/>`;
+  }).join('');
+  const shape=items.map((it,i)=>pt(i,Math.max(0.04,it.score/20)).map(Math.round).join(',')).join(' ');
+  const labels=items.map((it,i)=>{
+    const[x,y]=pt(i,1.24);
+    const anchor=i===0?'middle':(x<cx?'end':'start');
+    return`<text x="${Math.round(x)}" y="${Math.round(y)+4}" text-anchor="${anchor}" font-size="10" fill="var(--text-secondary)">${it.label}</text>`;
+  }).join('');
+  return`<svg viewBox="0 0 250 245" style="width:100%;max-width:250px;height:auto">
+    ${grid}${axes}
+    <polygon points="${shape}" fill="rgba(55,138,221,0.28)" stroke="#378ADD" stroke-width="2"/>
+    ${labels}
+  </svg>`;
+}
+
+function loanCard(title,badge,rows,comment){
+  return`<div class="card">
+    <div class="card-header"><span class="card-title">${title}</span>${badge}</div>
+    <div class="metric-grid" style="margin-bottom:12px">${rows}</div>
+    <div style="font-size:13px;line-height:1.8">${comment}</div>
+  </div>`;
+}
+
+function loanStat(label,value,sub,color){
+  return`<div class="metric-card">
+    <div class="metric-label">${label}</div>
+    <div class="metric-value" style="font-size:20px;${color?'color:'+color:''}">${value}</div>
+    ${sub?`<div class="metric-sub">${sub}</div>`:''}
+  </div>`;
+}
+
+function generateLoanReport(){
+  const m=loanMetrics();
+  const items=loanScores(m);
+  const total=items.reduce((a,it)=>a+it.score,0);
+  const color=scoreColor(total);
+  const by={};items.forEach(it=>by[it.key]=it.score);
+
+  // ①売上の継続性
+  const c1=m.recurringRate>=70
+    ?'継続契約の比率が高く、売上の見通しが立てやすい状態です。審査でも安定性を評価されやすい構成です。'
+    :m.recurringRate>=30
+    ?'継続契約はあるものの、単発案件への依存も残ります。月次契約を増やすと安定性の評価が上がります。'
+    :'単発案件が中心で、月ごとの売上が読みにくい状態です。まずは月次継続の契約を1〜2件つくることを優先しましょう。';
+  const card1=loanCard('① 売上の継続性',scoreBadge(by.sales),
+    loanStat('安定売上（今月の継続契約）',fmt(m.recurring))
+    +loanStat('月商（直近3ヶ月平均）',fmt(m.avgSales))
+    +loanStat('継続案件比率',m.recurringRate+'%')
+    +loanStat('融資目安額',fmt(m.avgSales*3)+' 〜 '+fmt(m.avgSales*4),'月商の3〜4倍'),
+    c1);
+
+  // ②現預金
+  const c2=m.cashMonths>=6
+    ?'月商の6ヶ月分以上の現預金があり、資金繰りの安全度は高い水準です。'
+    :m.cashMonths>=3
+    ?'月商の3ヶ月分以上を確保できています。もう一段積み増せると評価が安定します。'
+    :m.cash>0
+    ?'現預金が月商の3ヶ月分を下回っています。手元資金の厚みは審査で重視されるため、増強を優先しましょう。'
+    :'現預金残高が未入力です。設定ページの「財務情報」に入力すると診断精度が上がります。';
+  const card2=loanCard('② 現預金',scoreBadge(by.cash),
+    loanStat('現預金残高',fmt(m.cash))
+    +loanStat('月商の何ヶ月分か',m.cashMonths+'ヶ月分')
+    +loanStat('融資目安額',fmt(m.cash*2)+' 〜 '+fmt(m.cash*3),'現預金の2〜3倍'),
+    c2);
+
+  // ③収益性
+  const c3=m.avgProfit<=0
+    ?'直近3ヶ月の平均が赤字です。まずは単月黒字化が最優先です。黒字化の見通しを示す資料を用意しましょう。'
+    :m.marginRate>=10
+    ?'安定して黒字を確保できています。利益率も十分で、返済原資を説明しやすい状態です。'
+    :'黒字は確保していますが利益率は高くありません。経費の見直しか単価の改善で利益率を上げたいところです。';
+  const card3=loanCard('③ 収益性',scoreBadge(by.profit),
+    loanStat('営業利益（直近3ヶ月平均）',fmt(m.avgProfit),'',m.avgProfit>=0?'#1D9E75':'#E24B4A')
+    +loanStat('営業利益率',m.marginRate+'%')
+    +loanStat('判定',m.avgProfit>=0?'黒字':'赤字','',m.avgProfit>=0?'#1D9E75':'#E24B4A'),
+    c3);
+
+  // ④借入・個人ローン状況
+  const lev=m.yearSales>0?Math.round(m.loan/m.yearSales*100):0;
+  const c4=m.loan<=0
+    ?'借入残高はありません。返済負担がない一方で、金融機関との取引実績も無い状態です。少額でも実績をつくると次の調達がしやすくなります。'
+    :lev<=30
+    ?'年商に対する借入残高は軽く、追加調達の余力があります。'
+    :lev<=100
+    ?'借入残高が年商の一定割合を占めています。返済計画を明確に示せるようにしておきましょう。'
+    :'年商を超える借入残高があります。まずは返済実績を積み、既存借入の条件見直しも検討しましょう。';
+  const card4=loanCard('④ 借入・個人ローン状況',scoreBadge(by.loan),
+    loanStat('既存借入残高',fmt(m.loan))
+    +loanStat('年商に対する比率',m.yearSales>0?lev+'%':'-')
+    +loanStat('年商（案件＋収支）',fmt(m.yearSales)),
+    c4);
+
+  // ⑤事業計画の精度
+  const gapText=m.gapRate===null?'計画未入力':Math.round(m.gapRate*100)+'%';
+  const c5=m.plannedMonths===0
+    ?'月次計画が未入力です。収支管理の「計画編集」から入力すると、計画と実績の比較を示せるようになります。'
+    :m.gapRate===null
+    ?'計画は入力済みですが、直近3ヶ月の売上計画が0のため乖離を計算できません。'
+    :m.gapRate<=0.2
+    ?'計画と実績の乖離が小さく、見通しの精度が高い状態です。審査でも計画の信頼性を評価されやすくなります。'
+    :'計画と実績の乖離が大きめです。計画値を実態に合わせて見直すと、説明力のある資料になります。';
+  const card5=loanCard('⑤ 事業計画の精度',scoreBadge(by.plan),
+    loanStat('計画入力済み',m.plannedMonths+' / 12ヶ月')
+    +loanStat('計画との乖離率（売上・直近3ヶ月）',gapText),
+    c5);
+
+  document.getElementById('loan-body').innerHTML=`
+  <div class="card">
+    <div class="card-header"><span class="card-title">融資力 総合スコア</span>
+      <span style="font-size:12px;color:var(--text-secondary)">${new Date().getFullYear()}年${m.monthIndex+1}月時点</span>
+    </div>
+    <div class="two-col" style="align-items:center">
+      <div style="text-align:center">
+        <div style="font-size:52px;font-weight:700;letter-spacing:-1px;color:${color}">${total}<span style="font-size:20px;color:var(--text-muted)"> / 100</span></div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-top:4px">${total>=80?'融資を狙える水準です':total>=60?'あと一歩。改善余地があります':'まずは足元の改善から'}</div>
+        <div style="margin-top:14px">
+          ${items.map(it=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:0.5px solid var(--border)">
+            <span>${it.label}</span><span style="font-weight:600;color:${scoreColor(it.score/20*100)}">${it.score} / 20</span>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;justify-content:center">${loanRadar(items)}</div>
+    </div>
+  </div>
+  ${card1}${card2}${card3}${card4}${card5}
+  <div class="card">
+    <div class="card-header"><span class="card-title">🤖 AIによる融資戦略アドバイス</span>
+      <button class="btn primary" id="loan-advice-btn" onclick="requestLoanAdvice()">AIに融資戦略を相談する</button>
+    </div>
+    <div id="loan-advice"><div class="empty-state">ボタンを押すと、上の数値をもとにAIがアドバイスを作成します。</div></div>
+  </div>`;
+}
+
+// GAS経由でAIにアドバイスを作らせる
+async function requestLoanAdvice(){
+  const btn=document.getElementById('loan-advice-btn');
+  const el=document.getElementById('loan-advice');
+  const m=loanMetrics();
+  const items=loanScores(m);
+  btn.disabled=true;
+  el.innerHTML='<div class="alert alert-info"><span class="spinner"></span> AIが分析しています...</div>';
+  try{
+    const json=await gasCall({action:'advise',data:{
+      company:S.company.name||'',
+      monthSales:m.avgSales,
+      recurring:m.recurring,
+      recurringRate:m.recurringRate,
+      profit:m.avgProfit,
+      marginRate:m.marginRate,
+      cash:m.cash,
+      cashMonths:m.cashMonths,
+      loan:m.loan,
+      yearSales:m.yearSales,
+      plannedMonths:m.plannedMonths,
+      totalScore:items.reduce((a,it)=>a+it.score,0)
+    }});
+    if(!json.ok)throw new Error(json.error||'アドバイスを取得できませんでした');
+    el.innerHTML=`<div style="font-size:13px;line-height:1.9;white-space:pre-wrap">${json.text}</div>`;
+  }catch(e){
+    el.innerHTML=`<div class="alert alert-error">❌ アドバイスを取得できませんでした<br><small>${e.message}</small></div>`;
+  }
+  btn.disabled=false;
+}
+
+function switchReportTab(name,btn){
+  btn.closest('.tab-group').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('report-pane-monthly').style.display=name==='monthly'?'':'none';
+  document.getElementById('report-pane-loan').style.display=name==='loan'?'':'none';
+  if(name==='loan')generateLoanReport();
+}
+
 /* ===== 月次決算レポート =============================================
    対象月を選んでレポートを生成する。印刷（PDF化）を前提に、
    白背景・カード区切りのシンプルなビジネスレポート形式で組む。
@@ -2479,6 +2799,18 @@ function loadSettingsForm(){
   COMPANY_FIELDS.forEach(k=>{
     const el=document.getElementById('s-'+k);if(el)el.value=c[k]||'';
   });
+  if(!S.finance)S.finance={cash:0,loan:0};
+  document.getElementById('f-cash').value=S.finance.cash||0;
+  document.getElementById('f-loan').value=S.finance.loan||0;
+}
+
+function saveFinance(){
+  if(!S.finance)S.finance={cash:0,loan:0};
+  S.finance.cash=parseInt(document.getElementById('f-cash').value)||0;
+  S.finance.loan=parseInt(document.getElementById('f-loan').value)||0;
+  saveState();
+  const msg=document.getElementById('finance-msg');
+  msg.textContent='✓ 保存しました';setTimeout(()=>{msg.textContent=''},3000);
 }
 
 function saveSettings(){

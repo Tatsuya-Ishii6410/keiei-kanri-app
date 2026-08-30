@@ -96,6 +96,7 @@ function doPost(e) {
     if (action === 'driveList') return respond_({ ok: true, files: driveList_() }, '');
     if (action === 'driveExtract') return respond_(driveExtract_(body.fileId), '');
     if (action === 'driveProcessed') return respond_({ ok: true, renamed: driveMarkProcessed_(body.fileIds) }, '');
+    if (action === 'advise') return respond_(loanAdvice_(body.data), '');
   } catch (err) {
     return respond_({ ok: false, error: String(err && err.message || err) }, '');
   }
@@ -144,7 +145,8 @@ function readAll_() {
     nextProjectId: settings.nextProjectId,
     nextQuoteNum:  settings.nextQuoteNum,
     nextLedgerId:  settings.nextLedgerId,
-    nextFixedCostId: settings.nextFixedCostId
+    nextFixedCostId: settings.nextFixedCostId,
+    finance: settings.finance
   };
 }
 
@@ -219,6 +221,7 @@ function readSettings_(sh) {
   for (var i = 0; i < 12; i++) plan.push({ sales: 0, expense: 0, labor: 0 });
   var legacyPlan = null; // 月の区別が無かった頃の形式
   var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1, nextFixedCostId = 1;
+  var finance = { cash: 0, loan: 0 };
 
   rowObjects_(sh, SHEET_DEFS.settings).forEach(function (o) {
     var key = str_(o.key);
@@ -245,6 +248,10 @@ function readSettings_(sh) {
       nextLedgerId = num_(value) || 1;
     } else if (key === 'nextFixedCostId') {
       nextFixedCostId = num_(value) || 1;
+    } else if (key === 'finance.cash') {
+      finance.cash = num_(value);
+    } else if (key === 'finance.loan') {
+      finance.loan = num_(value);
     }
   });
 
@@ -264,7 +271,8 @@ function readSettings_(sh) {
     nextProjectId: nextProjectId,
     nextQuoteNum: nextQuoteNum,
     nextLedgerId: nextLedgerId,
-    nextFixedCostId: nextFixedCostId
+    nextFixedCostId: nextFixedCostId,
+    finance: finance
   };
 }
 
@@ -313,6 +321,9 @@ function writeAll_(data) {
   settings.push(['nextQuoteNum', num_(data.nextQuoteNum) || 1]);
   settings.push(['nextLedgerId', num_(data.nextLedgerId) || 1]);
   settings.push(['nextFixedCostId', num_(data.nextFixedCostId) || 1]);
+  var fin = data.finance || {};
+  settings.push(['finance.cash', num_(fin.cash)]);
+  settings.push(['finance.loan', num_(fin.loan)]);
   settings.push(['updatedAt', Utilities.formatDate(new Date(), timezone_(ss), 'yyyy-MM-dd HH:mm:ss')]);
 
   writeSheet_(ss.getSheetByName('projects'), SHEET_DEFS.projects, projects);
@@ -543,6 +554,63 @@ function normalizeCategory_(v) {
     if (s && s.indexOf(keys[i]) >= 0) return CATEGORY_MAP[keys[i]];
   }
   return 'その他経費';
+}
+
+
+// ===== 融資力診断のAIアドバイス =================================
+
+/** 診断結果の数値をもとに、融資に向けたアドバイスを生成する。 */
+function loanAdvice_(d) {
+  var key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
+  if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY がスクリプト プロパティに設定されていません' };
+  if (!d) return { ok: false, error: 'データがありません' };
+
+  var yen = function (v) { return Math.round(Number(v) || 0).toLocaleString(); };
+  var prompt = 'あなたは中小企業の資金調達に詳しい財務アドバイザーです。\n'
+    + '次の会社の直近の数字をもとに、金融機関からの融資を受けやすくするためのアドバイスを日本語で書いてください。\n\n'
+    + '会社名: ' + (d.company || '（未設定）') + '\n'
+    + '月商（直近3ヶ月平均）: ' + yen(d.monthSales) + '円\n'
+    + '安定売上（継続契約の月額合計）: ' + yen(d.recurring) + '円（継続案件比率 ' + (d.recurringRate || 0) + '%）\n'
+    + '営業利益（直近3ヶ月平均）: ' + yen(d.profit) + '円（利益率 ' + (d.marginRate || 0) + '%）\n'
+    + '現預金残高: ' + yen(d.cash) + '円（月商の ' + (d.cashMonths || 0) + 'ヶ月分）\n'
+    + '既存借入残高: ' + yen(d.loan) + '円\n'
+    + '年商: ' + yen(d.yearSales) + '円\n'
+    + '月次計画の入力状況: 12ヶ月中 ' + (d.plannedMonths || 0) + 'ヶ月\n'
+    + '融資力の総合スコア: ' + (d.totalScore || 0) + '/100\n\n'
+    + '次の3点だけに絞って、具体的な数字を挙げながら書いてください。前置きや一般論は不要です。\n'
+    + '【今すぐできること】\n【3ヶ月以内にすべきこと】\n【融資申込のベストタイミング】\n\n'
+    + '各項目3つ以内の箇条書きで、全体で800字以内にまとめてください。';
+
+  var payload = {
+    model: ANTHROPIC_MODEL,
+    max_tokens: 2000,
+    messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }]
+  };
+
+  var res;
+  try {
+    res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+  } catch (err) {
+    return { ok: false, error: 'APIに接続できませんでした: ' + (err && err.message || err) };
+  }
+
+  var code = res.getResponseCode();
+  var body;
+  try { body = JSON.parse(res.getContentText()); } catch (err) { body = null; }
+  if (code !== 200) {
+    return { ok: false, error: 'API エラー ' + code + ': ' + (body && body.error && body.error.message || res.getContentText().slice(0, 200)) };
+  }
+
+  var text = '';
+  (body.content || []).forEach(function (c) { if (c.type === 'text') text += c.text; });
+  if (!text) return { ok: false, error: 'AIの応答が空でした' };
+  return { ok: true, text: text };
 }
 
 
