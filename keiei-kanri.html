@@ -649,6 +649,14 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     </span>
   </div>
   <div id="bulk-list"></div>
+  <div class="form-row single" style="margin-top:14px">
+    <label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input id="bulk-merge" type="checkbox" onchange="updateBulkCount()" style="width:auto"> 同一顧客はまとめて発行する（1枚に複数明細）
+    </label>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">備考</label><textarea id="bulk-note" placeholder="請求書に記載する備考"></textarea></div>
+  </div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-bulk-invoice')">キャンセル</button>
     <button class="btn primary" id="bulk-submit" onclick="createBulkInvoices()">📄 選択した案件で請求書を一括作成</button>
@@ -1872,6 +1880,7 @@ function billingYear(){return new Date().getFullYear()}
 function openBulkInvoiceModal(){
   const mi=currentProjectMonth();
   document.getElementById('bulk-month').value=String(mi===null?new Date().getMonth():mi);
+  document.getElementById('bulk-note').value=S.company.note||'';
   updateBulkInvoiceForm();
   openModal('modal-bulk-invoice');
 }
@@ -1891,6 +1900,16 @@ function bulkInvoiceTargets(){
   return S.projects.filter(p=>(p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,mi));
 }
 
+// value属性に入れる文字列をエスケープする
+function escAttr(v){
+  return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// 品名・件名の初期値
+function defaultItemName(p,mi){
+  return `${p.name}（${billingYear()}年${mi+1}月分）`;
+}
+
 function renderBulkInvoiceList(){
   const mi=parseInt(document.getElementById('bulk-month').value)||0;
   const list=bulkInvoiceTargets();
@@ -1901,15 +1920,15 @@ function renderBulkInvoiceList(){
     document.getElementById('bulk-count').textContent='';
     return;
   }
-  document.getElementById('bulk-submit').disabled=false;
   el.innerHTML='<div class="table-wrap"><table><thead><tr>'
-    +'<th style="width:36px"></th><th>顧客名</th><th>案件名</th><th style="text-align:right">金額</th>'
+    +'<th style="width:36px"></th><th>顧客名</th><th>案件名</th><th style="min-width:200px">品名・件名</th><th style="text-align:right">金額</th>'
     +'</tr></thead><tbody>'
     +list.map(p=>`<tr>
       <td><input type="checkbox" class="bulk-check" value="${p.id}" checked onchange="updateBulkCount()" style="width:auto"></td>
       <td style="font-size:12px">${p.client||'-'}</td>
-      <td style="font-weight:500">${p.name}</td>
-      <td style="text-align:right">${fmt(projectMonthAmount(p,mi))}</td>
+      <td style="font-size:12px">${p.name}</td>
+      <td><input type="text" class="bulk-name" data-id="${p.id}" value="${escAttr(defaultItemName(p,mi))}" style="font-size:12px"></td>
+      <td style="text-align:right;white-space:nowrap">${fmt(projectMonthAmount(p,mi))}</td>
     </tr>`).join('')
     +'</tbody></table></div>';
   updateBulkCount();
@@ -1920,51 +1939,93 @@ function setBulkCheckAll(checked){
   updateBulkCount();
 }
 
-function updateBulkCount(){
-  const mi=parseInt(document.getElementById('bulk-month').value)||0;
-  const ids=selectedBulkIds();
-  const total=S.projects
-    .filter(p=>ids.indexOf(p.id)>=0)
-    .reduce((a,p)=>a+Math.floor(projectMonthAmount(p,mi)*1.1),0);
-  document.getElementById('bulk-count').textContent=ids.length+'件を選択中（税込合計 '+fmt(total)+'）';
-  document.getElementById('bulk-submit').disabled=ids.length===0;
-}
-
 function selectedBulkIds(){
   return Array.from(document.querySelectorAll('.bulk-check'))
     .filter(c=>c.checked)
     .map(c=>parseInt(c.value));
 }
 
+// 入力された品名・件名を {案件id: 品名} で取り出す
+function bulkItemNames(){
+  const map={};
+  document.querySelectorAll('.bulk-name').forEach(inp=>{
+    map[parseInt(inp.dataset.id)]=inp.value.trim();
+  });
+  return map;
+}
+
+function bulkMergeEnabled(){
+  const el=document.getElementById('bulk-merge');
+  return !!(el&&el.checked);
+}
+
+// 選択された案件を請求書1枚ぶんずつのまとまりに分ける。
+// まとめ発行がONなら同じ顧客名で1枚にする（顧客名が空の案件はまとめない）。
+function bulkInvoiceGroups(){
+  const mi=parseInt(document.getElementById('bulk-month').value)||0;
+  const ids=selectedBulkIds();
+  const names=bulkItemNames();
+  const merge=bulkMergeEnabled();
+  const groups=[];
+  const byClient={};
+  S.projects.filter(p=>ids.indexOf(p.id)>=0).forEach(p=>{
+    const unit=projectMonthAmount(p,mi);
+    const item={name:names[p.id]||defaultItemName(p,mi),qty:1,unit,total:unit};
+    const client=(p.client||'').trim();
+    if(merge&&client){
+      if(!byClient[client]){byClient[client]={client,items:[]};groups.push(byClient[client]);}
+      byClient[client].items.push(item);
+    }else{
+      groups.push({client,items:[item]});
+    }
+  });
+  return groups;
+}
+
+function updateBulkCount(){
+  const ids=selectedBulkIds();
+  const groups=bulkInvoiceGroups();
+  const total=groups.reduce((a,g)=>a+bulkGroupAmount(g),0);
+  document.getElementById('bulk-count').textContent=
+    ids.length+'件を選択中 → 請求書 '+groups.length+'枚（税込合計 '+fmt(total)+'）';
+  document.getElementById('bulk-submit').disabled=ids.length===0;
+}
+
+// 請求書1枚の税込金額（明細の合計に消費税を乗せて小数点以下切り捨て）
+function bulkGroupAmount(g){
+  const sub=g.items.reduce((a,it)=>a+it.total,0);
+  return Math.floor(sub*1.1);
+}
+
 function createBulkInvoices(){
   const mi=parseInt(document.getElementById('bulk-month').value)||0;
   const date=document.getElementById('bulk-date').value||today();
   const due=document.getElementById('bulk-due').value||'';
-  const ids=selectedBulkIds();
-  if(ids.length===0){alert('請求する案件を選択してください');return;}
+  const note=document.getElementById('bulk-note').value.trim();
+  const groups=bulkInvoiceGroups();
+  if(groups.length===0){alert('請求する案件を選択してください');return;}
 
   const y=billingYear();
-  const targets=S.projects.filter(p=>ids.indexOf(p.id)>=0);
-  targets.forEach(p=>{
-    const unit=projectMonthAmount(p,mi);
-    const subject=`${p.name}（${y}年${mi+1}月分）`;
+  groups.forEach(g=>{
+    // まとめた請求書は月まとめの件名、1件だけの請求書は品名をそのまま件名にする
+    const subject=g.items.length===1?g.items[0].name:`${y}年${mi+1}月分 ご請求`;
     S.quotes.push({
       id:makeDocNumber('請求書'),
       subject,
-      client:(p.client||'')+' 御中',
-      amount:Math.floor(unit*1.1),
+      client:(g.client||'')+' 御中',
+      amount:bulkGroupAmount(g),
       type:'請求書',
       date,
       due,
       expire:due,
-      items:[{name:subject,qty:1,unit,total:unit}],
-      note:S.company.note||''
+      items:g.items.map(it=>({...it})),
+      note
     });
   });
 
   saveState();
   closeModal('modal-bulk-invoice');
-  alert(targets.length+'件の請求書を作成しました');
+  alert(groups.length+'件の請求書を作成しました');
   showPage('quotes',document.querySelectorAll('.nav-btn')[2]);
 }
 
