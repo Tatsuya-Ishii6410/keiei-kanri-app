@@ -30,12 +30,14 @@ var SPREADSHEET_ID = '1gdtg7q3NwG3FQmWGc7lMpNEKROyvyRwuoIRKNSPsi4k';
 var SHEET_DEFS = {
   projects: ['id', 'name', 'client', 'amount', 'status', 'start', 'end', 'contract', 'memo'],
   quotes:   ['id', 'subject', 'client', 'amount', 'type', 'date', 'expire', 'due', 'items', 'note'],
-  ledger:   ['id', 'date', 'type', 'desc', 'amount'],
+  ledger:   ['id', 'date', 'type', 'desc', 'amount', 'fixedCostId'],
+  fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
   settings: ['key', 'value']
 };
 
 // 日付として自動変換されると困る列（テキスト書式を強制する）
-var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'value'];
+var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'value',
+  'startMonth', 'endMonth'];
 
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
@@ -115,11 +117,13 @@ function readAll_() {
     projects: readProjects_(ss.getSheetByName('projects')),
     quotes:   readQuotes_(ss.getSheetByName('quotes')),
     ledger:   readLedger_(ss.getSheetByName('ledger')),
+    fixedCosts: readFixedCosts_(ss.getSheetByName('fixedCosts')),
     company:  settings.company,
     plan:     settings.plan,
     nextProjectId: settings.nextProjectId,
     nextQuoteNum:  settings.nextQuoteNum,
-    nextLedgerId:  settings.nextLedgerId
+    nextLedgerId:  settings.nextLedgerId,
+    nextFixedCostId: settings.nextFixedCostId
   };
 }
 
@@ -168,9 +172,24 @@ function readLedger_(sh) {
       date: str_(o.date),
       type: str_(o.type),
       desc: str_(o.desc),
-      amount: num_(o.amount)
+      amount: num_(o.amount),
+      fixedCostId: str_(o.fixedCostId) === '' ? null : num_(o.fixedCostId)
     };
   }).filter(function (l) { return l.date !== '' && l.desc !== ''; });
+}
+
+function readFixedCosts_(sh) {
+  return rowObjects_(sh, SHEET_DEFS.fixedCosts).map(function (o) {
+    return {
+      id: num_(o.id),
+      type: str_(o.type),
+      desc: str_(o.desc),
+      amount: num_(o.amount),
+      startMonth: ym_(o.startMonth),
+      endMonth: ym_(o.endMonth),
+      enabled: bool_(o.enabled)
+    };
+  }).filter(function (f) { return f.desc !== '' && f.startMonth !== ''; });
 }
 
 function readSettings_(sh) {
@@ -178,7 +197,7 @@ function readSettings_(sh) {
   var plan = [];
   for (var i = 0; i < 12; i++) plan.push({ sales: 0, expense: 0, labor: 0 });
   var legacyPlan = null; // 月の区別が無かった頃の形式
-  var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1;
+  var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1, nextFixedCostId = 1;
 
   rowObjects_(sh, SHEET_DEFS.settings).forEach(function (o) {
     var key = str_(o.key);
@@ -203,6 +222,8 @@ function readSettings_(sh) {
       nextQuoteNum = num_(value) || 1;
     } else if (key === 'nextLedgerId') {
       nextLedgerId = num_(value) || 1;
+    } else if (key === 'nextFixedCostId') {
+      nextFixedCostId = num_(value) || 1;
     }
   });
 
@@ -221,7 +242,8 @@ function readSettings_(sh) {
     plan: plan,
     nextProjectId: nextProjectId,
     nextQuoteNum: nextQuoteNum,
-    nextLedgerId: nextLedgerId
+    nextLedgerId: nextLedgerId,
+    nextFixedCostId: nextFixedCostId
   };
 }
 
@@ -248,7 +270,13 @@ function writeAll_(data) {
   });
 
   var ledger = (data.ledger || []).map(function (l) {
-    return [num_(l.id), str_(l.date), str_(l.type), str_(l.desc), num_(l.amount)];
+    return [num_(l.id), str_(l.date), str_(l.type), str_(l.desc), num_(l.amount),
+      (l.fixedCostId === null || l.fixedCostId === undefined || l.fixedCostId === '') ? '' : num_(l.fixedCostId)];
+  });
+
+  var fixedCosts = (data.fixedCosts || []).map(function (f) {
+    return [num_(f.id), str_(f.type), str_(f.desc), num_(f.amount),
+      ym_(f.startMonth), ym_(f.endMonth), !!f.enabled];
   });
 
   var settings = [];
@@ -263,11 +291,13 @@ function writeAll_(data) {
   settings.push(['nextProjectId', num_(data.nextProjectId) || 1]);
   settings.push(['nextQuoteNum', num_(data.nextQuoteNum) || 1]);
   settings.push(['nextLedgerId', num_(data.nextLedgerId) || 1]);
+  settings.push(['nextFixedCostId', num_(data.nextFixedCostId) || 1]);
   settings.push(['updatedAt', Utilities.formatDate(new Date(), timezone_(ss), 'yyyy-MM-dd HH:mm:ss')]);
 
   writeSheet_(ss.getSheetByName('projects'), SHEET_DEFS.projects, projects);
   writeSheet_(ss.getSheetByName('quotes'),   SHEET_DEFS.quotes,   quotes);
   writeSheet_(ss.getSheetByName('ledger'),   SHEET_DEFS.ledger,   ledger);
+  writeSheet_(ss.getSheetByName('fixedCosts'), SHEET_DEFS.fixedCosts, fixedCosts);
   writeSheet_(ss.getSheetByName('settings'), SHEET_DEFS.settings, settings);
   SpreadsheetApp.flush();
 }
@@ -366,6 +396,24 @@ function num_(v) {
   var s = String(v === null || v === undefined ? '' : v).replace(/[^0-9.\-]/g, '');
   var n = parseFloat(s);
   return isNaN(n) ? 0 : Math.round(n);
+}
+
+/** セルの値を YYYY-MM に。日付として解釈されていた場合も整形する。 */
+function ym_(v) {
+  if (v === null || v === undefined || v === '') return '';
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    return Utilities.formatDate(v, timezone_(), 'yyyy-MM');
+  }
+  var s = String(v).trim();
+  var m = /^(\d{4})[-\/](\d{1,2})/.exec(s);
+  return m ? m[1] + '-' + ('0' + m[2]).slice(-2) : s;
+}
+
+/** セルの値を真偽値に。TRUE / true / 1 / 有効 を true とみなす。 */
+function bool_(v) {
+  if (typeof v === 'boolean') return v;
+  var s = String(v === null || v === undefined ? '' : v).trim().toLowerCase();
+  return s === 'true' || s === '1' || s === 'yes' || s === '有効';
 }
 
 function timezone_(ss) {

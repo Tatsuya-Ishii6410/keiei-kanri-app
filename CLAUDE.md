@@ -45,3 +45,12 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   （契約済・進行中・完了）で集計する。明細の合計と必ず一致させること
   ※ ダッシュボードの売上（calcProjectSalesByMonth）も同じ範囲なので、両者の数字は一致する
 - 印刷は @media print で topbar・操作ボタンを隠し、レポート本体のみА4に出力する
+
+## 固定費（収支管理）
+- 収支管理の「🔁 固定費管理」で登録。fixedCosts に {id,type,desc,amount,startMonth,endMonth,enabled}
+- 収支ページを開いたとき、または「固定費を反映」で、開始月〜今月のうち
+  未登録の月を ledger に自動追加する（計上日はその月の末日）
+- 重複防止は ledger の fixedCostId と年月の組み合わせで判定するため、
+  ledger シートの fixedCostId 列は消さないこと
+- 自動追加された収支を削除しても、次に反映したとき再作成される。
+  止めたいときは固定費を無効にするか終了月を設定する

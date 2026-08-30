@@ -319,7 +319,10 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <div id="page-ledger" class="page">
   <div class="section-header">
     <h1 class="section-title">収支管理</h1>
-    <button class="btn primary" onclick="openLedgerModal()">+ 入力</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn" onclick="openFixedCostsModal()">🔁 固定費管理</button>
+      <button class="btn primary" onclick="openLedgerModal()">+ 入力</button>
+    </div>
   </div>
   <div class="two-col">
     <div class="card">
@@ -585,6 +588,49 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </div>
 </div>
 
+<div class="modal-overlay" id="modal-fixed-costs">
+<div class="modal wide">
+  <div class="modal-header"><span class="modal-title">固定費管理</span><button class="btn sm" onclick="closeModal('modal-fixed-costs')">✕</button></div>
+  <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
+    毎月同額で発生する費用を登録すると、開始月から今月までのぶんが収支に自動で追加されます。<br>
+    計上日はその月の末日です。すでに追加済みの月は二重に登録されません。
+  </div>
+  <div id="fixed-cost-list"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="applyFixedCostsManually()">🔁 固定費を反映</button>
+    <button class="btn primary" onclick="openFixedCostForm()">+ 固定費を追加</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-fixed-cost-form">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title" id="fc-title">固定費を追加</span><button class="btn sm" onclick="closeModal('modal-fixed-cost-form')">✕</button></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">区分</label>
+      <select id="fc-type"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option></select>
+    </div>
+    <div class="form-group"><label class="form-label">金額</label><input id="fc-amount" type="number" placeholder="300000"></div>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">摘要</label><input id="fc-desc" type="text" placeholder="例: 役員報酬、オフィス利用料"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">開始月</label><input id="fc-start" type="month"></div>
+    <div class="form-group"><label class="form-label">終了月（空欄で無期限）</label><input id="fc-end" type="month"></div>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px">
+      <input id="fc-enabled" type="checkbox" checked style="width:auto"> 有効にする（オフにすると自動追加を止めます）
+    </label></div>
+  </div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-fixed-cost-form')">キャンセル</button>
+    <button class="btn primary" id="fc-submit" onclick="saveFixedCost()">+ 追加</button>
+  </div>
+</div>
+</div>
+
 <div class="modal-overlay" id="modal-bulk-invoice">
 <div class="modal wide">
   <div class="modal-header"><span class="modal-title">一括請求書作成</span><button class="btn sm" onclick="closeModal('modal-bulk-invoice')">✕</button></div>
@@ -711,7 +757,9 @@ const defaultState={
     {sales:0,expense:0,labor:0},  // 11月
     {sales:0,expense:0,labor:0}  // 12月
   ],
-  nextProjectId:1,nextQuoteNum:1,nextLedgerId:1
+  // 固定費: {id,type,desc,amount,startMonth,endMonth,enabled}
+  fixedCosts:[],
+  nextProjectId:1,nextQuoteNum:1,nextLedgerId:1,nextFixedCostId:1
 };
 
 let S=loadState();
@@ -759,6 +807,8 @@ function mergeState(parsed){
   if(!Array.isArray(s.projects))s.projects=[];
   if(!Array.isArray(s.quotes))s.quotes=[];
   if(!Array.isArray(s.ledger))s.ledger=[];
+  if(!Array.isArray(s.fixedCosts))s.fixedCosts=[];
+  if(!s.nextFixedCostId)s.nextFixedCostId=1;
   return s;
 }
 
@@ -928,7 +978,7 @@ function showPage(p,btn){
   if(p==='dashboard')updateDashboard();
   if(p==='projects')renderProjects();
   if(p==='quotes')renderQuotes();
-  if(p==='ledger')renderLedger();
+  if(p==='ledger')initLedgerPage();
   if(p==='csv')initCsvPage();
   if(p==='report')initReportPage();
   if(p==='settings')loadSettingsForm();
@@ -1429,6 +1479,179 @@ function previewQuoteById(id){
   currentQuoteData=q;showPreviewModal();
 }
 
+/* ===== 固定費 =========================================================
+   毎月同額で発生する費用（役員報酬・家賃など）を登録しておき、
+   収支に自動で展開する。展開済みかどうかは ledger の fixedCostId と
+   年月の組み合わせで判定するので、同じ月が二重に入ることはない。
+   ===================================================================== */
+
+let editFixedCostId=null;
+
+// YYYY-MM を「年*12＋月」の通し番号にする。形式が違えば null。
+function ymToAbs(ym){
+  const m=/^(\d{4})-(\d{1,2})$/.exec(String(ym||'').trim());
+  if(!m)return null;
+  const mm=parseInt(m[2],10);
+  if(mm<1||mm>12)return null;
+  return parseInt(m[1],10)*12+(mm-1);
+}
+
+function absToYm(abs){
+  return Math.floor(abs/12)+'-'+String(abs%12+1).padStart(2,'0');
+}
+
+// その年月の月末日を YYYY-MM-DD で返す（固定費はその月の末日で計上する）
+function absToLastDate(abs){
+  const y=Math.floor(abs/12),m=abs%12;
+  const d=new Date(y,m+1,0);
+  return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function ymLabel(ym){
+  const abs=ymToAbs(ym);
+  return abs===null?'':(Math.floor(abs/12)+'年'+(abs%12+1)+'月');
+}
+
+// 有効な固定費を、まだ収支に無い月のぶんだけ追加する。追加した件数を返す。
+function applyFixedCosts(){
+  if(!Array.isArray(S.fixedCosts))S.fixedCosts=[];
+  const now=new Date();
+  const nowAbs=now.getFullYear()*12+now.getMonth();
+
+  // すでに展開済みの「固定費ID@年月」
+  const done={};
+  S.ledger.forEach(l=>{
+    if(!l.fixedCostId||!l.date)return;
+    done[l.fixedCostId+'@'+String(l.date).slice(0,7)]=true;
+  });
+
+  let added=0;
+  S.fixedCosts.forEach(fc=>{
+    if(!fc.enabled)return;
+    const start=ymToAbs(fc.startMonth);
+    if(start===null)return;
+    const end=ymToAbs(fc.endMonth);
+    // 終了月が未設定なら今月まで。未来の月は先に作らない。
+    const last=Math.min(end===null?nowAbs:end,nowAbs);
+    for(let a=start;a<=Math.min(last,start+119);a++){
+      const key=fc.id+'@'+absToYm(a);
+      if(done[key])continue;
+      S.ledger.push({
+        id:S.nextLedgerId++,
+        date:absToLastDate(a),
+        type:fc.type,
+        desc:fc.desc,
+        amount:fc.amount,
+        fixedCostId:fc.id
+      });
+      done[key]=true;
+      added++;
+    }
+  });
+  if(added>0)saveState();
+  return added;
+}
+
+// 収支管理ページを開いたときの処理（固定費を反映してから描画する）
+function initLedgerPage(){
+  applyFixedCosts();
+  renderLedger();
+}
+
+function applyFixedCostsManually(){
+  const n=applyFixedCosts();
+  renderFixedCostList();
+  refreshAll();
+  alert(n>0?n+'件の収支を追加しました':'追加する収支はありませんでした（すべて反映済みです）');
+}
+
+function openFixedCostsModal(){
+  renderFixedCostList();
+  openModal('modal-fixed-costs');
+}
+
+function renderFixedCostList(){
+  const el=document.getElementById('fixed-cost-list');
+  if(!Array.isArray(S.fixedCosts)||S.fixedCosts.length===0){
+    el.innerHTML='<div class="empty-state">固定費が登録されていません。「+ 固定費を追加」から登録してください。</div>';
+    return;
+  }
+  el.innerHTML='<div class="table-wrap"><table><thead><tr>'
+    +'<th>区分</th><th>摘要</th><th style="text-align:right">金額</th><th>期間</th><th>有効</th><th>操作</th>'
+    +'</tr></thead><tbody>'
+    +S.fixedCosts.map(fc=>`<tr>
+      <td>${ledgerBadge(fc.type)}</td>
+      <td style="font-weight:500">${fc.desc}</td>
+      <td style="text-align:right">${fmt(fc.amount)}</td>
+      <td style="font-size:12px;white-space:nowrap">${ymLabel(fc.startMonth)} 〜 ${fc.endMonth?ymLabel(fc.endMonth):'無期限'}</td>
+      <td><label style="display:flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap"><input type="checkbox" ${fc.enabled?'checked':''} onchange="toggleFixedCost(${fc.id},this.checked)" style="width:auto"> ${fc.enabled?'有効':'無効'}</label></td>
+      <td><div style="display:flex;gap:4px">
+        <button class="btn sm" onclick="openFixedCostForm(${fc.id})">✏️ 編集</button>
+        <button class="btn sm danger" onclick="deleteFixedCost(${fc.id})">削除</button>
+      </div></td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+}
+
+function toggleFixedCost(id,checked){
+  const fc=S.fixedCosts.find(x=>x.id===id);
+  if(!fc)return;
+  fc.enabled=checked;
+  saveState();
+  renderFixedCostList();
+}
+
+// id を渡すと編集、省略すると新規登録モードでフォームを開く
+function openFixedCostForm(id){
+  const fc=(id!==undefined&&id!==null)?S.fixedCosts.find(x=>x.id===id):null;
+  editFixedCostId=fc?fc.id:null;
+  const now=new Date();
+  const nowYm=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('fc-type').value=fc?fc.type:LEDGER_TYPES[1];
+  document.getElementById('fc-desc').value=fc?fc.desc:'';
+  document.getElementById('fc-amount').value=fc?fc.amount:'';
+  document.getElementById('fc-start').value=fc?fc.startMonth:nowYm;
+  document.getElementById('fc-end').value=fc?(fc.endMonth||''):'';
+  document.getElementById('fc-enabled').checked=fc?!!fc.enabled:true;
+  document.getElementById('fc-title').textContent=fc?'固定費を編集':'固定費を追加';
+  document.getElementById('fc-submit').textContent=fc?'✓ 保存':'+ 追加';
+  openModal('modal-fixed-cost-form');
+}
+
+function saveFixedCost(){
+  const type=document.getElementById('fc-type').value;
+  const desc=document.getElementById('fc-desc').value.trim();
+  const amount=parseInt(document.getElementById('fc-amount').value)||0;
+  const startMonth=document.getElementById('fc-start').value;
+  const endMonth=document.getElementById('fc-end').value;
+  const enabled=document.getElementById('fc-enabled').checked;
+  if(!desc||!amount||!startMonth){alert('摘要・金額・開始月を入力してください');return;}
+  if(ymToAbs(startMonth)===null){alert('開始月の形式が正しくありません');return;}
+  if(endMonth&&ymToAbs(endMonth)<ymToAbs(startMonth)){alert('終了月は開始月と同じか、それより後にしてください');return;}
+
+  const values={type,desc,amount,startMonth,endMonth,enabled};
+  if(editFixedCostId!==null){
+    const fc=S.fixedCosts.find(x=>x.id===editFixedCostId);
+    if(!fc){alert('対象の固定費が見つかりませんでした');return;}
+    Object.assign(fc,values);
+  }else{
+    S.fixedCosts.push(Object.assign({id:S.nextFixedCostId++},values));
+  }
+  editFixedCostId=null;
+  saveState();
+  closeModal('modal-fixed-cost-form');
+  applyFixedCosts();
+  renderFixedCostList();
+  refreshAll();
+}
+
+function deleteFixedCost(id){
+  if(!confirm('この固定費を削除しますか？\n（すでに収支に追加された分はそのまま残ります）'))return;
+  S.fixedCosts=S.fixedCosts.filter(fc=>fc.id!==id);
+  saveState();
+  renderFixedCostList();
+}
+
 /* ===== 月次決算レポート =============================================
    対象月を選んでレポートを生成する。印刷（PDF化）を前提に、
    白背景・カード区切りのシンプルなビジネスレポート形式で組む。
@@ -1920,7 +2143,7 @@ function renderLedger(){
   }).join('');
   const sorted=[...S.ledger].sort((a,b)=>b.date.localeCompare(a.date));
   document.getElementById('ledger-list').innerHTML=sorted.slice(0,15).map(l=>{
-    return`<tr><td style="font-size:12px;white-space:nowrap">${l.date}</td><td>${ledgerBadge(l.type)}</td><td style="font-size:12px">${l.desc}</td><td style="font-weight:500">${fmt(l.amount)}</td><td><div style="display:flex;gap:4px"><button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button><button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button></div></td></tr>`;
+    return`<tr><td style="font-size:12px;white-space:nowrap">${l.date}</td><td>${ledgerBadge(l.type)}</td><td style="font-size:12px">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}</td><td style="font-weight:500">${fmt(l.amount)}</td><td><div style="display:flex;gap:4px"><button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button><button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button></div></td></tr>`;
   }).join('');
 }
 
