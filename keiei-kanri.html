@@ -299,8 +299,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="two-col">
     <div class="card">
       <div class="card-header">
-        <span class="card-title">計画 vs 実績（今月）</span>
-        <button class="btn sm" onclick="openModal('modal-edit-plan')">✏️ 計画編集</button>
+        <span class="card-title">計画 vs 実績（<span id="plan-month-label">今月</span>）</span>
+        <button class="btn sm" onclick="openPlanModal()">✏️ 計画編集</button>
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>区分</th><th>計画</th><th>実績</th><th>差異</th></tr></thead>
@@ -574,14 +574,21 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <div class="modal-overlay" id="modal-edit-plan">
 <div class="modal">
   <div class="modal-header"><span class="modal-title">月次計画を編集</span><button class="btn sm" onclick="closeModal('modal-edit-plan')">✕</button></div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">対象月</label>
+      <select id="plan-month" onchange="loadPlanForm()"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option></select>
+    </div>
+  </div>
   <div class="form-row three">
     <div class="form-group"><label class="form-label">売上計画</label><input id="plan-sales" type="number"></div>
     <div class="form-group"><label class="form-label">経費計画</label><input id="plan-expense" type="number"></div>
     <div class="form-group"><label class="form-label">人件費計画</label><input id="plan-labor" type="number"></div>
   </div>
+  <div style="font-size:12px;color:var(--text-muted);margin-top:6px">月を切り替えると、その月の計画値を編集できます。</div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-edit-plan')">キャンセル</button>
-    <button class="btn primary" onclick="savePlan()">✓ 保存</button>
+    <button class="btn" onclick="applyPlanToAllMonths()">全月に適用</button>
+    <button class="btn primary" onclick="savePlan()">✓ この月を保存</button>
   </div>
 </div>
 </div>
@@ -615,37 +622,26 @@ const defaultState={
     payment:'発行日から30日以内',
     note:''
   },
-  projects:[
-    {id:1,name:'AI活用支援',client:'CORENOVA株式会社',amount:100000,status:'契約済',start:'2026-04-01',end:'2026-04-30',contract:'monthly',memo:''},
-    {id:2,name:'AI活用支援（単月）',client:'アステッキホールディングス株式会社',amount:160000,status:'完了',start:'2026-05-01',end:'2026-05-31',contract:'single',memo:''},
-    {id:3,name:'AI活用支援',client:'アステッキホールディングス株式会社',amount:240000,status:'完了',start:'2026-06-01',end:'2026-07-31',contract:'monthly',memo:''},
-    {id:4,name:'AI活用支援',client:'アステッキホールディングス株式会社',amount:150000,status:'進行中',start:'2026-08-01',end:'2027-02-28',contract:'monthly',memo:''},
-    {id:5,name:'AI活用支援',client:'一般社団法人くらし支援ネット',amount:50000,status:'進行中',start:'2026-04-01',end:'2027-02-28',contract:'monthly',memo:''},
-    {id:6,name:'AI活用支援',client:'株式会社フラックスブルーム',amount:15000,status:'進行中',start:'2026-04-01',end:'2027-02-28',contract:'monthly',memo:''},
-    {id:7,name:'AI活用支援（単月）',client:'株式会社創生アドバイザリー',amount:64000,status:'完了',start:'2026-05-01',end:'2026-05-31',contract:'single',memo:''},
-    {id:8,name:'AI活用支援',client:'株式会社創生アドバイザリー',amount:144000,status:'完了',start:'2026-06-01',end:'2026-06-30',contract:'monthly',memo:''},
-    {id:9,name:'AI活用支援',client:'株式会社創生アドバイザリー',amount:208000,status:'進行中',start:'2026-07-01',end:'2027-02-28',contract:'monthly',memo:''},
-    {id:10,name:'AI活用支援',client:'LIMISH',amount:30000,status:'進行中',start:'2026-05-01',end:'2027-02-28',contract:'monthly',memo:''},
-    {id:11,name:'AI活用支援',client:'株式会社楯菱電産',amount:30000,status:'進行中',start:'2026-05-01',end:'2027-02-28',contract:'monthly',memo:''},
-    {id:12,name:'AI開発支援',client:'株式会社SOARIG',amount:1000000,status:'商談中',start:'2026-07-01',end:'2026-07-31',contract:'single',memo:''},
-    {id:13,name:'AI活用支援',client:'株式会社内海グループ',amount:50000,status:'進行中',start:'2026-09-01',end:'2027-02-28',contract:'monthly',memo:''},
-    {id:14,name:'AI活用支援（単月）',client:'SNACK SAWA',amount:300000,status:'完了',start:'2026-05-01',end:'2026-05-31',contract:'single',memo:''},
-    {id:15,name:'AI活用支援',client:'兵庫明光販売株式会社',amount:50000,status:'進行中',start:'2026-08-01',end:'2026-10-31',contract:'monthly',memo:''}
+  projects:[],
+  quotes:[],
+  ledger:[],
+  monthlyData:[0,0,0,0,0,0,0,0,0,0,0,0],
+  // 月次計画。添字0が1月、11が12月。
+  plan:[
+    {sales:0,expense:0,labor:0},  // 1月
+    {sales:0,expense:0,labor:0},  // 2月
+    {sales:0,expense:0,labor:0},  // 3月
+    {sales:0,expense:0,labor:0},  // 4月
+    {sales:0,expense:0,labor:0},  // 5月
+    {sales:0,expense:0,labor:0},  // 6月
+    {sales:0,expense:0,labor:0},  // 7月
+    {sales:0,expense:0,labor:0},  // 8月
+    {sales:0,expense:0,labor:0},  // 9月
+    {sales:0,expense:0,labor:0},  // 10月
+    {sales:0,expense:0,labor:0},  // 11月
+    {sales:0,expense:0,labor:0}  // 12月
   ],
-  quotes:[
-    {id:'Q-001',subject:'AIコンサル支援 4-6月',client:'株式会社A 御中',amount:528000,type:'見積書',date:'2026-03-25',expire:'2026-04-30',items:[{name:'AIコンサルティング（月次）',qty:3,unit:160000,total:480000}],note:''},
-    {id:'Q-002',subject:'Salesforce移行支援',client:'株式会社B 御中',amount:880000,type:'見積書',date:'2026-05-20',expire:'2026-06-20',items:[{name:'要件定義',qty:1,unit:200000,total:200000},{name:'移行作業',qty:1,unit:400000,total:400000},{name:'テスト・検証',qty:1,unit:200000,total:200000}],note:''}
-  ],
-  ledger:[
-    {id:1,date:'2026-06-01',type:'売上',desc:'AIコンサル 6月分',amount:160000},
-    {id:2,date:'2026-06-03',type:'経費',desc:'交通費',amount:12000},
-    {id:3,date:'2026-06-05',type:'人件費',desc:'外注費',amount:80000},
-    {id:4,date:'2026-06-10',type:'売上',desc:'Salesforce支援 着手金',amount:400000},
-    {id:5,date:'2026-06-12',type:'経費',desc:'ソフトウェア費用',amount:30000}
-  ],
-  monthlyData:[820000,950000,780000,1100000,900000,560000,0,0,0,0,0,0],
-  plan:{sales:1000000,expense:200000,labor:300000},
-  nextProjectId:16,nextQuoteNum:3,nextLedgerId:6
+  nextProjectId:1,nextQuoteNum:1,nextLedgerId:1
 };
 
 let S=loadState();
@@ -658,12 +654,36 @@ let csvType='project';
 let csvParsedData=null;
 let csvParsedHeaders=[];
 
+// 月次計画を必ず12ヶ月分の配列にそろえる（旧形式 {sales,expense,labor} からの移行にも対応）
+function normalizePlan(plan){
+  const out=[];
+  for(let i=0;i<12;i++)out.push({sales:0,expense:0,labor:0});
+  if(!plan)return out;
+  if(Array.isArray(plan)){
+    for(let i=0;i<12;i++){
+      const v=plan[i]||{};
+      out[i]={sales:parseInt(v.sales)||0,expense:parseInt(v.expense)||0,labor:parseInt(v.labor)||0};
+    }
+    return out;
+  }
+  // 旧形式（月の区別なし）は、同じ値を全ての月に適用する
+  const legacy={sales:parseInt(plan.sales)||0,expense:parseInt(plan.expense)||0,labor:parseInt(plan.labor)||0};
+  for(let i=0;i<12;i++)out[i]=Object.assign({},legacy);
+  return out;
+}
+
+// 指定した月（0=1月）の計画を取得する
+function planOf(mi){
+  if(!Array.isArray(S.plan))S.plan=normalizePlan(S.plan);
+  return S.plan[mi]||{sales:0,expense:0,labor:0};
+}
+
 function mergeState(parsed){
   const base=JSON.parse(JSON.stringify(defaultState));
   const s=Object.assign(base,parsed||{},{
-    company:Object.assign({},defaultState.company,(parsed&&parsed.company)||{}),
-    plan:Object.assign({},defaultState.plan,(parsed&&parsed.plan)||{})
+    company:Object.assign({},defaultState.company,(parsed&&parsed.company)||{})
   });
+  s.plan=normalizePlan(parsed&&parsed.plan);
   if(!Array.isArray(s.projects))s.projects=[];
   if(!Array.isArray(s.quotes))s.quotes=[];
   if(!Array.isArray(s.ledger))s.ledger=[];
@@ -869,10 +889,11 @@ function updateDashboard(){
   document.getElementById('d-profit').textContent=fmt(profit);
   document.getElementById('d-profit').className='metric-value '+(profit>=0?'green':'red');
   document.getElementById('d-margin').textContent='利益率: '+margin+'%';
+  const pl=planOf(mi);
   const diffs=[
-    {label:'売上',actual:sales,plan:S.plan.sales,invert:false},
-    {label:'経費',actual:exp,plan:S.plan.expense,invert:true},
-    {label:'人件費',actual:lab,plan:S.plan.labor,invert:true}
+    {label:'売上',actual:sales,plan:pl.sales,invert:false},
+    {label:'経費',actual:exp,plan:pl.expense,invert:true},
+    {label:'人件費',actual:lab,plan:pl.labor,invert:true}
   ];
   ['sales','expense','labor'].forEach((k,i)=>{
     const d=diffs[i].actual-diffs[i].plan;
@@ -1170,17 +1191,16 @@ function renderLedger(){
   const sales=S.ledger.filter(l=>l.type==='売上'&&new Date(l.date).getMonth()===mi).reduce((a,l)=>a+l.amount,0);
   const exp=S.ledger.filter(l=>l.type==='経費'&&new Date(l.date).getMonth()===mi).reduce((a,l)=>a+l.amount,0);
   const lab=S.ledger.filter(l=>l.type==='人件費'&&new Date(l.date).getMonth()===mi).reduce((a,l)=>a+l.amount,0);
+  const pl=planOf(mi);
+  document.getElementById('plan-month-label').textContent=(mi+1)+'月';
   document.getElementById('plan-table').innerHTML=[
-    {k:'売上',actual:sales,plan:S.plan.sales},
-    {k:'経費',actual:exp,plan:S.plan.expense},
-    {k:'人件費',actual:lab,plan:S.plan.labor}
+    {k:'売上',actual:sales,plan:pl.sales},
+    {k:'経費',actual:exp,plan:pl.expense},
+    {k:'人件費',actual:lab,plan:pl.labor}
   ].map(r=>{
     const d=r.actual-r.plan;const c=d>=0?'#1D9E75':'#E24B4A';
     return`<tr><td>${r.k}</td><td style="color:var(--text-secondary)">${fmt(r.plan)}</td><td style="font-weight:500">${fmt(r.actual)}</td><td style="color:${c};font-weight:500">${d>=0?'+':''}${fmt(d)}</td></tr>`;
   }).join('');
-  document.getElementById('plan-sales').value=S.plan.sales;
-  document.getElementById('plan-expense').value=S.plan.expense;
-  document.getElementById('plan-labor').value=S.plan.labor;
   const sorted=[...S.ledger].sort((a,b)=>b.date.localeCompare(a.date));
   document.getElementById('ledger-list').innerHTML=sorted.slice(0,15).map(l=>{
     const cls={売上:'badge-green',経費:'badge-red',人件費:'badge-amber'}[l.type]||'badge-gray';
@@ -1201,11 +1221,41 @@ function addLedger(){
   renderLedger();
 }
 
+function openPlanModal(mi){
+  document.getElementById('plan-month').value=String(typeof mi==='number'?mi:new Date().getMonth());
+  loadPlanForm();
+  openModal('modal-edit-plan');
+}
+
+function planFormMonth(){return parseInt(document.getElementById('plan-month').value)||0}
+
+function loadPlanForm(){
+  const p=planOf(planFormMonth());
+  document.getElementById('plan-sales').value=p.sales;
+  document.getElementById('plan-expense').value=p.expense;
+  document.getElementById('plan-labor').value=p.labor;
+}
+
+function readPlanForm(){
+  return {
+    sales:parseInt(document.getElementById('plan-sales').value)||0,
+    expense:parseInt(document.getElementById('plan-expense').value)||0,
+    labor:parseInt(document.getElementById('plan-labor').value)||0
+  };
+}
+
 function savePlan(){
-  S.plan.sales=parseInt(document.getElementById('plan-sales').value)||0;
-  S.plan.expense=parseInt(document.getElementById('plan-expense').value)||0;
-  S.plan.labor=parseInt(document.getElementById('plan-labor').value)||0;
-  saveState();closeModal('modal-edit-plan');renderLedger();
+  planOf(0); // S.plan を配列に正規化しておく
+  S.plan[planFormMonth()]=readPlanForm();
+  saveState();closeModal('modal-edit-plan');renderLedger();updateDashboard();
+}
+
+function applyPlanToAllMonths(){
+  if(!confirm('入力中の値を1月〜12月すべての計画に反映しますか？'))return;
+  const v=readPlanForm();
+  planOf(0);
+  for(let i=0;i<12;i++)S.plan[i]=Object.assign({},v);
+  saveState();closeModal('modal-edit-plan');renderLedger();updateDashboard();
 }
 
 function loadSettingsForm(){

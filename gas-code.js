@@ -40,6 +40,7 @@ var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'items', 'value'];
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email', 'bank', 'account', 'invoice', 'payment', 'note'];
 // settings シートに保存する計画の項目
+// 月次計画は plan.<月>.<項目> というキーで保存する（例: plan.4.sales）
 var PLAN_FIELDS = ['sales', 'expense', 'labor'];
 
 
@@ -172,7 +173,9 @@ function readLedger_(sh) {
 
 function readSettings_(sh) {
   var company = {};
-  var plan = {};
+  var plan = [];
+  for (var i = 0; i < 12; i++) plan.push({ sales: 0, expense: 0, labor: 0 });
+  var legacyPlan = null; // 月の区別が無かった頃の形式
   var monthlyData = [0,0,0,0,0,0,0,0,0,0,0,0];
   var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1;
 
@@ -183,7 +186,16 @@ function readSettings_(sh) {
     if (key.indexOf('company.') === 0) {
       company[key.substring(8)] = str_(value);
     } else if (key.indexOf('plan.') === 0) {
-      plan[key.substring(5)] = num_(value);
+      var rest = key.substring(5);        // "4.sales" または旧形式の "sales"
+      var dot = rest.indexOf('.');
+      if (dot > 0) {
+        var pm = parseInt(rest.substring(0, dot), 10) - 1;
+        var field = rest.substring(dot + 1);
+        if (pm >= 0 && pm < 12 && PLAN_FIELDS.indexOf(field) >= 0) plan[pm][field] = num_(value);
+      } else if (PLAN_FIELDS.indexOf(rest) >= 0) {
+        if (!legacyPlan) legacyPlan = { sales: 0, expense: 0, labor: 0 };
+        legacyPlan[rest] = num_(value);
+      }
     } else if (key.indexOf('monthlyData.') === 0) {
       var m = parseInt(key.substring(12), 10);
       if (m >= 1 && m <= 12) monthlyData[m - 1] = num_(value);
@@ -197,7 +209,14 @@ function readSettings_(sh) {
   });
 
   COMPANY_FIELDS.forEach(function (k) { if (company[k] === undefined) company[k] = ''; });
-  PLAN_FIELDS.forEach(function (k) { if (plan[k] === undefined) plan[k] = 0; });
+  // 旧形式しか無い月には、その値を引き継ぐ
+  if (legacyPlan) {
+    for (var j = 0; j < 12; j++) {
+      if (!plan[j].sales && !plan[j].expense && !plan[j].labor) {
+        plan[j] = { sales: legacyPlan.sales, expense: legacyPlan.expense, labor: legacyPlan.labor };
+      }
+    }
+  }
 
   return {
     company: company,
@@ -238,8 +257,12 @@ function writeAll_(data) {
   var settings = [];
   var company = data.company || {};
   COMPANY_FIELDS.forEach(function (k) { settings.push(['company.' + k, str_(company[k])]); });
-  var plan = data.plan || {};
-  PLAN_FIELDS.forEach(function (k) { settings.push(['plan.' + k, num_(plan[k])]); });
+  var plan = normalizePlan_(data.plan);
+  for (var pm = 0; pm < 12; pm++) {
+    var month = pm + 1;
+    var pv = plan[pm];
+    PLAN_FIELDS.forEach(function (k) { settings.push(['plan.' + month + '.' + k, pv[k]]); });
+  }
   var monthly = data.monthlyData || [];
   for (var m = 0; m < 12; m++) settings.push(['monthlyData.' + (m + 1), num_(monthly[m])]);
   settings.push(['nextProjectId', num_(data.nextProjectId) || 1]);
@@ -252,6 +275,24 @@ function writeAll_(data) {
   writeSheet_(ss.getSheetByName('ledger'),   SHEET_DEFS.ledger,   ledger);
   writeSheet_(ss.getSheetByName('settings'), SHEET_DEFS.settings, settings);
   SpreadsheetApp.flush();
+}
+
+/** 計画データを、どの形式で来ても12ヶ月分の配列に整える。 */
+function normalizePlan_(plan) {
+  var out = [];
+  for (var i = 0; i < 12; i++) out.push({ sales: 0, expense: 0, labor: 0 });
+  if (!plan) return out;
+  if (Object.prototype.toString.call(plan) === '[object Array]') {
+    for (var j = 0; j < 12; j++) {
+      var v = plan[j] || {};
+      out[j] = { sales: num_(v.sales), expense: num_(v.expense), labor: num_(v.labor) };
+    }
+    return out;
+  }
+  // 旧形式（月の区別なし）は全ての月に同じ値を入れる
+  var legacy = { sales: num_(plan.sales), expense: num_(plan.expense), labor: num_(plan.labor) };
+  for (var k = 0; k < 12; k++) out[k] = { sales: legacy.sales, expense: legacy.expense, labor: legacy.labor };
+  return out;
 }
 
 function writeSheet_(sh, headers, rows) {
