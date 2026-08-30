@@ -1,0 +1,12 @@
+# Netlify設定
+# リポジトリ直下をそのまま公開し、トップページ（/）で keiei-kanri.html を表示する。
+# （リポジトリに index.html を置かずに済ませるための設定）
+
+[build]
+  publish = "."
+  command = ""
+
+[[redirects]]
+  from = "/"
+  to = "/keiei-kanri.html"
+  status = 200
