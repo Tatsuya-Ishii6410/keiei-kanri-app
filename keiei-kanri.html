@@ -117,27 +117,12 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .modal-overlay.open{display:flex}
 .modal{background:var(--bg-primary);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;border:0.5px solid var(--border);box-shadow:0 8px 32px rgba(0,0,0,0.15)}
 .modal.wide{max-width:680px}
+.modal.doc{max-width:720px}
 .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .modal-title{font-size:16px;font-weight:600}
 .actions-row{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
-.quote-preview{background:var(--bg-primary);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:28px}
-.quote-doc-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:0.5px solid var(--border)}
-.company-block .company-name{font-size:16px;font-weight:600;margin-bottom:4px}
-.company-block .company-meta{font-size:12px;color:var(--text-secondary);line-height:1.8}
-.doc-title-block{text-align:right}
-.doc-title{font-size:22px;font-weight:700;letter-spacing:3px;margin-bottom:6px}
-.doc-meta{font-size:12px;color:var(--text-secondary);line-height:1.8}
-.quote-amount-block{background:var(--bg-secondary);border-radius:var(--radius-md);padding:14px 18px;margin:16px 0;display:flex;justify-content:space-between;align-items:center}
-.quote-amount-label{font-size:13px;color:var(--text-secondary)}
-.quote-amount-value{font-size:22px;font-weight:700}
-.quote-table{width:100%;border-collapse:collapse;font-size:12px;margin:12px 0}
-.quote-table th{background:var(--bg-secondary);padding:8px 10px;text-align:left;font-weight:500;border:0.5px solid var(--border)}
-.quote-table td{padding:8px 10px;border:0.5px solid var(--border)}
-.quote-table td.num{text-align:right}
-.quote-totals{text-align:right;font-size:13px;line-height:2}
-.quote-footer{margin-top:20px;padding-top:16px;border-top:0.5px solid var(--border);font-size:12px;color:var(--text-secondary);line-height:1.8}
 .empty-state{text-align:center;padding:40px;color:var(--text-muted);font-size:13px}
 .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin 0.7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -445,8 +430,13 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <div class="form-group"><label class="form-label">メールアドレス</label><input id="s-email" type="text" placeholder="info@example.com"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">銀行名・支店名</label><input id="s-bank" type="text" placeholder="〇〇銀行 △△支店"></div>
-      <div class="form-group"><label class="form-label">口座種別・番号</label><input id="s-account" type="text" placeholder="普通 1234567 ヤマダタロウ"></div>
+      <div class="form-group"><label class="form-label">銀行名</label><input id="s-bankName" type="text" placeholder="GMOあおぞらネット銀行"></div>
+      <div class="form-group"><label class="form-label">支店名</label><input id="s-bankBranch" type="text" placeholder="法人第二営業部"></div>
+    </div>
+    <div class="form-row three">
+      <div class="form-group"><label class="form-label">口座種別</label><input id="s-accountType" type="text" placeholder="普通"></div>
+      <div class="form-group"><label class="form-label">口座番号</label><input id="s-accountNumber" type="text" placeholder="2428016"></div>
+      <div class="form-group"><label class="form-label">口座名義</label><input id="s-accountHolder" type="text" placeholder="アスリンク株式会社"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">インボイス登録番号</label><input id="s-invoice" type="text" placeholder="T1234567890123"></div>
@@ -566,8 +556,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </div>
 
 <div class="modal-overlay" id="modal-preview-quote">
-<div class="modal wide">
-  <div class="modal-header"><span class="modal-title">見積書プレビュー</span><button class="btn sm" onclick="closeModal('modal-preview-quote')">✕</button></div>
+<div class="modal doc">
+  <div class="modal-header"><span class="modal-title" id="preview-modal-title">見積書プレビュー</span><button class="btn sm" onclick="closeModal('modal-preview-quote')">✕</button></div>
   <div id="quote-preview-content"></div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-preview-quote')">閉じる</button>
@@ -639,8 +629,11 @@ const defaultState={
     addr:'兵庫県神戸市中央区琴ノ緒町5-7-11 ONLYONE神戸・三宮2階',
     tel:'080-5760-5988',
     email:'tatsuya-ishii@us-links.com',
-    bank:'GMOあおぞらネット銀行 法人第二営業部(102)',
-    account:'普通 2428016 アスリンク株式会社',
+    bankName:'GMOあおぞらネット銀行',
+    bankBranch:'法人第二営業部',
+    accountType:'普通',
+    accountNumber:'2428016',
+    accountHolder:'アスリンク株式会社',
     invoice:'',
     payment:'発行日から30日以内',
     note:''
@@ -1380,64 +1373,134 @@ function previewQuoteById(id){
   currentQuoteData=q;showPreviewModal();
 }
 
-function showPreviewModal(){
-  const q=currentQuoteData,c=S.company;
+/* ===== 見積書・請求書のドキュメント ===================================
+   プレビューとHTMLダウンロードで同じ組版を使う。
+   アプリのダークモード設定に影響されないよう、色は固定値をインラインで指定する。
+   ===================================================================== */
+const DOC_NAVY='#1a2e4a';
+const DOC_RED='#e53e3e';
+
+// 書類番号: INV-YYYYMM-001（請求書）/ EST-YYYYMM-001（見積書）
+function makeDocNumber(type){
+  const d=new Date();
+  const ym=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0');
+  return (type==='請求書'?'INV':'EST')+'-'+ym+'-'+String(S.nextQuoteNum++).padStart(3,'0');
+}
+
+function docLabels(type){
+  const inv=type==='請求書';
+  return {
+    title:inv?'請　求　書':'見　積　書',
+    numberLabel:inv?'請求書番号':'見積書番号',
+    lead:inv?'下記の通りご請求申し上げます。':'下記の通りお見積り申し上げます。',
+    amountLabel:inv?'ご請求金額（税込）':'お見積金額（税込）',
+    dueLabel:inv?'お支払期限':'有効期限'
+  };
+}
+
+// YYYY-MM-DD を YYYY年M月D日 に整形する
+function jpDate(iso){
+  if(!iso)return '';
+  const d=new Date(iso);
+  if(isNaN(d.getTime()))return iso;
+  return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日';
+}
+
+function docYen(n){return '¥'+Math.round(n||0).toLocaleString('ja-JP')}
+
+// 【お振込先】の1行（ラベルは幅100px・太字）
+function docBankRow(label,value,color){
+  if(!value)return '';
+  return `<div style="margin-bottom:5px"><span style="display:inline-block;width:100px;font-weight:bold">${label}</span>：<span style="color:${color||'#111'}">${value}</span></div>`;
+}
+
+// 見積書・請求書の本体。q=書類データ、c=会社情報。
+function buildDocHtml(q,c){
+  const lb=docLabels(q.type);
   const items=q.items||[];
   const sub=items.reduce((a,it)=>a+(it.qty*it.unit),0);
   const tax=Math.round(sub*0.1);
   const total=sub+tax;
-  document.getElementById('quote-preview-content').innerHTML=`
-  <div class="quote-preview">
-    <div class="quote-doc-header">
-      <div class="company-block">
-        <div class="company-name">${c.name||'（会社名未設定）'}</div>
-        <div class="company-meta">${c.zip?'〒'+c.zip+'　':''}${c.addr||''}<br>${c.tel?'TEL: '+c.tel:''}　${c.email||''}<br>${c.invoice||''}</div>
-      </div>
-      <div class="doc-title-block">
-        <div class="doc-title">見　積　書</div>
-        <div class="doc-meta">No. ${q.id}<br>発行日: ${q.date}<br>${q.expire?'有効期限: '+q.expire:''}</div>
-      </div>
+  const client=(q.client||'').replace(/\s*御中\s*$/,'');
+  const th='padding:10px 12px;background:'+DOC_NAVY+';color:#fff;font-weight:bold;';
+  const td='padding:10px 12px;border-bottom:1px solid #e0e0e0;';
+  const sumTd='padding:10px 12px;border-bottom:1px solid #e0e0e0;text-align:right;';
+  const totalTd='padding:10px 12px;background:'+DOC_NAVY+';color:#fff;font-weight:bold;text-align:right;';
+  const meta=[
+    c.zip?'〒'+c.zip:'',
+    c.addr||'',
+    c.tel?'TEL: '+c.tel:'',
+    c.email||'',
+    c.invoice?'登録番号: '+c.invoice:''
+  ].filter(Boolean).join('<br>');
+  return `
+<div style="background:#fff;color:#111;font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',Meiryo,sans-serif;font-size:13px;line-height:1.6;padding:40px">
+  <div style="font-size:28px;font-weight:bold;letter-spacing:12px;text-align:center;color:${DOC_NAVY}">${lb.title}</div>
+  <div style="border-top:2px solid ${DOC_NAVY};margin:14px 0 26px"></div>
+  <div style="display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:26px">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:18px;font-weight:bold;border-bottom:1px solid #333;padding-bottom:6px">${client||'（宛先未設定）'} 御中</div>
+      <div style="font-size:12px;color:#333;margin-top:16px;line-height:2">毎度格別のお引き立てを賜り厚く御礼申し上げます。<br>${lb.lead}</div>
     </div>
-    <div style="font-size:14px;margin-bottom:4px">${q.client}</div>
-    <div style="font-size:13px;margin-bottom:12px;color:var(--text-secondary)">件名: <strong style="color:var(--text-primary)">${q.subject}</strong></div>
-    <div class="quote-amount-block">
-      <div class="quote-amount-label">合計金額（税込）</div>
-      <div class="quote-amount-value">${fmt(total)}</div>
+    <div style="text-align:right;white-space:nowrap">
+      <div style="font-size:12px">${lb.numberLabel}: ${q.id}</div>
+      <div style="font-size:12px">発行日: ${jpDate(q.date)}</div>
+      <div style="font-size:15px;font-weight:bold;color:${DOC_NAVY};margin-top:8px">${c.name||''}</div>
+      ${c.rep?`<div style="font-size:13px;font-weight:bold">代表取締役 ${c.rep}</div>`:''}
+      <div style="font-size:11px;color:#555;line-height:1.9;margin-top:4px">${meta}</div>
     </div>
-    <table class="quote-table">
-      <thead><tr><th>品名・作業内容</th><th style="text-align:right">数量</th><th style="text-align:right">単価</th><th style="text-align:right">金額</th></tr></thead>
-      <tbody>${items.map(it=>`<tr><td>${it.name}</td><td class="num">${it.qty}</td><td class="num">${fmt(it.unit)}</td><td class="num">${fmt(it.qty*it.unit)}</td></tr>`).join('')}</tbody>
-    </table>
-    <div class="quote-totals">小計: ${fmt(sub)}<br>消費税（10%）: ${fmt(tax)}<br><strong style="font-size:15px">合計: ${fmt(total)}</strong></div>
-    <div class="quote-footer">
-      ${c.bank?`お振込先: ${c.bank}　${c.account||''}<br>`:''}
-      ${c.payment?`お支払条件: ${c.payment}<br>`:''}
-      ${q.note?`備考: ${q.note}<br>`:''}
-      ${c.rep?`<div style="text-align:right;margin-top:12px">代表者: ${c.rep}</div>`:''}
-    </div>
-  </div>`;
+  </div>
+  <div style="background:#f5f5f5;border:1px solid #ddd;border-radius:6px;text-align:center;padding:16px;margin-bottom:26px">
+    <div style="font-size:12px;color:#555">${lb.amountLabel}</div>
+    <div style="font-size:32px;font-weight:bold;color:${DOC_NAVY};margin-top:2px">${docYen(total)}-</div>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr>
+      <th style="${th}text-align:left">品名・件名</th>
+      <th style="${th}text-align:right;width:70px">数量</th>
+      <th style="${th}text-align:right;width:110px">単価（税抜）</th>
+      <th style="${th}text-align:right;width:120px">金額（税抜）</th>
+    </tr></thead>
+    <tbody>${items.map(it=>`<tr>
+      <td style="${td}">${it.name||''}</td>
+      <td style="${td}text-align:right">${it.qty}</td>
+      <td style="${td}text-align:right">${docYen(it.unit)}</td>
+      <td style="${td}text-align:right">${docYen(it.qty*it.unit)}</td>
+    </tr>`).join('')}</tbody>
+    <tfoot>
+      <tr><td colspan="2" style="border:none"></td><td style="${sumTd}">小計（税抜）</td><td style="${sumTd}">${docYen(sub)}</td></tr>
+      <tr><td colspan="2" style="border:none"></td><td style="${sumTd}">消費税（10%）</td><td style="${sumTd}">${docYen(tax)}</td></tr>
+      <tr><td colspan="2" style="border:none"></td><td style="${totalTd}">合計金額（税込）</td><td style="${totalTd}">${docYen(total)}-</td></tr>
+    </tfoot>
+  </table>
+  <div style="border:1px solid #ddd;padding:16px;margin-top:26px;font-size:12px">
+    <div style="font-weight:bold;margin-bottom:8px">【お振込先】</div>
+    ${docBankRow('銀行名',c.bankName)}${docBankRow('支店名',c.bankBranch)}${docBankRow('口座種別',c.accountType)}${docBankRow('口座番号',c.accountNumber)}${docBankRow('口座名義',c.accountHolder)}${docBankRow(lb.dueLabel,jpDate(q.expire),DOC_RED)}
+  </div>
+  ${q.note?`<div style="margin-top:14px;font-size:11px;color:#555;line-height:1.8">備考: ${q.note}</div>`:''}
+</div>`;
+}
+
+function showPreviewModal(){
+  const q=currentQuoteData;
+  document.getElementById('preview-modal-title').textContent=(q.type||'見積書')+'プレビュー';
+  document.getElementById('quote-preview-content').innerHTML=buildDocHtml(q,S.company);
   openModal('modal-preview-quote');
 }
 
 function downloadQuote(){
-  const q=currentQuoteData,c=S.company;
-  const items=q.items||[];
-  const sub=items.reduce((a,it)=>a+(it.qty*it.unit),0);
-  const tax=Math.round(sub*0.1);const total=sub+tax;
-  const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>見積書 ${q.id}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',Meiryo,sans-serif;color:#111;font-size:13px;padding:40px;max-width:800px;margin:0 auto}.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:16px;border-bottom:1px solid #ddd}.co-name{font-size:18px;font-weight:bold;margin-bottom:5px}.co-meta{font-size:12px;color:#555;line-height:1.9}.doc-title{font-size:26px;font-weight:bold;letter-spacing:4px;text-align:right;margin-bottom:6px}.doc-meta{font-size:12px;color:#555;text-align:right;line-height:1.9}.amount-box{background:#f5f5f5;padding:14px 18px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;margin:16px 0}.amount-value{font-size:24px;font-weight:bold}table{width:100%;border-collapse:collapse;margin:14px 0;font-size:12px}th{background:#f0f0f0;padding:9px 12px;border:1px solid #ddd;font-weight:600}td{padding:9px 12px;border:1px solid #ddd}.num{text-align:right}.totals{text-align:right;margin-top:10px;font-size:13px;line-height:2.2}.footer{margin-top:24px;padding-top:16px;border-top:1px solid #ddd;font-size:12px;color:#555;line-height:2}@media print{body{padding:20px}}</style></head><body>
-<div class="header"><div><div class="co-name">${c.name||''}</div><div class="co-meta">${c.zip?'〒'+c.zip+'　':''}${c.addr||''}<br>${c.tel?'TEL: '+c.tel+'　':''}${c.email||''}<br>${c.invoice||''}</div></div>
-<div><div class="doc-title">見　積　書</div><div class="doc-meta">No. ${q.id}<br>発行日: ${q.date}<br>${q.expire?'有効期限: '+q.expire:''}</div></div></div>
-<div style="margin-bottom:10px;font-size:14px">${q.client}</div>
-<div style="margin-bottom:12px;font-size:13px">件名: <strong>${q.subject}</strong></div>
-<div class="amount-box"><span style="font-size:13px;color:#555">合計金額（税込）</span><span class="amount-value">¥${total.toLocaleString('ja-JP')}</span></div>
-<table><thead><tr><th>品名・作業内容</th><th style="text-align:right">数量</th><th style="text-align:right">単価</th><th style="text-align:right">金額</th></tr></thead>
-<tbody>${items.map(it=>`<tr><td>${it.name}</td><td class="num">${it.qty}</td><td class="num">¥${it.unit.toLocaleString('ja-JP')}</td><td class="num">¥${(it.qty*it.unit).toLocaleString('ja-JP')}</td></tr>`).join('')}</tbody></table>
-<div class="totals">小計: ¥${sub.toLocaleString('ja-JP')}<br>消費税（10%）: ¥${tax.toLocaleString('ja-JP')}<br><strong style="font-size:15px">合計: ¥${total.toLocaleString('ja-JP')}</strong></div>
-<div class="footer">${c.bank?'お振込先: '+c.bank+'　'+(c.account||'')+'<br>':''}${c.payment?'お支払条件: '+c.payment+'<br>':''}${q.note?'備考: '+q.note+'<br>':''}${c.rep?'<div style="text-align:right;margin-top:14px">代表者: '+c.rep+'</div>':''}</div>
-</body></html>`;
+  const q=currentQuoteData;
+  const kind=q.type||'見積書';
+  const html='<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>'+kind+' '+q.id+'</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#fff}'
+    +'.sheet{max-width:794px;margin:0 auto}'  /* A4縦の幅（210mm ≒ 794px） */
+    +'@page{size:A4 portrait;margin:0}'
+    +'</style></head><body><div class="sheet">'+buildDocHtml(q,S.company)+'</div></body></html>';
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`見積書_${q.id}_${q.date}.html`;a.click();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`${kind}_${q.id}_${q.date}.html`;
+  a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
 }
 
@@ -1454,8 +1517,9 @@ async function handlePDFUpload(event){
       if(data.error)throw new Error(data.error.message);
       const text=data.content.find(c=>c.type==='text')?.text||'{}';
       const parsed=JSON.parse(text.replace(/```json|```/g,'').trim());
-      const qid='Q-'+String(S.nextQuoteNum++).padStart(3,'0');
-      const qdata={id:qid,subject:parsed.subject||file.name,client:parsed.client||'',amount:parsed.amount||0,type:parsed.type||'見積書',date:parsed.date||today(),expire:parsed.expire||'',items:parsed.items||[],note:parsed.note||''};
+      const dtype=parsed.type||'見積書';
+      const qid=makeDocNumber(dtype);
+      const qdata={id:qid,subject:parsed.subject||file.name,client:parsed.client||'',amount:parsed.amount||0,type:dtype,date:parsed.date||today(),expire:parsed.expire||'',items:parsed.items||[],note:parsed.note||''};
       S.quotes.push(qdata);saveState();
       el.innerHTML=`<div class="alert alert-success">✓ 読み取り完了！「${qdata.subject}」を登録しました。</div>`;
       renderQuotes();
@@ -1561,15 +1625,18 @@ function applyPlanToAllMonths(){
   saveState();closeModal('modal-edit-plan');renderLedger();updateDashboard();
 }
 
+// 設定ページで編集できる会社情報の項目（入力欄のidは s-<項目名>）
+const COMPANY_FIELDS=['name','rep','zip','addr','tel','email','bankName','bankBranch','accountType','accountNumber','accountHolder','invoice','payment','note'];
+
 function loadSettingsForm(){
   const c=S.company;
-  ['name','rep','zip','addr','tel','email','bank','account','invoice','payment','note'].forEach(k=>{
+  COMPANY_FIELDS.forEach(k=>{
     const el=document.getElementById('s-'+k);if(el)el.value=c[k]||'';
   });
 }
 
 function saveSettings(){
-  ['name','rep','zip','addr','tel','email','bank','account','invoice','payment','note'].forEach(k=>{
+  COMPANY_FIELDS.forEach(k=>{
     const el=document.getElementById('s-'+k);if(el)S.company[k]=el.value.trim();
   });
   saveState();

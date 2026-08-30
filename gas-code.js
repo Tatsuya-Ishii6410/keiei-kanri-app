@@ -38,7 +38,9 @@ var SHEET_DEFS = {
 var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'items', 'value'];
 
 // settings シートに保存する会社情報の項目
-var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email', 'bank', 'account', 'invoice', 'payment', 'note'];
+var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
+  'bankName', 'bankBranch', 'accountType', 'accountNumber', 'accountHolder',
+  'invoice', 'payment', 'note'];
 // settings シートに保存する計画の項目
 // 月次計画は plan.<月>.<項目> というキーで保存する（例: plan.4.sales）
 var PLAN_FIELDS = ['sales', 'expense', 'labor'];
@@ -203,7 +205,7 @@ function readSettings_(sh) {
     }
   });
 
-  COMPANY_FIELDS.forEach(function (k) { if (company[k] === undefined) company[k] = ''; });
+  // 未設定の項目はキーごと返さない（アプリ側の初期値を潰さないため）
   // 旧形式しか無い月には、その値を引き継ぐ
   if (legacyPlan) {
     for (var j = 0; j < 12; j++) {
