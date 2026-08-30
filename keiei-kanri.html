@@ -965,7 +965,7 @@ function sumLedger(mi){
 }
 
 /* ===== 案件ベースの売上 ==============================================
-   契約済・進行中の案件から、月ごとの売上を計算する。
+   契約済・進行中・完了の案件から、月ごとの売上を計算する。
      単発（single）  : 開始月のみ金額を計上
      月次継続（monthly）: 開始月〜終了月まで毎月、金額を計上
      年次継続（annual）: 開始月〜終了月まで毎月、金額÷12を計上
@@ -977,7 +977,7 @@ function sumLedger(mi){
 function calcProjectSalesByMonth(monthIndex){
   let total=0;
   S.projects.forEach(p=>{
-    if(p.status!=='契約済'&&p.status!=='進行中')return;
+    if(p.status!=='契約済'&&p.status!=='進行中'&&p.status!=='完了')return;
     if(!p.start)return;
     const start=new Date(p.start);
     if(isNaN(start.getTime()))return;
