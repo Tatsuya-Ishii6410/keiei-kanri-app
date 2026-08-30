@@ -901,6 +901,58 @@ function sumLedger(mi){
   return t;
 }
 
+/* ===== 案件ベースの売上 ==============================================
+   契約済・進行中の案件から、月ごとの売上を計算する。
+     単発（single）  : 開始月のみ金額を計上
+     月次継続（monthly）: 開始月〜終了月まで毎月、金額を計上
+     年次継続（annual）: 開始月〜終了月まで毎月、金額÷12を計上
+   月は「何月か」だけで扱うため、年をまたぐ契約（例 2026-08〜2027-02）は
+   開始から終了まで1ヶ月ずつ進めながら、該当する月に加算していく。
+   =================================================================== */
+
+// monthIndex: 0=1月, 1=2月 … 11=12月
+function calcProjectSalesByMonth(monthIndex){
+  let total=0;
+  S.projects.forEach(p=>{
+    if(p.status!=='契約済'&&p.status!=='進行中')return;
+    if(!p.start)return;
+    const start=new Date(p.start);
+    if(isNaN(start.getTime()))return;
+    const amount=p.amount||0;
+    const startAbs=start.getFullYear()*12+start.getMonth();
+
+    // 単発、または終了日が無い案件は開始月だけ計上する
+    const end=p.end?new Date(p.end):null;
+    if(p.contract==='single'||!end||isNaN(end.getTime())){
+      if(start.getMonth()===monthIndex)total+=amount;
+      return;
+    }
+
+    const endAbs=end.getFullYear()*12+end.getMonth();
+    if(endAbs<startAbs)return;
+    const per=p.contract==='annual'?Math.round(amount/12):amount;
+    const last=startAbs+Math.min(endAbs-startAbs,119); // 念のための上限
+    for(let a=startAbs;a<=last;a++){
+      if(a%12===monthIndex)total+=per;
+    }
+  });
+  return total;
+}
+
+// 1〜12月の案件売上を合計する（年間累計）
+function calcProjectSalesYear(){
+  let t=0;
+  for(let i=0;i<12;i++)t+=calcProjectSalesByMonth(i);
+  return t;
+}
+
+// 12ヶ月分の案件売上を配列で返す（月次推移グラフ用）
+function projectSalesSeries(){
+  const a=[];
+  for(let i=0;i<12;i++)a.push(calcProjectSalesByMonth(i));
+  return a;
+}
+
 // 1〜12月すべての実績をグループごとに集計する（年間累計）
 function sumLedgerYear(){
   const t={sales:0,expense:0,labor:0};
@@ -946,7 +998,8 @@ function statusBadge(s){
 function updateDashboard(){
   const mi=getMonth();
   const t=sumLedger(mi);
-  const sales=t.sales,exp=t.expense,lab=t.labor;
+  // 売上は案件から計算し、経費・役員報酬は収支の入力から集計する
+  const sales=calcProjectSalesByMonth(mi),exp=t.expense,lab=t.labor;
   const profit=sales-exp-lab;
   const margin=sales>0?Math.round(profit/sales*100):0;
   document.getElementById('d-sales').textContent=fmt(sales);
@@ -958,8 +1011,9 @@ function updateDashboard(){
 
   // 年間累計（1〜12月の合計）
   const y=sumLedgerYear();
-  const yProfit=y.sales-y.expense-y.labor;
-  document.getElementById('d-sales-year').textContent='年間累計: '+fmt(y.sales);
+  const ySales=calcProjectSalesYear();
+  const yProfit=ySales-y.expense-y.labor;
+  document.getElementById('d-sales-year').textContent='年間累計: '+fmt(ySales);
   document.getElementById('d-expense-year').textContent='年間累計: '+fmt(y.expense);
   document.getElementById('d-labor-year').textContent='年間累計: '+fmt(y.labor);
   document.getElementById('d-profit-year').textContent='年間累計: '+fmt(yProfit);
@@ -972,8 +1026,9 @@ function updateDashboard(){
   renderDiffList(mi);
   const mc=document.getElementById('monthly-chart');
   const months=['1','2','3','4','5','6','7','8','9','10','11','12'];
-  const maxV=Math.max(...S.monthlyData,1);
-  mc.innerHTML=S.monthlyData.map((v,i)=>
+  const series=projectSalesSeries();
+  const maxV=Math.max(...series,1);
+  mc.innerHTML=series.map((v,i)=>
     `<div class="chart-bar-wrap">
       <div class="chart-value">${fmtMan(v)}</div>
       <div class="chart-bar" style="height:${Math.round(v/maxV*92)}px;background:${i===mi?'#378ADD':'#B5D4F4'}"></div>
@@ -1003,9 +1058,10 @@ function setDiffMode(mode){
 function renderDiffList(mi){
   const isYear=diffMode==='year';
   const actual=isYear?sumLedgerYear():sumLedger(mi);
+  const actualSales=isYear?calcProjectSalesYear():calcProjectSalesByMonth(mi);
   const plan=isYear?planYearTotal():planOf(mi);
   const diffs=[
-    {label:'売上',actual:actual.sales,plan:plan.sales,invert:false},
+    {label:'売上',actual:actualSales,plan:plan.sales,invert:false},
     {label:'経費合計',actual:actual.expense,plan:plan.expense,invert:true},
     {label:'役員報酬',actual:actual.labor,plan:plan.labor,invert:true}
   ];
@@ -1315,7 +1371,8 @@ async function handlePDFUpload(event){
 function renderLedger(){
   const mi=new Date().getMonth();
   const t=sumLedger(mi);
-  const sales=t.sales,exp=t.expense,lab=t.labor;
+  // 売上は案件から計算し、経費・役員報酬は収支の入力から集計する
+  const sales=calcProjectSalesByMonth(mi),exp=t.expense,lab=t.labor;
   const pl=planOf(mi);
   document.getElementById('plan-month-label').textContent=(mi+1)+'月';
   document.getElementById('plan-table').innerHTML=[
