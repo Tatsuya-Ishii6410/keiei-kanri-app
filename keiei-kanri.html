@@ -253,7 +253,19 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <div id="page-projects" class="page">
   <div class="section-header">
     <h1 class="section-title">案件管理</h1>
-    <button class="btn primary" onclick="openProjectModal()">+ 案件追加</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="project-month" onchange="renderProjects()" style="width:auto;font-size:13px">
+        <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
+      </select>
+      <button class="btn primary" onclick="openProjectModal()">+ 案件追加</button>
+    </div>
+  </div>
+  <div class="metric-grid" style="grid-template-columns:minmax(200px,300px)">
+    <div class="metric-card">
+      <div class="metric-label" id="project-total-label">売上合計</div>
+      <div class="metric-value blue" id="project-total">¥0</div>
+      <div class="metric-sub" id="project-total-sub">対象: 0件</div>
+    </div>
   </div>
   <div class="card">
     <div class="table-wrap"><table>
@@ -937,6 +949,34 @@ function calcProjectSalesByMonth(monthIndex){
   return total;
 }
 
+/* ===== 案件ページの月フィルター =====================================
+   mi は 0=1月 … 11=12月。null は「全期間」。
+   =================================================================== */
+
+// その案件がその月に売上を生むか
+function projectHasMonth(p,mi){
+  if(mi===null)return true;
+  if(!p.start)return false;
+  const start=new Date(p.start);
+  if(isNaN(start.getTime()))return false;
+  const end=p.end?new Date(p.end):null;
+  // 単発、終了日が無い案件は開始月のみ
+  if(p.contract==='single'||!end||isNaN(end.getTime()))return start.getMonth()===mi;
+  const sa=start.getFullYear()*12+start.getMonth();
+  const ea=end.getFullYear()*12+end.getMonth();
+  if(ea<sa)return false;
+  const last=sa+Math.min(ea-sa,119);
+  for(let a=sa;a<=last;a++)if(a%12===mi)return true;
+  return false;
+}
+
+// その月に計上される金額。年次継続は12等分。全期間のときは案件の全額。
+function projectMonthAmount(p,mi){
+  const amount=p.amount||0;
+  if(mi===null)return amount;
+  return p.contract==='annual'?Math.round(amount/12):amount;
+}
+
 // 1〜12月の案件売上を合計する（年間累計）
 function calcProjectSalesYear(){
   let t=0;
@@ -1105,11 +1145,36 @@ function renderAlerts(){
   }).join('');
 }
 
+// 案件ページで選択中の月。「全期間」なら null を返す。
+function currentProjectMonth(){
+  const el=document.getElementById('project-month');
+  if(!el||el.value==='')return null;
+  return parseInt(el.value);
+}
+
 function renderProjects(){
   const tb=document.getElementById('project-list');
-  if(S.projects.length===0){tb.innerHTML='';document.getElementById('project-empty').style.display='';return;}
+  const mi=currentProjectMonth();
+  const list=S.projects.filter(p=>projectHasMonth(p,mi));
+
+  // 合計カード（完了・失注は除外）
+  const targets=list.filter(p=>p.status==='契約済'||p.status==='進行中'||p.status==='商談中');
+  const total=targets.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
+  document.getElementById('project-total-label').textContent=(mi===null?'全期間':(mi+1)+'月')+'の売上合計';
+  document.getElementById('project-total').textContent=fmt(total);
+  document.getElementById('project-total-sub').textContent='対象: '+targets.length+'件（完了・失注を除く）';
+
+  if(list.length===0){
+    tb.innerHTML='';
+    const empty=document.getElementById('project-empty');
+    empty.style.display='';
+    empty.textContent=S.projects.length===0
+      ?'案件がありません。「案件追加」から登録してください。'
+      :(mi===null?'表示できる案件がありません。':(mi+1)+'月に売上が発生する案件はありません。');
+    return;
+  }
   document.getElementById('project-empty').style.display='none';
-  tb.innerHTML=S.projects.map(p=>`<tr>
+  tb.innerHTML=list.map(p=>`<tr>
     <td style="font-weight:500">${p.name}</td>
     <td style="font-size:12px;color:var(--text-secondary)">${p.client||'-'}</td>
     <td>${fmt(p.amount)}</td>
@@ -1732,6 +1797,7 @@ function csvDownloadTemplate(type){
 
 // INIT
 document.getElementById('month-select').value=new Date().getMonth();
+document.getElementById('project-month').value=new Date().getMonth();
 document.getElementById('l-date').value=today();
 document.getElementById('gas-sheet-link').href=SHEET_URL;
 setSyncStatus(gasEnabled()?'sync':'off');
