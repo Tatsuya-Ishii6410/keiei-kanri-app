@@ -152,6 +152,21 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .col-note{font-size:11px;color:var(--text-secondary);margin-top:2px}
 .col-req{color:var(--red-text);font-size:10px;margin-left:4px}
 .col-opt{color:var(--green-text);font-size:10px;margin-left:4px}
+/* 月次決算レポート */
+.report-sheet{background:#fff;color:#111;border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:28px}
+.report-head{text-align:center;border-bottom:2px solid #1a2e4a;padding-bottom:14px;margin-bottom:20px;color:#111}
+.report-card{border:1px solid #e0e0e0;border-radius:8px;padding:16px 18px;margin-bottom:16px;background:#fff}
+.report-card-title{font-size:13px;font-weight:bold;color:#1a2e4a;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #e0e0e0}
+@media print{
+  body{background:#fff}
+  .topbar,.report-actions,.section-header{display:none!important}
+  .app,.content{max-width:none;margin:0;padding:0;background:#fff}
+  .page{display:none!important}
+  #page-report{display:block!important}
+  .report-sheet{border:none;border-radius:0;padding:0}
+  .report-card{break-inside:avoid;page-break-inside:avoid}
+  @page{size:A4 portrait;margin:14mm}
+}
 @media(max-width:768px){
   .two-col,.three-col{grid-template-columns:1fr}
   .form-row{grid-template-columns:1fr}
@@ -178,6 +193,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <button class="nav-btn" onclick="showPage('quotes',this)">📄 <span>見積・請求</span></button>
     <button class="nav-btn" onclick="showPage('ledger',this)">💰 <span>収支</span></button>
     <button class="nav-btn" onclick="showPage('csv',this)">📥 <span>CSV取込</span></button>
+    <button class="nav-btn" onclick="showPage('report',this)">📊 <span>月次レポート</span></button>
     <button class="nav-btn" onclick="showPage('settings',this)">⚙️ <span>設定</span></button>
   </nav>
   <div class="topbar-right">
@@ -412,6 +428,19 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <button class="btn" onclick="csvDownloadTemplate('ledger')">📥 テンプレートをダウンロード</button>
     </div>
   </div>
+</div>
+
+<!-- MONTHLY REPORT -->
+<div id="page-report" class="page">
+  <div class="section-header">
+    <h1 class="section-title">月次決算レポート</h1>
+    <div class="report-actions" style="display:flex;gap:8px;align-items:center">
+      <select id="report-month" style="width:auto;font-size:13px"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option></select>
+      <button class="btn primary" onclick="generateReport()">レポートを生成</button>
+      <button class="btn" onclick="printReport()">🖨️ 印刷する</button>
+    </div>
+  </div>
+  <div class="report-sheet"><div id="report-body"></div></div>
 </div>
 
 <!-- SETTINGS -->
@@ -901,6 +930,7 @@ function showPage(p,btn){
   if(p==='quotes')renderQuotes();
   if(p==='ledger')renderLedger();
   if(p==='csv')initCsvPage();
+  if(p==='report')initReportPage();
   if(p==='settings')loadSettingsForm();
 }
 
@@ -1397,6 +1427,209 @@ function deleteQuote(id){
 function previewQuoteById(id){
   const q=S.quotes.find(x=>x.id===id);if(!q)return;
   currentQuoteData=q;showPreviewModal();
+}
+
+/* ===== 月次決算レポート =============================================
+   対象月を選んでレポートを生成する。印刷（PDF化）を前提に、
+   白背景・カード区切りのシンプルなビジネスレポート形式で組む。
+   =================================================================== */
+
+// 経費として集計する区分（勘定科目）。役員報酬は別枠なので含めない。
+const EXPENSE_ACCOUNTS=LEDGER_TYPES.filter(t=>t!=='売上'&&LABOR_TYPES.indexOf(t)<0);
+
+// レポート内の金額。マイナスは赤字にする。
+function repYen(n){
+  const v=Math.round(n||0);
+  const color=v<0?'#e53e3e':'inherit';
+  return`<span style="color:${color}">${fmt(v)}</span>`;
+}
+
+function repRow(label,value,opt){
+  const o=opt||{};
+  const bg=o.bg?`background:${o.bg};`:'';
+  const weight=o.bold?'font-weight:bold;':'';
+  const color=o.color?`color:${o.color};`:'';
+  return`<tr style="${bg}">
+    <td style="padding:9px 12px;border-bottom:1px solid #e0e0e0;${weight}${color}">${label}</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e0e0e0;text-align:right;${weight}${color}">${value}</td>
+  </tr>`;
+}
+
+function repSection(title,inner){
+  return`<div class="report-card">
+    <div class="report-card-title">${title}</div>
+    ${inner}
+  </div>`;
+}
+
+function repEmpty(msg){
+  return`<div style="padding:14px 12px;color:#888;font-size:12px">${msg}</div>`;
+}
+
+function initReportPage(){
+  const sel=document.getElementById('report-month');
+  if(sel.value===''){
+    // 既定は前月
+    const m=new Date().getMonth();
+    sel.value=String(m===0?11:m-1);
+  }
+  if(!document.getElementById('report-body').innerHTML.trim())generateReport();
+}
+
+function generateReport(){
+  const mi=parseInt(document.getElementById('report-month').value)||0;
+  const y=new Date().getFullYear();
+  const c=S.company;
+
+  // 案件ベースの売上は【2】の明細と同じ範囲（契約済・進行中・完了）で集計し、
+  // サマリーと明細の合計が必ず一致するようにする。
+  const kinds={single:'単発',monthly:'月次継続',annual:'年次継続'};
+  const projects=S.projects.filter(p=>
+    (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,mi));
+  const projectTotal=projects.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
+  const projectSales=projectTotal;
+  const t=sumLedger(mi);
+  const ledgerSales=t.sales;
+  const sales=projectSales+ledgerSales;
+  const exp=t.expense, lab=t.labor;
+  const profit=sales-exp-lab;
+  const margin=sales>0?Math.round(profit/sales*100):0;
+  const pl=planOf(mi);
+  const planProfit=pl.sales-pl.expense-pl.labor;
+
+  /* --- 1. サマリー --- */
+  const summary=`<table style="width:100%;border-collapse:collapse;font-size:13px">
+    ${repRow('売上高（案件ベース）',repYen(projectSales))}
+    ${repRow('売上高（収支入力分）',repYen(ledgerSales))}
+    ${repRow('売上高 合計',repYen(sales),{bold:true,bg:'#f5f5f5'})}
+    ${repRow('経費合計',repYen(exp))}
+    ${repRow('役員報酬',repYen(lab))}
+    ${repRow('営業利益',repYen(profit),{bold:true,bg:'#f5f5f5'})}
+    ${repRow('営業利益率',(sales>0?margin+'%':'-'),{bold:true})}
+  </table>
+  <div style="font-size:12px;font-weight:bold;margin:18px 0 6px">計画比</div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f5f5f5">
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">項目</th>
+      <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e0e0e0">計画</th>
+      <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e0e0e0">実績</th>
+      <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e0e0e0">差異</th>
+    </tr></thead>
+    <tbody>
+      ${[{k:'売上高',plan:pl.sales,actual:sales},
+         {k:'経費合計',plan:pl.expense,actual:exp},
+         {k:'役員報酬',plan:pl.labor,actual:lab},
+         {k:'営業利益',plan:planProfit,actual:profit}].map(r=>`<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${r.k}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right;color:#666">${fmt(r.plan)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${fmt(r.actual)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${repYen(r.actual-r.plan)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+
+  /* --- 2. 案件別売上明細 --- */
+  const projectTable=projects.length===0?repEmpty('この月に売上が発生する案件はありません。'):
+  `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f5f5f5">
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">顧客名</th>
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">案件名</th>
+      <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e0e0e0">金額</th>
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">種別</th>
+    </tr></thead>
+    <tbody>${projects.map(p=>`<tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${p.client||'-'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${p.name}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${fmt(projectMonthAmount(p,mi))}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${kinds[p.contract]||p.contract}</td>
+    </tr>`).join('')}
+    <tr style="background:#f5f5f5;font-weight:bold">
+      <td colspan="2" style="padding:9px 12px">合計（${projects.length}件）</td>
+      <td style="padding:9px 12px;text-align:right">${fmt(projectTotal)}</td>
+      <td style="padding:9px 12px"></td>
+    </tr></tbody>
+  </table></div>`;
+
+  /* --- 3. 収支入力明細（売上区分のみ） --- */
+  const salesRows=S.ledger
+    .filter(l=>l.type==='売上'&&l.date&&new Date(l.date).getMonth()===mi)
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  const salesTable=salesRows.length===0?repEmpty('この月の「売上」区分の入力はありません。'):
+  `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f5f5f5">
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">日付</th>
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">摘要</th>
+      <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e0e0e0">金額</th>
+    </tr></thead>
+    <tbody>${salesRows.map(l=>`<tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;white-space:nowrap">${l.date}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${l.desc}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${fmt(l.amount)}</td>
+    </tr>`).join('')}
+    <tr style="background:#f5f5f5;font-weight:bold">
+      <td colspan="2" style="padding:9px 12px">合計（${salesRows.length}件）</td>
+      <td style="padding:9px 12px;text-align:right">${fmt(ledgerSales)}</td>
+    </tr></tbody>
+  </table></div>`;
+
+  /* --- 4. 経費明細（勘定科目別） --- */
+  const byAccount={};
+  EXPENSE_ACCOUNTS.forEach(k=>{byAccount[k]=0});
+  S.ledger.forEach(l=>{
+    if(!l.date||new Date(l.date).getMonth()!==mi)return;
+    if(ledgerGroup(l.type)!=='expense')return;
+    if(byAccount[l.type]===undefined)byAccount[l.type]=0; // 旧区分「経費」など
+    byAccount[l.type]+=l.amount;
+  });
+  const accountKeys=Object.keys(byAccount).filter(k=>byAccount[k]!==0);
+  const expenseTable=accountKeys.length===0?repEmpty('この月の経費入力はありません。'):
+  `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    ${accountKeys.map(k=>repRow(k,repYen(byAccount[k]))).join('')}
+    ${repRow('経費合計',repYen(exp),{bold:true,bg:'#f5f5f5'})}
+  </table>`;
+
+  /* --- 5. 請求書発行状況 --- */
+  const invoices=S.quotes.filter(q=>
+    q.type==='請求書'&&q.date&&new Date(q.date).getMonth()===mi);
+  const invoiceTotal=invoices.reduce((a,q)=>a+(q.amount||0),0);
+  const invoiceTable=invoices.length===0?repEmpty('この月に発行した請求書はありません。'):
+  `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f5f5f5">
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">番号</th>
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">顧客名</th>
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">件名</th>
+      <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e0e0e0">金額（税込）</th>
+    </tr></thead>
+    <tbody>${invoices.map(q=>`<tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;white-space:nowrap">${q.id}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${q.client||'-'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${q.subject}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${fmt(q.amount)}</td>
+    </tr>`).join('')}
+    <tr style="background:#f5f5f5;font-weight:bold">
+      <td colspan="3" style="padding:9px 12px">発行済み合計（${invoices.length}件）</td>
+      <td style="padding:9px 12px;text-align:right">${fmt(invoiceTotal)}</td>
+    </tr></tbody>
+  </table></div>`;
+
+  document.getElementById('report-body').innerHTML=`
+  <div class="report-head">
+    <div style="font-size:15px;font-weight:bold">${c.name||''}</div>
+    <div style="font-size:20px;font-weight:bold;margin:6px 0">${y}年${mi+1}月 月次決算レポート</div>
+    <div style="font-size:12px;color:#555">生成日：${jpDate(today())}</div>
+  </div>
+  ${repSection('【1】サマリー（損益計算書形式）',summary)}
+  ${repSection('【2】案件別売上明細',projectTable)}
+  ${repSection('【3】収支入力明細（売上区分のみ）',salesTable)}
+  ${repSection('【4】経費明細（勘定科目別）',expenseTable)}
+  ${repSection('【5】請求書発行状況',invoiceTable)}`;
+}
+
+function printReport(){
+  if(!document.getElementById('report-body').innerHTML.trim()){
+    alert('先にレポートを生成してください');return;
+  }
+  window.print();
 }
 
 /* ===== 一括請求書作成 ===============================================
