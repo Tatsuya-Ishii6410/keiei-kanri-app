@@ -242,6 +242,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <select id="project-month" onchange="renderProjects()" style="width:auto;font-size:13px">
         <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
       </select>
+      <button class="btn" onclick="openBulkInvoiceModal()">📄 一括請求書作成</button>
       <button class="btn primary" onclick="openProjectModal()">+ 案件追加</button>
     </div>
   </div>
@@ -551,6 +552,31 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-create-quote')">キャンセル</button>
     <button class="btn primary" onclick="createQuote()">📄 作成してプレビュー</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-bulk-invoice">
+<div class="modal wide">
+  <div class="modal-header"><span class="modal-title">一括請求書作成</span><button class="btn sm" onclick="closeModal('modal-bulk-invoice')">✕</button></div>
+  <div class="form-row three">
+    <div class="form-group"><label class="form-label">対象月</label>
+      <select id="bulk-month" onchange="updateBulkInvoiceForm()"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option></select>
+    </div>
+    <div class="form-group"><label class="form-label">発行日</label><input id="bulk-date" type="date"></div>
+    <div class="form-group"><label class="form-label">支払期限</label><input id="bulk-due" type="date"></div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:16px 0 8px">
+    <span class="form-label" id="bulk-count"></span>
+    <span style="display:flex;gap:6px">
+      <button class="btn sm" onclick="setBulkCheckAll(true)">全選択</button>
+      <button class="btn sm" onclick="setBulkCheckAll(false)">全解除</button>
+    </span>
+  </div>
+  <div id="bulk-list"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-bulk-invoice')">キャンセル</button>
+    <button class="btn primary" id="bulk-submit" onclick="createBulkInvoices()">📄 選択した案件で請求書を一括作成</button>
   </div>
 </div>
 </div>
@@ -1373,6 +1399,119 @@ function previewQuoteById(id){
   currentQuoteData=q;showPreviewModal();
 }
 
+/* ===== 一括請求書作成 ===============================================
+   選択した月に売上が発生する案件（進行中・完了）から、
+   請求書をまとめて作成する。
+   =================================================================== */
+
+// 月末日を YYYY-MM-DD で返す（offset=0 は当月末、1 は翌月末）
+function endOfMonth(year,monthIndex,offset){
+  const d=new Date(year,monthIndex+(offset||0)+1,0);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+// 請求対象の年を決める。選択月が今より先なら前年扱いにはせず、単純に今年とする。
+function billingYear(){return new Date().getFullYear()}
+
+function openBulkInvoiceModal(){
+  const mi=currentProjectMonth();
+  document.getElementById('bulk-month').value=String(mi===null?new Date().getMonth():mi);
+  updateBulkInvoiceForm();
+  openModal('modal-bulk-invoice');
+}
+
+// 対象月が変わったら、発行日・支払期限の初期値と案件一覧を作り直す
+function updateBulkInvoiceForm(){
+  const mi=parseInt(document.getElementById('bulk-month').value)||0;
+  const y=billingYear();
+  document.getElementById('bulk-date').value=endOfMonth(y,mi,0);
+  document.getElementById('bulk-due').value=endOfMonth(y,mi,1);
+  renderBulkInvoiceList();
+}
+
+// その月の請求対象案件（進行中・完了）
+function bulkInvoiceTargets(){
+  const mi=parseInt(document.getElementById('bulk-month').value)||0;
+  return S.projects.filter(p=>(p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,mi));
+}
+
+function renderBulkInvoiceList(){
+  const mi=parseInt(document.getElementById('bulk-month').value)||0;
+  const list=bulkInvoiceTargets();
+  const el=document.getElementById('bulk-list');
+  if(list.length===0){
+    el.innerHTML='<div class="empty-state">'+(mi+1)+'月に請求できる案件がありません。<br><span style="font-size:12px">対象は「進行中」「完了」の案件です。</span></div>';
+    document.getElementById('bulk-submit').disabled=true;
+    document.getElementById('bulk-count').textContent='';
+    return;
+  }
+  document.getElementById('bulk-submit').disabled=false;
+  el.innerHTML='<div class="table-wrap"><table><thead><tr>'
+    +'<th style="width:36px"></th><th>顧客名</th><th>案件名</th><th style="text-align:right">金額</th>'
+    +'</tr></thead><tbody>'
+    +list.map(p=>`<tr>
+      <td><input type="checkbox" class="bulk-check" value="${p.id}" checked onchange="updateBulkCount()" style="width:auto"></td>
+      <td style="font-size:12px">${p.client||'-'}</td>
+      <td style="font-weight:500">${p.name}</td>
+      <td style="text-align:right">${fmt(projectMonthAmount(p,mi))}</td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+  updateBulkCount();
+}
+
+function setBulkCheckAll(checked){
+  document.querySelectorAll('.bulk-check').forEach(c=>{c.checked=checked});
+  updateBulkCount();
+}
+
+function updateBulkCount(){
+  const mi=parseInt(document.getElementById('bulk-month').value)||0;
+  const ids=selectedBulkIds();
+  const total=S.projects
+    .filter(p=>ids.indexOf(p.id)>=0)
+    .reduce((a,p)=>a+Math.floor(projectMonthAmount(p,mi)*1.1),0);
+  document.getElementById('bulk-count').textContent=ids.length+'件を選択中（税込合計 '+fmt(total)+'）';
+  document.getElementById('bulk-submit').disabled=ids.length===0;
+}
+
+function selectedBulkIds(){
+  return Array.from(document.querySelectorAll('.bulk-check'))
+    .filter(c=>c.checked)
+    .map(c=>parseInt(c.value));
+}
+
+function createBulkInvoices(){
+  const mi=parseInt(document.getElementById('bulk-month').value)||0;
+  const date=document.getElementById('bulk-date').value||today();
+  const due=document.getElementById('bulk-due').value||'';
+  const ids=selectedBulkIds();
+  if(ids.length===0){alert('請求する案件を選択してください');return;}
+
+  const y=billingYear();
+  const targets=S.projects.filter(p=>ids.indexOf(p.id)>=0);
+  targets.forEach(p=>{
+    const unit=projectMonthAmount(p,mi);
+    const subject=`${p.name}（${y}年${mi+1}月分）`;
+    S.quotes.push({
+      id:makeDocNumber('請求書'),
+      subject,
+      client:(p.client||'')+' 御中',
+      amount:Math.floor(unit*1.1),
+      type:'請求書',
+      date,
+      due,
+      expire:due,
+      items:[{name:subject,qty:1,unit,total:unit}],
+      note:S.company.note||''
+    });
+  });
+
+  saveState();
+  closeModal('modal-bulk-invoice');
+  alert(targets.length+'件の請求書を作成しました');
+  showPage('quotes',document.querySelectorAll('.nav-btn')[2]);
+}
+
 /* ===== 見積書・請求書のドキュメント ===================================
    プレビューとHTMLダウンロードで同じ組版を使う。
    アプリのダークモード設定に影響されないよう、色は固定値をインラインで指定する。
@@ -1475,7 +1614,7 @@ function buildDocHtml(q,c){
   </table>
   <div style="border:1px solid #ddd;padding:16px;margin-top:26px;font-size:12px">
     <div style="font-weight:bold;margin-bottom:8px">【お振込先】</div>
-    ${docBankRow('銀行名',c.bankName)}${docBankRow('支店名',c.bankBranch)}${docBankRow('口座種別',c.accountType)}${docBankRow('口座番号',c.accountNumber)}${docBankRow('口座名義',c.accountHolder)}${docBankRow(lb.dueLabel,jpDate(q.expire),DOC_RED)}
+    ${docBankRow('銀行名',c.bankName)}${docBankRow('支店名',c.bankBranch)}${docBankRow('口座種別',c.accountType)}${docBankRow('口座番号',c.accountNumber)}${docBankRow('口座名義',c.accountHolder)}${docBankRow(lb.dueLabel,jpDate(q.due||q.expire),DOC_RED)}
   </div>
   ${q.note?`<div style="margin-top:14px;font-size:11px;color:#555;line-height:1.8">備考: ${q.note}</div>`:''}
 </div>`;
