@@ -214,8 +214,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
   <div class="metric-grid">
     <div class="metric-card"><div class="metric-label">売上</div><div class="metric-value blue" id="d-sales">¥0</div><div class="metric-sub" id="d-sales-diff">計画比: -</div></div>
-    <div class="metric-card"><div class="metric-label">経費</div><div class="metric-value" id="d-expense">¥0</div><div class="metric-sub" id="d-expense-diff">計画比: -</div></div>
-    <div class="metric-card"><div class="metric-label">人件費</div><div class="metric-value" id="d-labor">¥0</div><div class="metric-sub" id="d-labor-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">経費合計</div><div class="metric-value" id="d-expense">¥0</div><div class="metric-sub" id="d-expense-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">役員報酬</div><div class="metric-value" id="d-labor">¥0</div><div class="metric-sub" id="d-labor-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">営業利益</div><div class="metric-value green" id="d-profit">¥0</div><div class="metric-sub" id="d-margin">利益率: -%</div></div>
   </div>
   <div class="two-col">
@@ -246,7 +246,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <div id="page-projects" class="page">
   <div class="section-header">
     <h1 class="section-title">案件管理</h1>
-    <button class="btn primary" onclick="openModal('modal-add-project')">+ 案件追加</button>
+    <button class="btn primary" onclick="openProjectModal()">+ 案件追加</button>
   </div>
   <div class="card">
     <div class="table-wrap"><table>
@@ -294,7 +294,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <div id="page-ledger" class="page">
   <div class="section-header">
     <h1 class="section-title">収支管理</h1>
-    <button class="btn primary" onclick="openModal('modal-add-ledger')">+ 入力</button>
+    <button class="btn primary" onclick="openLedgerModal()">+ 入力</button>
   </div>
   <div class="two-col">
     <div class="card">
@@ -310,7 +310,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="card">
       <div class="card-header"><span class="card-title">直近の収支</span></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>日付</th><th>区分</th><th>摘要</th><th>金額</th></tr></thead>
+        <thead><tr><th>日付</th><th>区分</th><th>摘要</th><th>金額</th><th>操作</th></tr></thead>
         <tbody id="ledger-list"></tbody>
       </table></div>
     </div>
@@ -395,7 +395,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">売上・経費・人件費をまとめて登録するためのCSVテンプレートです。</p>
       <div class="col-grid">
         <div class="col-item"><div class="col-name">日付<span class="col-req">必須</span></div><div class="col-note">YYYY-MM-DD形式</div></div>
-        <div class="col-item"><div class="col-name">区分<span class="col-req">必須</span></div><div class="col-note">売上／経費／人件費</div></div>
+        <div class="col-item"><div class="col-name">区分<span class="col-req">必須</span></div><div class="col-note">売上／家賃（レンタルオフィス利用料）／通信料／システム利用料／交通費／交際費／役員報酬／その他経費</div></div>
         <div class="col-item"><div class="col-name">摘要<span class="col-req">必須</span></div><div class="col-note">内容・説明</div></div>
         <div class="col-item"><div class="col-name">金額<span class="col-req">必須</span></div><div class="col-note">数値のみ（税抜）</div></div>
       </div>
@@ -471,7 +471,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <!-- MODALS -->
 <div class="modal-overlay" id="modal-add-project">
 <div class="modal">
-  <div class="modal-header"><span class="modal-title">案件を追加</span><button class="btn sm" onclick="closeModal('modal-add-project')">✕</button></div>
+  <div class="modal-header"><span class="modal-title" id="modal-project-title">案件を追加</span><button class="btn sm" onclick="closeModal('modal-add-project')">✕</button></div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">案件名 *</label><input id="p-name" type="text" placeholder="Webサイトリニューアル"></div>
     <div class="form-group"><label class="form-label">顧客名</label><input id="p-client" type="text" placeholder="株式会社〇〇"></div>
@@ -490,7 +490,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-add-project')">キャンセル</button>
-    <button class="btn primary" onclick="addProject()">+ 追加</button>
+    <button class="btn primary" id="modal-project-submit" onclick="saveProject()">+ 追加</button>
   </div>
 </div>
 </div>
@@ -555,10 +555,10 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 
 <div class="modal-overlay" id="modal-add-ledger">
 <div class="modal">
-  <div class="modal-header"><span class="modal-title">収支を入力</span><button class="btn sm" onclick="closeModal('modal-add-ledger')">✕</button></div>
+  <div class="modal-header"><span class="modal-title" id="modal-ledger-title">収支を入力</span><button class="btn sm" onclick="closeModal('modal-add-ledger')">✕</button></div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">日付</label><input id="l-date" type="date"></div>
-    <div class="form-group"><label class="form-label">区分</label><select id="l-type"><option>売上</option><option>経費</option><option>人件費</option></select></div>
+    <div class="form-group"><label class="form-label">区分</label><select id="l-type"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option></select></div>
   </div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">摘要</label><input id="l-desc" type="text" placeholder="例: 〇〇案件 6月分"></div>
@@ -566,7 +566,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-add-ledger')">キャンセル</button>
-    <button class="btn primary" onclick="addLedger()">+ 追加</button>
+    <button class="btn primary" id="modal-ledger-submit" onclick="saveLedger()">+ 追加</button>
   </div>
 </div>
 </div>
@@ -581,8 +581,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
   <div class="form-row three">
     <div class="form-group"><label class="form-label">売上計画</label><input id="plan-sales" type="number"></div>
-    <div class="form-group"><label class="form-label">経費計画</label><input id="plan-expense" type="number"></div>
-    <div class="form-group"><label class="form-label">人件費計画</label><input id="plan-labor" type="number"></div>
+    <div class="form-group"><label class="form-label">経費合計の計画</label><input id="plan-expense" type="number"></div>
+    <div class="form-group"><label class="form-label">役員報酬の計画</label><input id="plan-labor" type="number"></div>
   </div>
   <div style="font-size:12px;color:var(--text-muted);margin-top:6px">月を切り替えると、その月の計画値を編集できます。</div>
   <div class="actions-row">
@@ -646,6 +646,8 @@ const defaultState={
 
 let S=loadState();
 let renewTarget=null;
+let editProjectId=null;
+let editLedgerId=null;
 let currentQuoteItems=[{name:'',qty:1,unit:0,total:0}];
 let currentQuoteData=null;
 
@@ -868,6 +870,37 @@ document.querySelectorAll('.modal-overlay').forEach(m=>{
   m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')});
 });
 
+/* ===== 収支の区分 =====================================================
+   売上 / 経費系 / 役員報酬 の3グループに分けて集計する。
+   旧データの「経費」「人件費」も読めるように扱いを残してある。
+   =================================================================== */
+const LEDGER_TYPES=['売上','家賃（レンタルオフィス利用料）','通信料','システム利用料','交通費','交際費','役員報酬','その他経費'];
+const LABOR_TYPES=['役員報酬','人件費'];
+
+// 区分を集計グループ（sales / expense / labor）に振り分ける
+function ledgerGroup(type){
+  if(type==='売上')return'sales';
+  if(LABOR_TYPES.indexOf(type)>=0)return'labor';
+  return'expense'; // 経費系と、旧「経費」や未知の区分はまとめて経費に含める
+}
+
+// 指定した月（0=1月）の実績をグループごとに集計する
+function sumLedger(mi){
+  const t={sales:0,expense:0,labor:0};
+  S.ledger.forEach(l=>{
+    if(!l.date||new Date(l.date).getMonth()!==mi)return;
+    t[ledgerGroup(l.type)]+=l.amount;
+  });
+  return t;
+}
+
+// 収支一覧のバッジ（売上=緑 / 役員報酬=アンバー / 経費系=赤）
+function ledgerBadge(type){
+  const g=ledgerGroup(type);
+  const cls=g==='sales'?'badge-green':(g==='labor'?'badge-amber':'badge-red');
+  return`<span class="badge ${cls}">${type}</span>`;
+}
+
 function fmt(n){return'¥'+Math.round(n||0).toLocaleString('ja-JP')}
 function today(){return new Date().toISOString().split('T')[0]}
 function getMonth(){return parseInt(document.getElementById('month-select').value)}
@@ -878,9 +911,8 @@ function statusBadge(s){
 
 function updateDashboard(){
   const mi=getMonth();
-  const sales=S.ledger.filter(l=>l.type==='売上'&&new Date(l.date).getMonth()===mi).reduce((a,l)=>a+l.amount,0);
-  const exp=S.ledger.filter(l=>l.type==='経費'&&new Date(l.date).getMonth()===mi).reduce((a,l)=>a+l.amount,0);
-  const lab=S.ledger.filter(l=>l.type==='人件費'&&new Date(l.date).getMonth()===mi).reduce((a,l)=>a+l.amount,0);
+  const t=sumLedger(mi);
+  const sales=t.sales,exp=t.expense,lab=t.labor;
   const profit=sales-exp-lab;
   const margin=sales>0?Math.round(profit/sales*100):0;
   document.getElementById('d-sales').textContent=fmt(sales);
@@ -892,8 +924,8 @@ function updateDashboard(){
   const pl=planOf(mi);
   const diffs=[
     {label:'売上',actual:sales,plan:pl.sales,invert:false},
-    {label:'経費',actual:exp,plan:pl.expense,invert:true},
-    {label:'人件費',actual:lab,plan:pl.labor,invert:true}
+    {label:'経費合計',actual:exp,plan:pl.expense,invert:true},
+    {label:'役員報酬',actual:lab,plan:pl.labor,invert:true}
   ];
   ['sales','expense','labor'].forEach((k,i)=>{
     const d=diffs[i].actual-diffs[i].plan;
@@ -957,6 +989,7 @@ function renderProjects(){
     <td>${statusBadge(p.status)}</td>
     <td style="font-size:12px"><div>${p.start} 〜 ${p.end}</div><span class="badge badge-gray" style="margin-top:3px">${{single:'単発',monthly:'月次継続',annual:'年次継続'}[p.contract]||p.contract}</span></td>
     <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+      <button class="btn sm" onclick="openProjectModal(${p.id})">✏️ 編集</button>
       <button class="btn sm" onclick="openRenewModal(${p.id})" ${p.contract==='single'?'disabled':''}>🔄 更新</button>
       <button class="btn sm" onclick="quickQuote(${p.id})">📄 見積</button>
       <button class="btn sm danger" onclick="deleteProject(${p.id})">削除</button>
@@ -964,18 +997,50 @@ function renderProjects(){
   </tr>`).join('');
 }
 
-function addProject(){
+// id を渡すと編集、省略すると新規追加モードでモーダルを開く
+function openProjectModal(id){
+  const p=(id!==undefined&&id!==null)?S.projects.find(x=>x.id===id):null;
+  editProjectId=p?p.id:null;
+  document.getElementById('p-name').value=p?p.name:'';
+  document.getElementById('p-client').value=p?(p.client||''):'';
+  document.getElementById('p-amount').value=p?p.amount:'';
+  document.getElementById('p-status').value=p?p.status:'商談中';
+  document.getElementById('p-start').value=p?(p.start||''):'';
+  document.getElementById('p-end').value=p?(p.end||''):'';
+  document.getElementById('p-contract').value=p?p.contract:'single';
+  document.getElementById('p-memo').value=p?(p.memo||''):'';
+  document.getElementById('modal-project-title').textContent=p?'案件を編集':'案件を追加';
+  document.getElementById('modal-project-submit').textContent=p?'✓ 保存':'+ 追加';
+  openModal('modal-add-project');
+}
+
+function saveProject(){
   const name=document.getElementById('p-name').value.trim();
   if(!name){alert('案件名を入力してください');return;}
-  S.projects.push({id:S.nextProjectId++,name,client:document.getElementById('p-client').value.trim(),amount:parseInt(document.getElementById('p-amount').value)||0,status:document.getElementById('p-status').value,start:document.getElementById('p-start').value,end:document.getElementById('p-end').value,contract:document.getElementById('p-contract').value,memo:document.getElementById('p-memo').value.trim()});
-  saveState();closeModal('modal-add-project');
-  ['p-name','p-client','p-amount','p-memo'].forEach(id=>document.getElementById(id).value='');
-  renderProjects();
+  const values={
+    name,
+    client:document.getElementById('p-client').value.trim(),
+    amount:parseInt(document.getElementById('p-amount').value)||0,
+    status:document.getElementById('p-status').value,
+    start:document.getElementById('p-start').value,
+    end:document.getElementById('p-end').value,
+    contract:document.getElementById('p-contract').value,
+    memo:document.getElementById('p-memo').value.trim()
+  };
+  if(editProjectId!==null){
+    const p=S.projects.find(x=>x.id===editProjectId);
+    if(!p){alert('対象の案件が見つかりませんでした');return;}
+    Object.assign(p,values);
+  }else{
+    S.projects.push(Object.assign({id:S.nextProjectId++},values));
+  }
+  editProjectId=null;
+  saveState();closeModal('modal-add-project');refreshAll();
 }
 
 function deleteProject(id){
   if(!confirm('この案件を削除しますか？'))return;
-  S.projects=S.projects.filter(p=>p.id!==id);saveState();renderProjects();
+  S.projects=S.projects.filter(p=>p.id!==id);saveState();refreshAll();
 }
 
 function openRenewModal(id){
@@ -1188,37 +1253,71 @@ async function handlePDFUpload(event){
 
 function renderLedger(){
   const mi=new Date().getMonth();
-  const sales=S.ledger.filter(l=>l.type==='売上'&&new Date(l.date).getMonth()===mi).reduce((a,l)=>a+l.amount,0);
-  const exp=S.ledger.filter(l=>l.type==='経費'&&new Date(l.date).getMonth()===mi).reduce((a,l)=>a+l.amount,0);
-  const lab=S.ledger.filter(l=>l.type==='人件費'&&new Date(l.date).getMonth()===mi).reduce((a,l)=>a+l.amount,0);
+  const t=sumLedger(mi);
+  const sales=t.sales,exp=t.expense,lab=t.labor;
   const pl=planOf(mi);
   document.getElementById('plan-month-label').textContent=(mi+1)+'月';
   document.getElementById('plan-table').innerHTML=[
     {k:'売上',actual:sales,plan:pl.sales},
-    {k:'経費',actual:exp,plan:pl.expense},
-    {k:'人件費',actual:lab,plan:pl.labor}
+    {k:'経費合計',actual:exp,plan:pl.expense},
+    {k:'役員報酬',actual:lab,plan:pl.labor}
   ].map(r=>{
     const d=r.actual-r.plan;const c=d>=0?'#1D9E75':'#E24B4A';
     return`<tr><td>${r.k}</td><td style="color:var(--text-secondary)">${fmt(r.plan)}</td><td style="font-weight:500">${fmt(r.actual)}</td><td style="color:${c};font-weight:500">${d>=0?'+':''}${fmt(d)}</td></tr>`;
   }).join('');
   const sorted=[...S.ledger].sort((a,b)=>b.date.localeCompare(a.date));
   document.getElementById('ledger-list').innerHTML=sorted.slice(0,15).map(l=>{
-    const cls={売上:'badge-green',経費:'badge-red',人件費:'badge-amber'}[l.type]||'badge-gray';
-    return`<tr><td style="font-size:12px;white-space:nowrap">${l.date}</td><td><span class="badge ${cls}">${l.type}</span></td><td style="font-size:12px">${l.desc}</td><td style="font-weight:500">${fmt(l.amount)}</td></tr>`;
+    return`<tr><td style="font-size:12px;white-space:nowrap">${l.date}</td><td>${ledgerBadge(l.type)}</td><td style="font-size:12px">${l.desc}</td><td style="font-weight:500">${fmt(l.amount)}</td><td><div style="display:flex;gap:4px"><button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button><button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button></div></td></tr>`;
   }).join('');
 }
 
-function addLedger(){
+// 月次売上グラフ用のデータを収支から再計算する（追加・編集・削除のあとに必ず呼ぶ）
+function recalcMonthlyData(){
+  const m=[0,0,0,0,0,0,0,0,0,0,0,0];
+  S.ledger.forEach(l=>{
+    if(l.type!=='売上'||!l.date)return;
+    const i=new Date(l.date).getMonth();
+    if(i>=0&&i<12)m[i]+=l.amount;
+  });
+  S.monthlyData=m;
+}
+
+// id を渡すと編集、省略すると新規入力モードでモーダルを開く
+function openLedgerModal(id){
+  const l=(id!==undefined&&id!==null)?S.ledger.find(x=>x.id===id):null;
+  editLedgerId=l?l.id:null;
+  document.getElementById('l-date').value=l?l.date:today();
+  document.getElementById('l-type').value=l?l.type:'売上';
+  document.getElementById('l-desc').value=l?l.desc:'';
+  document.getElementById('l-amount').value=l?l.amount:'';
+  document.getElementById('modal-ledger-title').textContent=l?'収支を編集':'収支を入力';
+  document.getElementById('modal-ledger-submit').textContent=l?'✓ 保存':'+ 追加';
+  openModal('modal-add-ledger');
+}
+
+function saveLedger(){
   const date=document.getElementById('l-date').value;
   const type=document.getElementById('l-type').value;
   const desc=document.getElementById('l-desc').value.trim();
   const amount=parseInt(document.getElementById('l-amount').value)||0;
   if(!date||!desc||!amount){alert('日付・摘要・金額を入力してください');return;}
-  S.ledger.push({id:S.nextLedgerId++,date,type,desc,amount});
-  if(type==='売上')S.monthlyData[new Date(date).getMonth()]+=amount;
-  saveState();closeModal('modal-add-ledger');
-  document.getElementById('l-desc').value='';document.getElementById('l-amount').value='';
-  renderLedger();
+  if(editLedgerId!==null){
+    const l=S.ledger.find(x=>x.id===editLedgerId);
+    if(!l){alert('対象の収支が見つかりませんでした');return;}
+    Object.assign(l,{date,type,desc,amount});
+  }else{
+    S.ledger.push({id:S.nextLedgerId++,date,type,desc,amount});
+  }
+  editLedgerId=null;
+  recalcMonthlyData();
+  saveState();closeModal('modal-add-ledger');refreshAll();
+}
+
+function deleteLedger(id){
+  if(!confirm('この収支を削除しますか？'))return;
+  S.ledger=S.ledger.filter(l=>l.id!==id);
+  recalcMonthlyData();
+  saveState();refreshAll();
 }
 
 function openPlanModal(mi){
@@ -1317,8 +1416,10 @@ const CSV_TEMPLATES={
     headers:['日付','区分','摘要','金額'],
     sample:[
       ['2026-07-01','売上','コンサル料 7月分','100000'],
-      ['2026-07-05','経費','交通費','8000'],
-      ['2026-07-10','人件費','外注費','50000']
+      ['2026-07-05','家賃（レンタルオフィス利用料）','7月分オフィス利用料','30000'],
+      ['2026-07-08','交通費','客先訪問 交通費','8000'],
+      ['2026-07-10','システム利用料','SaaS 月額利用料','5000'],
+      ['2026-07-25','役員報酬','7月分 役員報酬','300000']
     ],
     required:['日付','区分','摘要','金額']
   }
@@ -1489,17 +1590,14 @@ function csvImportLedger(){
     const desc=(obj['摘要']||'').trim();
     const amount=parseInt((obj['金額']||'0').replace(/[^0-9]/g,''))||0;
     if(!date||!desc||!amount)return;
-    const validTypes=['売上','経費','人件費'];
+    const validTypes=LEDGER_TYPES.concat(['経費','人件費']); // 旧区分のCSVも取り込めるようにする
     if(!validTypes.includes(type)){csvLog(`スキップ（区分不明）: ${desc}`,'err');return;}
     S.ledger.push({id:S.nextLedgerId++,date,type,desc,amount});
-    if(type==='売上'){
-      const m=new Date(date).getMonth();
-      S.monthlyData[m]=(S.monthlyData[m]||0)+amount;
-    }
     csvLog(`✓ ${type}: ${desc}（${amount.toLocaleString()}円）`,'ok');
     added++;
   });
 
+  recalcMonthlyData();
   saveState();
   csvProgress(100,'取込完了');
   csvLog(`完了: ${added}件の収支を追加しました`,'info');
