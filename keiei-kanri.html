@@ -286,19 +286,42 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <div id="page-quotes" class="page">
   <div class="section-header">
     <h1 class="section-title">見積・請求管理</h1>
-    <button class="btn primary" onclick="openCreateQuoteModal()">+ 見積書作成</button>
+    <select id="quote-month" onchange="renderQuotes()" style="width:auto;font-size:13px">
+      <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
+    </select>
   </div>
   <div class="tab-group">
-    <button class="tab active" onclick="switchQuoteTab('q-list',this)">一覧</button>
-    <button class="tab" onclick="switchQuoteTab('q-upload',this)">PDFアップロード（AI読取）</button>
+    <button class="tab active" onclick="switchQuoteTab('estimate',this)">📄 見積書</button>
+    <button class="tab" onclick="switchQuoteTab('invoice',this)">💴 請求書</button>
+    <button class="tab" onclick="switchQuoteTab('upload',this)">📤 PDF取込</button>
   </div>
-  <div id="q-list">
+  <div id="q-estimate">
     <div class="card">
+      <div class="card-header">
+        <span class="card-title" id="estimate-summary">0件　合計: ¥0（税込）</span>
+        <button class="btn primary" onclick="openCreateQuoteModal()">+ 見積書作成</button>
+      </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>番号</th><th>件名</th><th>顧客</th><th>金額</th><th>種別</th><th>日付</th><th>操作</th></tr></thead>
-        <tbody id="quote-list"></tbody>
+        <thead><tr><th>番号</th><th>件名</th><th>顧客</th><th>金額</th><th>発行日</th><th>操作</th></tr></thead>
+        <tbody id="estimate-list"></tbody>
       </table></div>
-      <div id="quote-empty" class="empty-state" style="display:none">見積書・請求書がありません。</div>
+      <div id="estimate-empty" class="empty-state" style="display:none">この期間の見積書はありません。</div>
+    </div>
+  </div>
+  <div id="q-invoice" style="display:none">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title" id="invoice-summary">0件　合計: ¥0（税込）</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="openBulkInvoiceModal()">📄 一括請求書作成</button>
+          <button class="btn primary" onclick="openCreateInvoiceModal()">+ 請求書作成</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>番号</th><th>件名</th><th>顧客</th><th>金額</th><th>発行日</th><th>支払期限</th><th>操作</th></tr></thead>
+        <tbody id="invoice-list"></tbody>
+      </table></div>
+      <div id="invoice-empty" class="empty-state" style="display:none">この期間の請求書はありません。</div>
     </div>
   </div>
   <div id="q-upload" style="display:none">
@@ -582,14 +605,14 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 
 <div class="modal-overlay" id="modal-create-quote">
 <div class="modal wide">
-  <div class="modal-header"><span class="modal-title">見積書を作成</span><button class="btn sm" onclick="closeModal('modal-create-quote')">✕</button></div>
+  <div class="modal-header"><span class="modal-title" id="modal-doc-title">見積書を作成</span><button class="btn sm" onclick="closeModal('modal-create-quote')">✕</button></div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">件名 *</label><input id="q-subject" type="text" placeholder="Webサイト制作一式"></div>
     <div class="form-group"><label class="form-label">宛先（顧客名）</label><input id="q-client" type="text" placeholder="株式会社〇〇 御中"></div>
   </div>
   <div class="form-row">
-    <div class="form-group"><label class="form-label">見積日</label><input id="q-date" type="date"></div>
-    <div class="form-group"><label class="form-label">有効期限</label><input id="q-expire" type="date"></div>
+    <div class="form-group"><label class="form-label" id="q-date-label">見積日</label><input id="q-date" type="date"></div>
+    <div class="form-group"><label class="form-label" id="q-expire-label">有効期限</label><input id="q-expire" type="date"></div>
   </div>
   <div style="margin-bottom:8px">
     <div style="display:grid;grid-template-columns:2.5fr 0.8fr 1fr 1fr auto;gap:6px;font-size:12px;color:var(--text-secondary);padding:0 4px 6px;border-bottom:0.5px solid var(--border)">
@@ -823,6 +846,7 @@ let editProjectId=null;
 let editLedgerId=null;
 let currentQuoteItems=[{name:'',qty:1,unit:0,total:0}];
 let currentQuoteData=null;
+let currentDocType='見積書';
 
 // CSV state
 let csvType='project';
@@ -1436,44 +1460,95 @@ function renewProject(){
   const ne=document.getElementById('r-end').value;
   const na=parseInt(document.getElementById('r-amount').value)||p.amount;
   p.start=ns;p.end=ne;p.amount=na;p.status='契約済';
-  const qid='Q-'+String(S.nextQuoteNum++).padStart(3,'0');
+  const qid=makeDocNumber('見積書');
   const qdata={id:qid,subject:`${p.name} 更新（${ns}〜${ne}）`,client:(p.client||'')+' 御中',amount:na+Math.round(na*0.1),type:'見積書',date:today(),expire:ne,items:[{name:p.name+'（更新）',qty:1,unit:na,total:na}],note:S.company.note||''};
   S.quotes.push(qdata);saveState();closeModal('modal-renew-project');
   currentQuoteData=qdata;showPreviewModal();renderProjects();
 }
 
-function renderQuotes(){
-  const tb=document.getElementById('quote-list');
-  if(S.quotes.length===0){tb.innerHTML='';document.getElementById('quote-empty').style.display='';return;}
-  document.getElementById('quote-empty').style.display='none';
-  const sorted=[...S.quotes].reverse();
-  tb.innerHTML=sorted.map(q=>`<tr>
-    <td style="font-size:12px;color:var(--text-muted)">${q.id}</td>
-    <td style="font-weight:500">${q.subject}</td>
-    <td style="font-size:12px">${q.client||''}</td>
-    <td>${fmt(q.amount)}</td>
-    <td><span class="badge badge-blue">${q.type||'見積書'}</span></td>
-    <td style="font-size:12px;color:var(--text-secondary)">${q.date}</td>
-    <td><div style="display:flex;gap:4px">
-      <button class="btn sm" onclick="previewQuoteById('${q.id}')">👁 表示</button>
-      <button class="btn sm danger" onclick="deleteQuote('${q.id}')">削除</button>
-    </div></td>
-  </tr>`).join('');
+// 見積・請求ページで選択中の月。「全期間」なら null。
+function currentQuoteMonth(){
+  const el=document.getElementById('quote-month');
+  if(!el||el.value==='')return null;
+  return parseInt(el.value);
 }
 
-function switchQuoteTab(id,btn){
+// 種別と選択月で書類を絞り込む（新しいものが上）
+function quotesOfType(type){
+  const mi=currentQuoteMonth();
+  return S.quotes.filter(q=>{
+    if((q.type||'見積書')!==type)return false;
+    if(mi===null)return true;
+    if(!q.date)return false;
+    const d=new Date(q.date);
+    return !isNaN(d.getTime())&&d.getMonth()===mi;
+  }).reverse();
+}
+
+function renderQuotes(){
+  renderQuoteTable('見積書','estimate');
+  renderQuoteTable('請求書','invoice');
+}
+
+function renderQuoteTable(type,prefix){
+  const list=quotesOfType(type);
+  const total=list.reduce((a,q)=>a+(q.amount||0),0);
+  document.getElementById(prefix+'-summary').textContent=
+    list.length+'件　合計: '+fmt(total)+'（税込）';
+
+  const tb=document.getElementById(prefix+'-list');
+  const empty=document.getElementById(prefix+'-empty');
+  if(list.length===0){tb.innerHTML='';empty.style.display='';return;}
+  empty.style.display='none';
+
+  const isInvoice=type==='請求書';
+  const nowYmd=today();
+  tb.innerHTML=list.map(q=>{
+    const due=q.due||q.expire||'';
+    const overdue=isInvoice&&due&&due<nowYmd;   // 支払期限切れ
+    return`<tr>
+      <td style="font-size:12px;color:var(--text-muted);white-space:nowrap">${q.id}</td>
+      <td style="font-weight:500">${q.subject}</td>
+      <td style="font-size:12px">${q.client||''}</td>
+      <td style="white-space:nowrap">${fmt(q.amount)}</td>
+      <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap">${q.date||'-'}</td>
+      ${isInvoice?`<td style="font-size:12px;white-space:nowrap;${overdue?'color:#E24B4A;font-weight:600':'color:var(--text-secondary)'}">${due||'-'}${overdue?' ⚠ 期限超過':''}</td>`:''}
+      <td><div style="display:flex;gap:4px">
+        <button class="btn sm" onclick="previewQuoteById('${q.id}')">👁 表示</button>
+        <button class="btn sm danger" onclick="deleteQuote('${q.id}')">削除</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function switchQuoteTab(name,btn){
   btn.closest('.tab-group').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('q-list').style.display=id==='q-list'?'':'none';
-  document.getElementById('q-upload').style.display=id==='q-upload'?'':'none';
+  document.getElementById('q-estimate').style.display=name==='estimate'?'':'none';
+  document.getElementById('q-invoice').style.display=name==='invoice'?'':'none';
+  document.getElementById('q-upload').style.display=name==='upload'?'':'none';
 }
 
-function openCreateQuoteModal(){
+// 作成モーダルの見出し・項目名を書類の種別に合わせる
+function applyDocTypeLabels(type){
+  currentDocType=type;
+  const inv=type==='請求書';
+  document.getElementById('modal-doc-title').textContent=inv?'請求書を作成':'見積書を作成';
+  document.getElementById('q-date-label').textContent=inv?'請求日':'見積日';
+  document.getElementById('q-expire-label').textContent=inv?'支払期限':'有効期限';
+}
+
+function openCreateQuoteModal(type){
+  applyDocTypeLabels(type||'見積書');
   currentQuoteItems=[{name:'',qty:1,unit:0,total:0}];
   ['q-subject','q-client','q-expire'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('q-date').value=today();
   document.getElementById('q-note').value=S.company.note||'';
   renderQuoteItems();openModal('modal-create-quote');
+}
+
+function openCreateInvoiceModal(){
+  openCreateQuoteModal('請求書');
 }
 
 function addQuoteItem(){currentQuoteItems.push({name:'',qty:1,unit:0,total:0});renderQuoteItems();}
@@ -1510,14 +1585,27 @@ function createQuote(){
   const subject=document.getElementById('q-subject').value.trim();
   if(!subject){alert('件名を入力してください');return;}
   const sub=currentQuoteItems.reduce((a,it)=>a+it.qty*it.unit,0);
-  const qid='Q-'+String(S.nextQuoteNum++).padStart(3,'0');
-  const qdata={id:qid,subject,client:document.getElementById('q-client').value.trim()||'御中',amount:sub+Math.round(sub*0.1),type:'見積書',date:document.getElementById('q-date').value||today(),expire:document.getElementById('q-expire').value,items:currentQuoteItems.map(it=>({...it})),note:document.getElementById('q-note').value.trim()};
+  const type=currentDocType||'見積書';
+  const expire=document.getElementById('q-expire').value;
+  const qdata={
+    id:makeDocNumber(type),
+    subject,
+    client:document.getElementById('q-client').value.trim()||'御中',
+    amount:sub+Math.round(sub*0.1),
+    type,
+    date:document.getElementById('q-date').value||today(),
+    expire,
+    due:type==='請求書'?expire:'',
+    items:currentQuoteItems.map(it=>({...it})),
+    note:document.getElementById('q-note').value.trim()
+  };
   S.quotes.push(qdata);saveState();currentQuoteData=qdata;
   closeModal('modal-create-quote');showPreviewModal();renderQuotes();
 }
 
 function quickQuote(pid){
   const p=S.projects.find(x=>x.id===pid);if(!p)return;
+  applyDocTypeLabels('見積書');
   currentQuoteItems=[{name:p.name,qty:1,unit:p.amount,total:p.amount}];
   document.getElementById('q-subject').value=p.name;
   document.getElementById('q-client').value=(p.client||'')+' 御中';
@@ -3067,6 +3155,7 @@ function csvDownloadTemplate(type){
 // INIT
 document.getElementById('month-select').value=new Date().getMonth();
 document.getElementById('project-month').value=new Date().getMonth();
+document.getElementById('quote-month').value=new Date().getMonth();
 document.getElementById('l-date').value=today();
 document.getElementById('gas-sheet-link').href=SHEET_URL;
 setSyncStatus(gasEnabled()?'sync':'off');
