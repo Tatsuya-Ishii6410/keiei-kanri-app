@@ -37,6 +37,7 @@ var SHEET_DEFS = {
   quotes:   ['id', 'subject', 'client', 'amount', 'type', 'date', 'expire', 'due', 'items', 'note'],
   ledger:   ['id', 'date', 'type', 'desc', 'amount', 'fixedCostId'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
+  fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
   settings: ['key', 'value']
 };
 
@@ -140,13 +141,16 @@ function readAll_() {
     quotes:   readQuotes_(ss.getSheetByName('quotes')),
     ledger:   readLedger_(ss.getSheetByName('ledger')),
     fixedCosts: readFixedCosts_(ss.getSheetByName('fixedCosts')),
+    fiscalYears: readFiscalYears_(ss.getSheetByName('fiscalYears')),
     company:  settings.company,
     plan:     settings.plan,
     nextProjectId: settings.nextProjectId,
     nextQuoteNum:  settings.nextQuoteNum,
     nextLedgerId:  settings.nextLedgerId,
     nextFixedCostId: settings.nextFixedCostId,
-    finance: settings.finance
+    finance: settings.finance,
+    currentFiscalYearId: settings.currentFiscalYearId,
+    nextFiscalYearId: settings.nextFiscalYearId
   };
 }
 
@@ -201,6 +205,20 @@ function readLedger_(sh) {
   }).filter(function (l) { return l.date !== '' && l.desc !== ''; });
 }
 
+function readFiscalYears_(sh) {
+  return rowObjects_(sh, SHEET_DEFS.fiscalYears).map(function (o) {
+    return {
+      id: num_(o.id),
+      name: str_(o.name),
+      startMonth: ym_(o.startMonth),
+      endMonth: ym_(o.endMonth),
+      salesTarget: num_(o.salesTarget),
+      profitTarget: num_(o.profitTarget),
+      active: bool_(o.active)
+    };
+  }).filter(function (f) { return f.id && f.name !== ''; });
+}
+
 function readFixedCosts_(sh) {
   return rowObjects_(sh, SHEET_DEFS.fixedCosts).map(function (o) {
     return {
@@ -222,6 +240,7 @@ function readSettings_(sh) {
   var legacyPlan = null; // 月の区別が無かった頃の形式
   var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1, nextFixedCostId = 1;
   var finance = { cash: 0, loan: 0 };
+  var currentFiscalYearId = 0, nextFiscalYearId = 1;
 
   rowObjects_(sh, SHEET_DEFS.settings).forEach(function (o) {
     var key = str_(o.key);
@@ -252,6 +271,10 @@ function readSettings_(sh) {
       finance.cash = num_(value);
     } else if (key === 'finance.loan') {
       finance.loan = num_(value);
+    } else if (key === 'currentFiscalYearId') {
+      currentFiscalYearId = num_(value);
+    } else if (key === 'nextFiscalYearId') {
+      nextFiscalYearId = num_(value) || 1;
     }
   });
 
@@ -272,7 +295,9 @@ function readSettings_(sh) {
     nextQuoteNum: nextQuoteNum,
     nextLedgerId: nextLedgerId,
     nextFixedCostId: nextFixedCostId,
-    finance: finance
+    finance: finance,
+    currentFiscalYearId: currentFiscalYearId,
+    nextFiscalYearId: nextFiscalYearId
   };
 }
 
@@ -308,6 +333,11 @@ function writeAll_(data) {
       ym_(f.startMonth), ym_(f.endMonth), !!f.enabled];
   });
 
+  var fiscalYears = (data.fiscalYears || []).map(function (f) {
+    return [num_(f.id), str_(f.name), ym_(f.startMonth), ym_(f.endMonth),
+      num_(f.salesTarget), num_(f.profitTarget), !!f.active];
+  });
+
   var settings = [];
   var company = data.company || {};
   COMPANY_FIELDS.forEach(function (k) { settings.push(['company.' + k, str_(company[k])]); });
@@ -324,12 +354,15 @@ function writeAll_(data) {
   var fin = data.finance || {};
   settings.push(['finance.cash', num_(fin.cash)]);
   settings.push(['finance.loan', num_(fin.loan)]);
+  settings.push(['currentFiscalYearId', num_(data.currentFiscalYearId)]);
+  settings.push(['nextFiscalYearId', num_(data.nextFiscalYearId) || 1]);
   settings.push(['updatedAt', Utilities.formatDate(new Date(), timezone_(ss), 'yyyy-MM-dd HH:mm:ss')]);
 
   writeSheet_(ss.getSheetByName('projects'), SHEET_DEFS.projects, projects);
   writeSheet_(ss.getSheetByName('quotes'),   SHEET_DEFS.quotes,   quotes);
   writeSheet_(ss.getSheetByName('ledger'),   SHEET_DEFS.ledger,   ledger);
   writeSheet_(ss.getSheetByName('fixedCosts'), SHEET_DEFS.fixedCosts, fixedCosts);
+  writeSheet_(ss.getSheetByName('fiscalYears'), SHEET_DEFS.fiscalYears, fiscalYears);
   writeSheet_(ss.getSheetByName('settings'), SHEET_DEFS.settings, settings);
   SpreadsheetApp.flush();
 }

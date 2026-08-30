@@ -214,12 +214,19 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <div id="page-dashboard" class="page active">
   <div class="section-header">
     <h1 class="section-title">経営ダッシュボード</h1>
+    <div style="display:flex;gap:8px;align-items:center">
+    <select id="fiscal-select" onchange="updateDashboard()" style="width:auto;font-size:13px"></select>
     <select id="month-select" onchange="updateDashboard()" style="width:auto;font-size:13px">
       <option value="0">1月</option><option value="1">2月</option><option value="2">3月</option>
       <option value="3">4月</option><option value="4">5月</option><option value="5" selected>6月</option>
       <option value="6">7月</option><option value="7">8月</option><option value="8">9月</option>
       <option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
     </select>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">📊 期間サマリー</span></div>
+    <div id="fiscal-summary"></div>
   </div>
   <div class="metric-grid">
     <div class="metric-card"><div class="metric-label">売上</div><div class="metric-value blue" id="d-sales">¥0</div><div class="metric-sub" id="d-sales-year">年間累計: ¥0</div><div class="metric-sub" id="d-sales-diff">計画比: -</div></div>
@@ -579,6 +586,17 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div id="settings-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
   </div>
   <div class="card">
+    <div class="card-header">
+      <span class="card-title">期の管理</span>
+      <button class="btn primary" onclick="openFiscalForm()">+ 新しい期を追加</button>
+    </div>
+    <div style="font-size:13px;margin-bottom:12px">現在の期：<strong id="fiscal-current">-</strong></div>
+    <div id="fiscal-list"></div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:10px">
+      アクティブな期は、ダッシュボードの初期表示と月次計画の入力月の並びに使われます。
+    </div>
+  </div>
+  <div class="card">
     <div class="card-header"><span class="card-title">財務情報（融資力診断に使用）</span></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">現預金残高（円）</label><input id="f-cash" type="number" placeholder="1500000"></div>
@@ -714,6 +732,27 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-drive-import')">閉じる</button>
     <button class="btn success" id="drive-register-btn" onclick="driveRegister()" style="display:none">✓ 収支に登録する</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-fiscal">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title" id="fy-title">期を追加</span><button class="btn sm" onclick="closeModal('modal-fiscal')">✕</button></div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">期の名前</label><input id="fy-name" type="text" placeholder="第2期"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">開始月</label><input id="fy-start" type="month"></div>
+    <div class="form-group"><label class="form-label">終了月</label><input id="fy-end" type="month"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">売上目標（円）</label><input id="fy-sales" type="number" placeholder="6500000"></div>
+    <div class="form-group"><label class="form-label">利益目標（円）</label><input id="fy-profit" type="number" placeholder="1060000"></div>
+  </div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-fiscal')">キャンセル</button>
+    <button class="btn primary" id="fy-submit" onclick="saveFiscal()">+ 追加</button>
   </div>
 </div>
 </div>
@@ -898,6 +937,20 @@ const defaultState={
     {sales:0,expense:0,labor:0},  // 11月
     {sales:0,expense:0,labor:0}  // 12月
   ],
+  // 期（会計年度）
+  fiscalYears:[
+    {
+      id:1,
+      name:'第1期',
+      startMonth:'2026-03',
+      endMonth:'2027-02',
+      salesTarget:6500000,
+      profitTarget:1060000,
+      active:true
+    }
+  ],
+  currentFiscalYearId:1,
+  nextFiscalYearId:2,
   // 財務情報（融資力診断で使う）
   finance:{cash:0,loan:0},
   // 固定費: {id,type,desc,amount,startMonth,endMonth,enabled}
@@ -952,6 +1005,21 @@ function mergeState(parsed){
   if(!Array.isArray(s.quotes))s.quotes=[];
   if(!Array.isArray(s.ledger))s.ledger=[];
   if(!Array.isArray(s.fixedCosts))s.fixedCosts=[];
+  if(!Array.isArray(s.fiscalYears))s.fiscalYears=[];
+  s.fiscalYears=s.fiscalYears.map(f=>({
+    id:parseInt(f.id)||0,
+    name:String(f.name||''),
+    startMonth:String(f.startMonth||''),
+    endMonth:String(f.endMonth||''),
+    salesTarget:parseInt(f.salesTarget)||0,
+    profitTarget:parseInt(f.profitTarget)||0,
+    active:!!f.active
+  })).filter(f=>f.id&&f.name);
+  if(!s.nextFiscalYearId)s.nextFiscalYearId=Math.max(0,...s.fiscalYears.map(f=>f.id))+1;
+  if(!s.currentFiscalYearId){
+    const a=s.fiscalYears.find(f=>f.active)||s.fiscalYears[0];
+    s.currentFiscalYearId=a?a.id:null;
+  }
   s.finance=Object.assign({cash:0,loan:0},(parsed&&parsed.finance)||{});
   s.finance.cash=parseInt(s.finance.cash)||0;
   s.finance.loan=parseInt(s.finance.loan)||0;
@@ -1059,6 +1127,8 @@ async function loadFromGAS(){
   S=mergeState(json.data);
   saveLocal();
   setSyncStatus('ok');
+  renderFiscalSelects();
+  updatePlanMonthOptions();
   refreshAll();
 }
 
@@ -1181,14 +1251,14 @@ let chartPoints=null;   // 月ごとのX座標
 // 月ごとの売上・営業利益・利益率・有効案件数
 function monthlySeries(){
   const rows=[];
-  for(let i=0;i<12;i++){
+  fiscalMonths(dashboardFiscalYear()).forEach(i=>{
     const t=sumLedger(i);
     const sales=salesByMonth(i);
     const profit=sales-t.expense-t.labor;
     const projects=S.projects.filter(p=>
       (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,i)).length;
-    rows.push({month:i+1,sales,profit,rate:sales>0?profit/sales*100:0,projects});
-  }
+    rows.push({index:i,month:i+1,sales,profit,rate:sales>0?profit/sales*100:0,projects});
+  });
   return rows;
 }
 
@@ -1201,7 +1271,7 @@ function drawMonthlyChart(){
   const cv=document.getElementById('monthly-chart');
   if(!cv)return;
   const rows=chartSeries=monthlySeries();
-  const mi=getMonth();
+  const mi=rows.findIndex(r=>r.index===getMonth());
 
   const cssW=cv.clientWidth||600, cssH=180;
   const dpr=window.devicePixelRatio||1;
@@ -1227,7 +1297,8 @@ function drawMonthlyChart(){
 
   const y=v=>T+h-(v-aMin)/(aMax-aMin)*h;
   const yr=v=>T+h-(v-rMin)/(rMax-rMin)*h;
-  const x=i=>L+(w/11)*i;
+  const span=Math.max(1,rows.length-1);
+  const x=i=>L+(w/span)*i;
   chartPoints=rows.map((_,i)=>x(i));
 
   // 目盛りとグリッド
@@ -1497,6 +1568,7 @@ function updateDashboard(){
     document.getElementById('d-'+k+'-diff').textContent='計画比: '+(d>=0?'+':'')+fmt(d);
   });
   renderDiffList(mi);
+  renderFiscalSummary();
   drawMonthlyChart();
   const dp=document.getElementById('dash-projects');
   const active=S.projects.filter(p=>p.status!=='完了'&&p.status!=='失注');
@@ -2179,6 +2251,269 @@ function deleteFixedCost(id){
   renderFixedCostList();
 }
 
+/* ===== 期（会計年度） ===============================================
+   このアプリの集計は「何月か」だけで行うため、期の範囲は月インデックス
+   （0=1月）の並びとして扱う。例: 2026-03〜2027-02 なら [2,3,...,11,0,1]。
+   =================================================================== */
+
+let editFiscalId=null;
+
+function fiscalList(){
+  if(!Array.isArray(S.fiscalYears))S.fiscalYears=[];
+  return S.fiscalYears;
+}
+
+function fiscalById(id){
+  return fiscalList().find(f=>f.id===id)||null;
+}
+
+// アクティブな期。無ければ先頭を使う。
+function activeFiscalYear(){
+  const list=fiscalList();
+  if(list.length===0)return null;
+  return fiscalById(S.currentFiscalYearId)||list.find(f=>f.active)||list[0];
+}
+
+// ダッシュボードで選択中の期
+function dashboardFiscalYear(){
+  const el=document.getElementById('fiscal-select');
+  if(el&&el.value)return fiscalById(parseInt(el.value))||activeFiscalYear();
+  return activeFiscalYear();
+}
+
+// 期に含まれる月インデックスを、期の並び順で返す
+function fiscalMonths(fy){
+  const all=[0,1,2,3,4,5,6,7,8,9,10,11];
+  if(!fy)return all;
+  const s=ymToAbs(fy.startMonth),e=ymToAbs(fy.endMonth);
+  if(s===null||e===null||e<s)return all;
+  const out=[];
+  for(let a=s;a<=Math.min(e,s+23);a++)out.push(a%12);
+  return out;
+}
+
+function fiscalLabel(fy){
+  if(!fy)return'';
+  const s=ymToAbs(fy.startMonth),e=ymToAbs(fy.endMonth);
+  if(s===null||e===null)return fy.name||'';
+  return`${Math.floor(s/12)}年${s%12+1}月〜${Math.floor(e/12)}年${e%12+1}月`;
+}
+
+// 残り月数（当月を含む）
+function fiscalRemaining(fy){
+  const e=fy?ymToAbs(fy.endMonth):null;
+  if(e===null)return 0;
+  const now=new Date();
+  return Math.max(0,e-(now.getFullYear()*12+now.getMonth())+1);
+}
+
+// 期の実績。uptoIndex を渡すと期初からその月までの累計になる。
+function fiscalTotals(fy,uptoIndex){
+  const months=fiscalMonths(fy);
+  let list=months;
+  if(uptoIndex!==undefined&&uptoIndex!==null){
+    const at=months.indexOf(uptoIndex);
+    list=at>=0?months.slice(0,at+1):months;
+  }
+  let sales=0,expense=0,labor=0,tax=0;
+  list.forEach(m=>{
+    const t=sumLedger(m);
+    sales+=salesByMonth(m);expense+=t.expense;labor+=t.labor;tax+=t.tax;
+  });
+  return{months:list,sales,expense,labor,tax,profit:sales-expense-labor};
+}
+
+// 期の月次計画の合計
+function fiscalPlanTotals(fy,uptoIndex){
+  const months=fiscalMonths(fy);
+  let list=months;
+  if(uptoIndex!==undefined&&uptoIndex!==null){
+    const at=months.indexOf(uptoIndex);
+    list=at>=0?months.slice(0,at+1):months;
+  }
+  let sales=0,expense=0,labor=0,tax=0;
+  list.forEach(m=>{
+    const p=planOf(m);
+    sales+=p.sales;expense+=p.expense;labor+=p.labor;tax+=p.tax||0;
+  });
+  return{sales,expense,labor,tax,profit:sales-expense-labor};
+}
+
+function pct(actual,target){
+  if(!target)return null;
+  return Math.round(actual/target*1000)/10;
+}
+
+function progressBar(rate){
+  const r=rate===null?0:Math.max(0,Math.min(100,rate));
+  const color=rate===null?'#9b9b9b':rate>=100?'#1D9E75':rate>=70?'#EF9F27':'#E24B4A';
+  return`<div class="diff-bar"><div class="diff-fill" style="width:${r}%;background:${color}"></div></div>`;
+}
+
+function rateText(rate){return rate===null?'-':rate.toFixed(1)+'%'}
+
+/* ---- ダッシュボードの期間サマリー ---- */
+
+function renderFiscalSummary(){
+  const fy=dashboardFiscalYear();
+  const card=document.getElementById('fiscal-summary');
+  if(!fy){
+    card.innerHTML='<div class="empty-state">期が登録されていません。設定ページの「期の管理」から追加してください。</div>';
+    return;
+  }
+  const act=fiscalTotals(fy);
+  const plan=fiscalPlanTotals(fy);
+  const salesRate=pct(act.sales,fy.salesTarget);
+  const profitRate=pct(act.profit,fy.profitTarget);
+  const targetMargin=fy.salesTarget>0?fy.profitTarget/fy.salesTarget*100:null;
+  const actualMargin=act.sales>0?act.profit/act.sales*100:null;
+  const planSalesRate=pct(act.sales,plan.sales);
+  const planProfitRate=pct(act.profit,plan.profit);
+
+  const row=(label,target,actual,rate,extra)=>`<tr>
+    <td style="padding:9px 12px;border-bottom:0.5px solid var(--border)">${label}</td>
+    <td style="padding:9px 12px;border-bottom:0.5px solid var(--border);text-align:right;color:var(--text-secondary)">${target}</td>
+    <td style="padding:9px 12px;border-bottom:0.5px solid var(--border);text-align:right;font-weight:600">${actual}</td>
+    <td style="padding:9px 12px;border-bottom:0.5px solid var(--border);text-align:right;min-width:120px">
+      ${rate===null?'-':`<div style="font-weight:600;color:${rate>=100?'#1D9E75':rate>=70?'#EF9F27':'#E24B4A'}">${rateText(rate)}</div>${progressBar(rate)}`}
+    </td>
+  </tr>`;
+
+  card.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600">${fy.name} 進捗<span style="font-size:12px;font-weight:400;color:var(--text-secondary)">（${fiscalLabel(fy)}）</span></div>
+      <span class="badge badge-blue">残り ${fiscalRemaining(fy)}ヶ月（当月含む）</span>
+    </div>
+    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr>
+        <th style="padding:8px 12px;text-align:left;border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text-secondary)">項目</th>
+        <th style="padding:8px 12px;text-align:right;border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text-secondary)">目標</th>
+        <th style="padding:8px 12px;text-align:right;border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text-secondary)">実績</th>
+        <th style="padding:8px 12px;text-align:right;border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text-secondary)">達成率</th>
+      </tr></thead>
+      <tbody>
+        ${row('売上',fmt(fy.salesTarget),fmt(act.sales),salesRate)}
+        ${row('営業利益',fmt(fy.profitTarget),fmt(act.profit),profitRate)}
+        ${row('利益率',targetMargin===null?'-':targetMargin.toFixed(1)+'%',actualMargin===null?'-':actualMargin.toFixed(1)+'%',null)}
+        ${row('月次計画合計（売上）',fmt(plan.sales),fmt(act.sales),planSalesRate)}
+        ${row('月次計画合計（営業利益）',fmt(plan.profit),fmt(act.profit),planProfitRate)}
+      </tbody>
+    </table></div>`;
+}
+
+/* ---- 期の選択セレクト ---- */
+
+function renderFiscalSelects(){
+  const list=fiscalList();
+  const sel=document.getElementById('fiscal-select');
+  if(sel){
+    const keep=sel.value;
+    sel.innerHTML=list.map(f=>`<option value="${f.id}">${f.name}</option>`).join('');
+    const act=activeFiscalYear();
+    sel.value=list.some(f=>String(f.id)===keep)?keep:(act?String(act.id):'');
+  }
+}
+
+/* ---- 設定ページの期の管理 ---- */
+
+function renderFiscalList(){
+  const el=document.getElementById('fiscal-list');
+  if(!el)return;
+  const list=fiscalList();
+  const act=activeFiscalYear();
+  document.getElementById('fiscal-current').textContent=
+    act?`${act.name}：${fiscalLabel(act)}`:'期が登録されていません';
+  if(list.length===0){
+    el.innerHTML='<div class="empty-state">期が登録されていません。</div>';
+    return;
+  }
+  el.innerHTML='<div class="table-wrap"><table><thead><tr>'
+    +'<th>期</th><th>期間</th><th style="text-align:right">売上目標</th><th style="text-align:right">利益目標</th><th>状態</th><th>操作</th>'
+    +'</tr></thead><tbody>'
+    +list.map(f=>`<tr>
+      <td style="font-weight:500">${f.name}</td>
+      <td style="font-size:12px;white-space:nowrap">${fiscalLabel(f)}</td>
+      <td style="text-align:right">${fmt(f.salesTarget)}</td>
+      <td style="text-align:right">${fmt(f.profitTarget)}</td>
+      <td>${act&&act.id===f.id?'<span class="badge badge-green">アクティブ</span>':''}</td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+        ${act&&act.id===f.id?'':`<button class="btn sm" onclick="activateFiscal(${f.id})">この期をアクティブにする</button>`}
+        <button class="btn sm" onclick="openFiscalForm(${f.id})">✏️ 編集</button>
+        <button class="btn sm danger" onclick="deleteFiscal(${f.id})">削除</button>
+      </div></td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+}
+
+function activateFiscal(id){
+  const fy=fiscalById(id);
+  if(!fy)return;
+  fiscalList().forEach(f=>{f.active=f.id===id});
+  S.currentFiscalYearId=id;
+  saveState();
+  renderFiscalList();renderFiscalSelects();updatePlanMonthOptions();refreshAll();
+}
+
+function openFiscalForm(id){
+  const fy=(id!==undefined&&id!==null)?fiscalById(id):null;
+  editFiscalId=fy?fy.id:null;
+  document.getElementById('fy-name').value=fy?fy.name:'第'+(fiscalList().length+1)+'期';
+  document.getElementById('fy-start').value=fy?fy.startMonth:'';
+  document.getElementById('fy-end').value=fy?fy.endMonth:'';
+  document.getElementById('fy-sales').value=fy?fy.salesTarget:'';
+  document.getElementById('fy-profit').value=fy?fy.profitTarget:'';
+  document.getElementById('fy-title').textContent=fy?'期を編集':'期を追加';
+  document.getElementById('fy-submit').textContent=fy?'✓ 保存':'+ 追加';
+  openModal('modal-fiscal');
+}
+
+function saveFiscal(){
+  const name=document.getElementById('fy-name').value.trim();
+  const startMonth=document.getElementById('fy-start').value;
+  const endMonth=document.getElementById('fy-end').value;
+  const salesTarget=parseInt(document.getElementById('fy-sales').value)||0;
+  const profitTarget=parseInt(document.getElementById('fy-profit').value)||0;
+  if(!name||!startMonth||!endMonth){alert('期の名前・開始月・終了月を入力してください');return;}
+  if(ymToAbs(endMonth)<ymToAbs(startMonth)){alert('終了月は開始月と同じか、それより後にしてください');return;}
+
+  const values={name,startMonth,endMonth,salesTarget,profitTarget};
+  if(editFiscalId!==null){
+    const fy=fiscalById(editFiscalId);
+    if(!fy){alert('対象の期が見つかりませんでした');return;}
+    Object.assign(fy,values);
+  }else{
+    const first=fiscalList().length===0;
+    fiscalList().push(Object.assign({id:S.nextFiscalYearId++,active:first},values));
+    if(first)S.currentFiscalYearId=S.nextFiscalYearId-1;
+  }
+  editFiscalId=null;
+  saveState();closeModal('modal-fiscal');
+  renderFiscalList();renderFiscalSelects();updatePlanMonthOptions();refreshAll();
+}
+
+function deleteFiscal(id){
+  if(!confirm('この期を削除しますか？（収支や案件のデータは消えません）'))return;
+  S.fiscalYears=fiscalList().filter(f=>f.id!==id);
+  if(S.currentFiscalYearId===id){
+    const first=fiscalList()[0];
+    S.currentFiscalYearId=first?first.id:null;
+    if(first)first.active=true;
+  }
+  saveState();
+  renderFiscalList();renderFiscalSelects();updatePlanMonthOptions();refreshAll();
+}
+
+// 月次計画の対象月セレクトを、アクティブな期の並びに合わせる
+function updatePlanMonthOptions(){
+  const sel=document.getElementById('plan-month');
+  if(!sel)return;
+  const keep=sel.value;
+  const months=fiscalMonths(activeFiscalYear());
+  sel.innerHTML=months.map(m=>`<option value="${m}">${m+1}月</option>`).join('');
+  if(months.map(String).indexOf(keep)>=0)sel.value=keep;
+  else sel.value=String(months[0]);
+}
+
 /* ===== 融資力診断 =====================================================
    アプリ内のデータから、融資審査でよく見られる5項目を採点して表示する。
    AIによるアドバイスはGAS経由で取得する（APIキーをブラウザに置かないため）。
@@ -2542,6 +2877,19 @@ function generateReport(){
   const pl=planOf(mi);
   const planProfit=pl.sales-pl.expense-pl.labor;
 
+  /* --- 0. 期間累計サマリー（期初からこの月まで） --- */
+  const fy=activeFiscalYear();
+  const cum=fy?fiscalTotals(fy,mi):null;
+  const fiscalSummary=!fy?repEmpty('期が登録されていません。設定ページの「期の管理」から追加してください。'):
+  `<div style="font-size:12px;color:#555;margin-bottom:8px">${fy.name}（${fiscalLabel(fy)}）／ 経過 ${cum.months.length}ヶ月</div>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    ${repRow('累計売上',repYen(cum.sales))}
+    ${repRow('累計営業利益',repYen(cum.profit))}
+    ${repRow('累計利益率',cum.sales>0?(cum.profit/cum.sales*100).toFixed(1)+'%':'-')}
+    ${repRow('売上目標に対する進捗',fmt(fy.salesTarget)+' に対して '+rateText(pct(cum.sales,fy.salesTarget)),{bold:true})}
+    ${repRow('利益目標に対する進捗',fmt(fy.profitTarget)+' に対して '+rateText(pct(cum.profit,fy.profitTarget)),{bold:true})}
+  </table>`;
+
   /* --- 1. サマリー --- */
   const summary=`<table style="width:100%;border-collapse:collapse;font-size:13px">
     ${repRow('売上高（案件ベース）',repYen(projectSales))}
@@ -2681,6 +3029,7 @@ function generateReport(){
     <div style="font-size:20px;font-weight:bold;margin:6px 0">${y}年${mi+1}月 月次決算レポート</div>
     <div style="font-size:12px;color:#555">生成日：${jpDate(today())}</div>
   </div>
+  ${repSection('【0】期間累計サマリー（期初〜'+(mi+1)+'月）',fiscalSummary)}
   ${repSection('【1】サマリー（損益計算書形式）',summary)}
   ${repSection('【2】案件別売上明細',projectTable)}
   ${repSection('【3】収支入力明細（売上区分のみ）',salesTable)}
@@ -3128,6 +3477,7 @@ function loadSettingsForm(){
   if(!S.finance)S.finance={cash:0,loan:0};
   document.getElementById('f-cash').value=S.finance.cash||0;
   document.getElementById('f-loan').value=S.finance.loan||0;
+  renderFiscalList();
 }
 
 function saveFinance(){
@@ -3593,6 +3943,8 @@ function csvDownloadTemplate(type){
 document.getElementById('month-select').value=new Date().getMonth();
 document.getElementById('project-month').value=new Date().getMonth();
 document.getElementById('quote-month').value=new Date().getMonth();
+renderFiscalSelects();
+updatePlanMonthOptions();
 document.getElementById('l-date').value=today();
 document.getElementById('gas-sheet-link').href=SHEET_URL;
 setSyncStatus(gasEnabled()?'sync':'off');

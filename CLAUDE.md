@@ -86,3 +86,13 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 区分は摘要のキーワードから推測（BANK_RULES）。該当なしの支出は「その他経費」
 - 同じ日付・金額・摘要が既にledgerにあれば「重複の可能性あり」として未選択にする
 - 文字コードは readCsvFile() が UTF-8 → Shift-JIS の順で自動判別する
+
+## 期（会計年度）
+- fiscalYears:[{id,name,startMonth,endMonth,salesTarget,profitTarget,active}]、
+  currentFiscalYearId / nextFiscalYearId。GASは fiscalYears シートに保存
+- 期の範囲は月インデックス（0=1月）の並びとして扱う
+  例: 2026-03〜2027-02 → [2,3,…,11,0,1]。fiscalMonths() が期の並び順で返す
+- ダッシュボードの期セレクト・期間サマリー・月次推移グラフ、
+  月次計画の入力月の並び、月次レポートの【0】期間累計サマリーがこれに連動する
+- 注意: 集計は「何月か」だけで行うため、同じ月を持つ複数の期は数字を区別できない
+  （年をまたぐ複数期のデータを同時に持つ場合は要拡張）
