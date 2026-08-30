@@ -406,6 +406,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <div class="csv-type-toggle">
         <button class="csv-type-btn active" id="csvbtn-project" onclick="setCsvType('project')">💼 新規案件追加</button>
         <button class="csv-type-btn" id="csvbtn-ledger" onclick="setCsvType('ledger')">💰 収支データ追加</button>
+        <button class="csv-type-btn" id="csvbtn-bank" onclick="setCsvType('bank')">🏦 銀行明細取込</button>
       </div>
 
       <div class="csv-drop-zone" id="csv-drop-zone"
@@ -418,6 +419,41 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
         <div style="font-size:12px;color:var(--text-secondary)">またはクリックして選択　UTF-8 / Shift-JIS 対応</div>
       </div>
       <input type="file" id="csv-file-input" accept=".csv" style="display:none" onchange="csvHandleFile(this.files[0])">
+
+      <div id="bank-zone" style="display:none">
+        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">
+          GMOあおぞらネット銀行の入出金明細CSV（取引日 / 摘要 / お支払金額 / お預り金額 / 残高 / メモ）に対応しています。<br>
+          お支払金額は支出、お預り金額は収入として取り込みます。区分は摘要から自動で推測し、取込前に修正できます。
+        </div>
+        <div class="csv-drop-zone" id="bank-drop-zone"
+          onclick="document.getElementById('bank-file-input').click()"
+          ondragover="bankDragOver(event)"
+          ondragleave="bankDragLeave(event)"
+          ondrop="bankDrop(event)">
+          <div style="font-size:36px;margin-bottom:10px">🏦</div>
+          <div style="font-size:14px;font-weight:500;margin-bottom:4px">銀行明細CSVをドラッグ＆ドロップ</div>
+          <div style="font-size:12px;color:var(--text-secondary)">またはクリックして選択　Shift-JIS / UTF-8 自動判別</div>
+        </div>
+        <input type="file" id="bank-file-input" accept=".csv" style="display:none" onchange="bankHandleFile(this.files[0])">
+      </div>
+    </div>
+
+    <div id="bank-area" style="display:none">
+      <div id="bank-msg" style="margin-bottom:12px"></div>
+      <div class="card" id="bank-actions" style="display:none">
+        <div class="card-header">
+          <span class="card-title">取込内容の確認</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm" onclick="setBankCheckAll(true)">全選択</button>
+            <button class="btn sm" onclick="setBankCheckAll(false)">全解除</button>
+          </div>
+        </div>
+        <div id="bank-result"></div>
+        <div class="actions-row">
+          <button class="btn" onclick="bankReset()">やり直す</button>
+          <button class="btn primary" onclick="bankRegister()">✓ 選択したデータを収支に登録</button>
+        </div>
+      </div>
     </div>
 
     <div id="csv-preview-area" style="display:none">
@@ -444,6 +480,13 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 
   <!-- テンプレートパネル -->
   <div id="csv-panel-template" style="display:none">
+    <div class="card">
+      <div class="card-header"><span class="card-title">🏦 銀行明細の取込について</span></div>
+      <p style="font-size:13px;color:var(--text-secondary)">
+        GMOあおぞらネット銀行の明細CSVをそのままドロップするだけで取込できます。<br>
+        テンプレートに合わせて作り直す必要はありません。「データ取込」タブで「🏦 銀行明細取込」を選んでください。
+      </p>
+    </div>
     <div class="card">
       <div class="card-header"><span class="card-title">① 新規案件追加テンプレート</span></div>
       <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">新しい案件をまとめて登録するためのCSVテンプレートです。</p>
@@ -3134,6 +3177,198 @@ function confirmClearData(){
   alert('データをリセットしました。');refreshAll();
 }
 
+/* ===== 銀行明細CSV取込（GMOあおぞらネット銀行） =======================
+   列: 取引日 / 摘要 / お支払金額 / お預り金額 / 残高 / メモ
+   お支払金額>0 は支出、お預り金額>0 は収入として取り込む。残高は使わない。
+   ===================================================================== */
+
+let bankRows=[];
+
+// 摘要のキーワードから区分を推測する（上から順に判定）
+const BANK_RULES=[
+  {types:['ｵｵｸﾞﾛ','OOGURO','ANTHROPIC','GOOGLE','ｸﾗｳﾄﾞ','クラウド'],type:'システム利用料'},
+  {types:['ﾎｹｯﾄ','通信','ｿﾌﾄﾊﾞﾝｸ','ソフトバンク','ﾄﾞｺﾓ','ドコモ','AU'],type:'通信料'},
+  {types:['ﾀｸｼｰ','タクシー','鉄道','ﾊﾞｽ','バス','ｴｷ','交通'],type:'交通費'},
+  {types:['飲食','ﾚｽﾄﾗﾝ','レストラン','ｲｻﾞｶﾔ','居酒屋','ｶﾌｪ','カフェ'],type:'交際費'},
+  {types:['ﾔﾁﾝ','家賃','ｵﾌｨｽ','オフィス','ONLYONE'],type:'家賃（レンタルオフィス利用料）'},
+  {types:['ｼﾞｭｳﾐﾝｾﾞｲ','住民税'],type:'住民税（特別徴収）'},
+  {types:['ｼｮｳﾋｾﾞｲ','消費税'],type:'消費税（納付）'},
+  {types:['ｺｸｾｲ','ｻﾞｲﾑｼｮ','財務省','ｼｬｶｲ','社会','ｹﾝｺｳ','健康'],type:'社会保険料'}
+];
+const BANK_SALES_WORDS=['振込','ﾌﾘｺﾐ','ｳﾘｱｹﾞ','売上'];
+
+function bankGuessType(desc,isIncome){
+  const d=String(desc||'').toUpperCase();
+  if(isIncome)return'売上';
+  for(const r of BANK_RULES){
+    if(r.types.some(k=>d.indexOf(k.toUpperCase())>=0))return r.type;
+  }
+  if(BANK_SALES_WORDS.some(k=>d.indexOf(k.toUpperCase())>=0))return'売上';
+  return'その他経費';
+}
+
+// 文字コードを判定して読む（UTF-8で読めなければShift-JIS）
+function readCsvFile(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('ファイルを読み込めませんでした'));
+    reader.onload=e=>{
+      const buf=e.target.result;
+      let text;
+      try{
+        text=new TextDecoder('utf-8',{fatal:true}).decode(buf);
+      }catch(err){
+        try{text=new TextDecoder('shift_jis').decode(buf);}
+        catch(err2){reject(new Error('文字コードを判別できませんでした'));return;}
+      }
+      resolve(text.replace(/^﻿/,''));
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function bankNum(v){
+  const n=parseInt(String(v==null?'':v).replace(/[^0-9\-]/g,''),10);
+  return isNaN(n)?0:n;
+}
+
+// 2026/8/12・2026-08-12・20260812 などを YYYY-MM-DD にする
+function bankDate(v){
+  const s=String(v==null?'':v).trim();
+  let m=/^(\d{4})[-\/.年](\d{1,2})[-\/.月](\d{1,2})/.exec(s);
+  if(m)return m[1]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[3]).slice(-2);
+  m=/^(\d{4})(\d{2})(\d{2})$/.exec(s);
+  if(m)return m[1]+'-'+m[2]+'-'+m[3];
+  return'';
+}
+
+// 同じ日付・金額・摘要の収支がすでにあるか
+function bankIsDuplicate(date,amount,desc){
+  return S.ledger.some(l=>l.date===date&&l.amount===amount&&l.desc===desc);
+}
+
+async function bankHandleFile(file){
+  const msg=document.getElementById('bank-msg');
+  msg.innerHTML='<div class="alert alert-info"><span class="spinner"></span> 読み込んでいます...</div>';
+  let text;
+  try{
+    text=await readCsvFile(file);
+  }catch(e){
+    msg.innerHTML=`<div class="alert alert-error">❌ ${e.message}</div>`;return;
+  }
+
+  const rows=csvParseText(text);
+  if(rows.length<2){
+    msg.innerHTML='<div class="alert alert-error">❌ データ行がありません</div>';return;
+  }
+  const head=rows[0].map(h=>String(h).replace(/\s/g,''));
+  const col=names=>head.findIndex(h=>names.some(n=>h.indexOf(n)>=0));
+  const iDate=col(['取引日','日付']);
+  const iDesc=col(['摘要','内容']);
+  const iOut=col(['お支払金額','支払金額','出金']);
+  const iIn=col(['お預り金額','預り金額','入金']);
+  const iMemo=col(['メモ']);
+  if(iDate<0||iDesc<0||(iOut<0&&iIn<0)){
+    msg.innerHTML='<div class="alert alert-error">❌ 列を認識できませんでした<br>'
+      +'<small>「取引日 / 摘要 / お支払金額 / お預り金額」を含むCSVを選んでください</small></div>';
+    return;
+  }
+
+  bankRows=[];
+  rows.slice(1).forEach(r=>{
+    if(!r.some(c=>c))return;
+    const date=bankDate(r[iDate]);
+    const out=iOut>=0?bankNum(r[iOut]):0;
+    const inc=iIn>=0?bankNum(r[iIn]):0;
+    if(!date||(out===0&&inc===0))return;
+    const memo=iMemo>=0?String(r[iMemo]||'').trim():'';
+    const desc=(String(r[iDesc]||'').trim()+(memo?' '+memo:'')).trim();
+    const income=inc>0;
+    const amount=income?inc:out;
+    bankRows.push({
+      date,desc,amount,income,
+      type:bankGuessType(desc,income),
+      dup:bankIsDuplicate(date,amount,desc)
+    });
+  });
+
+  if(bankRows.length===0){
+    msg.innerHTML='<div class="alert alert-warning">取り込める明細がありませんでした</div>';
+    document.getElementById('bank-result').innerHTML='';
+    document.getElementById('bank-actions').style.display='none';
+    return;
+  }
+  renderBankPreview();
+}
+
+function renderBankPreview(){
+  const dates=bankRows.map(r=>r.date).sort();
+  const inSum=bankRows.filter(r=>r.income).reduce((a,r)=>a+r.amount,0);
+  const outSum=bankRows.filter(r=>!r.income).reduce((a,r)=>a+r.amount,0);
+  const dup=bankRows.filter(r=>r.dup).length;
+
+  document.getElementById('bank-msg').innerHTML=
+    `<div class="alert alert-success">✓ ${bankRows.length}件の明細を読み込みました`
+    +(dup>0?`（うち ${dup}件は重複の可能性があるため未選択）`:'')+'</div>'
+    +`<div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">取引件数</div><div class="metric-value" style="font-size:20px">${bankRows.length}件</div></div>
+      <div class="metric-card"><div class="metric-label">期間</div><div class="metric-value" style="font-size:15px">${dates[0]}<br>〜 ${dates[dates.length-1]}</div></div>
+      <div class="metric-card"><div class="metric-label">お預り合計</div><div class="metric-value green" style="font-size:20px">${fmt(inSum)}</div></div>
+      <div class="metric-card"><div class="metric-label">お支払合計</div><div class="metric-value red" style="font-size:20px">${fmt(outSum)}</div></div>
+    </div>`;
+
+  const opts=t=>LEDGER_TYPES.map(x=>`<option ${x===t?'selected':''}>${x}</option>`).join('');
+  document.getElementById('bank-result').innerHTML=
+    '<div class="table-wrap"><table><thead><tr>'
+    +'<th style="width:36px"></th><th>取引日</th><th>摘要（原文）</th><th style="min-width:170px">区分</th>'
+    +'<th style="min-width:110px">金額</th><th>収支</th>'
+    +'</tr></thead><tbody>'
+    +bankRows.map((r,i)=>`<tr>
+      <td><input type="checkbox" class="bank-check" value="${i}" ${r.dup?'':'checked'} style="width:auto"></td>
+      <td><input type="date" value="${r.date}" oninput="bankRows[${i}].date=this.value" style="font-size:12px"></td>
+      <td style="font-size:11px">${r.desc}${r.dup?'<br><span class="badge badge-amber">重複の可能性あり</span>':''}</td>
+      <td><select oninput="bankRows[${i}].type=this.value" onchange="bankRows[${i}].type=this.value" style="font-size:12px">${opts(r.type)}</select></td>
+      <td><input type="number" value="${r.amount}" oninput="bankRows[${i}].amount=parseInt(this.value)||0" style="font-size:12px"></td>
+      <td>${r.income?'<span class="badge badge-green">収入</span>':'<span class="badge badge-red">支出</span>'}</td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+  document.getElementById('bank-actions').style.display='';
+}
+
+function setBankCheckAll(checked){
+  document.querySelectorAll('.bank-check').forEach(c=>{c.checked=checked});
+}
+
+function bankRegister(){
+  const idx=Array.from(document.querySelectorAll('.bank-check'))
+    .filter(c=>c.checked).map(c=>parseInt(c.value));
+  const rows=idx.map(i=>bankRows[i]).filter(r=>r.date&&r.desc&&r.amount);
+  if(rows.length===0){alert('登録する明細を選択してください');return;}
+  rows.forEach(r=>{
+    S.ledger.push({id:S.nextLedgerId++,date:r.date,type:r.type,desc:r.desc,amount:r.amount});
+  });
+  saveState();
+  alert(rows.length+'件を収支に登録しました');
+  bankReset();
+  refreshAll();
+}
+
+function bankReset(){
+  bankRows=[];
+  document.getElementById('bank-msg').innerHTML='';
+  document.getElementById('bank-result').innerHTML='';
+  document.getElementById('bank-actions').style.display='none';
+  document.getElementById('bank-file-input').value='';
+}
+
+function bankDragOver(e){e.preventDefault();document.getElementById('bank-drop-zone').classList.add('dragover')}
+function bankDragLeave(){document.getElementById('bank-drop-zone').classList.remove('dragover')}
+function bankDrop(e){
+  e.preventDefault();
+  document.getElementById('bank-drop-zone').classList.remove('dragover');
+  if(e.dataTransfer.files[0])bankHandleFile(e.dataTransfer.files[0]);
+}
+
 // ===== CSV IMPORT =====
 const CSV_TEMPLATES={
   project:{
@@ -3175,9 +3410,14 @@ function switchCsvTab(tab,btn){
 
 function setCsvType(type){
   csvType=type;
-  document.getElementById('csvbtn-project').classList.toggle('active',type==='project');
-  document.getElementById('csvbtn-ledger').classList.toggle('active',type==='ledger');
+  ['project','ledger','bank'].forEach(t=>
+    document.getElementById('csvbtn-'+t).classList.toggle('active',type===t));
+  const isBank=type==='bank';
+  document.getElementById('csv-drop-zone').style.display=isBank?'none':'';
+  document.getElementById('bank-zone').style.display=isBank?'':'none';
+  document.getElementById('bank-area').style.display=isBank?'':'none';
   csvReset();
+  bankReset();
 }
 
 function csvDragOver(e){e.preventDefault();document.getElementById('csv-drop-zone').classList.add('dragover')}
@@ -3200,16 +3440,16 @@ function csvParseText(text){
   });
 }
 
-function csvHandleFile(file){
-  const reader=new FileReader();
-  reader.onload=function(e){
-    const rows=csvParseText(e.target.result);
-    if(rows.length<2)return;
-    csvParsedHeaders=rows[0];
-    csvParsedData=rows.slice(1).filter(r=>r.some(c=>c));
-    csvRenderPreview();
-  };
-  reader.readAsText(file,'UTF-8');
+async function csvHandleFile(file){
+  if(!file)return;
+  let text;
+  try{text=await readCsvFile(file);}
+  catch(e){alert('ファイルを読み込めませんでした: '+e.message);return;}
+  const rows=csvParseText(text);
+  if(rows.length<2)return;
+  csvParsedHeaders=rows[0];
+  csvParsedData=rows.slice(1).filter(r=>r.some(c=>c));
+  csvRenderPreview();
 }
 
 function csvRenderPreview(){
