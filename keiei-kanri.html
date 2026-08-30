@@ -95,7 +95,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue)}
 textarea{resize:vertical;min-height:70px}
 input[type=number]{-moz-appearance:textfield}
 input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
-.chart-container{display:flex;gap:4px;align-items:flex-end;height:90px;margin-top:8px}
+.chart-container{display:flex;gap:4px;align-items:flex-end;height:130px;margin-top:8px}
+.chart-value{font-size:10px;color:var(--text-secondary);line-height:1.2;white-space:nowrap}
 .chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
 .chart-bar{width:100%;border-radius:3px 3px 0 0;transition:height 0.4s ease;min-height:2px}
 .chart-label{font-size:10px;color:var(--text-muted)}
@@ -213,14 +214,20 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     </select>
   </div>
   <div class="metric-grid">
-    <div class="metric-card"><div class="metric-label">売上</div><div class="metric-value blue" id="d-sales">¥0</div><div class="metric-sub" id="d-sales-diff">計画比: -</div></div>
-    <div class="metric-card"><div class="metric-label">経費合計</div><div class="metric-value" id="d-expense">¥0</div><div class="metric-sub" id="d-expense-diff">計画比: -</div></div>
-    <div class="metric-card"><div class="metric-label">役員報酬</div><div class="metric-value" id="d-labor">¥0</div><div class="metric-sub" id="d-labor-diff">計画比: -</div></div>
-    <div class="metric-card"><div class="metric-label">営業利益</div><div class="metric-value green" id="d-profit">¥0</div><div class="metric-sub" id="d-margin">利益率: -%</div></div>
+    <div class="metric-card"><div class="metric-label">売上</div><div class="metric-value blue" id="d-sales">¥0</div><div class="metric-sub" id="d-sales-year">年間累計: ¥0</div><div class="metric-sub" id="d-sales-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">経費合計</div><div class="metric-value" id="d-expense">¥0</div><div class="metric-sub" id="d-expense-year">年間累計: ¥0</div><div class="metric-sub" id="d-expense-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">役員報酬</div><div class="metric-value" id="d-labor">¥0</div><div class="metric-sub" id="d-labor-year">年間累計: ¥0</div><div class="metric-sub" id="d-labor-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">営業利益</div><div class="metric-value green" id="d-profit">¥0</div><div class="metric-sub" id="d-profit-year">年間累計: ¥0</div><div class="metric-sub" id="d-margin">利益率: -%</div></div>
   </div>
   <div class="two-col">
     <div class="card">
-      <div class="card-header"><span class="card-title">計画差異</span></div>
+      <div class="card-header">
+        <span class="card-title">計画差異</span>
+        <div style="display:flex;gap:4px">
+          <button class="btn sm primary" id="diff-tab-month" onclick="setDiffMode('month')">月間</button>
+          <button class="btn sm" id="diff-tab-year" onclick="setDiffMode('year')">年間</button>
+        </div>
+      </div>
       <div id="diff-list"></div>
     </div>
     <div class="card">
@@ -894,6 +901,33 @@ function sumLedger(mi){
   return t;
 }
 
+// 1〜12月すべての実績をグループごとに集計する（年間累計）
+function sumLedgerYear(){
+  const t={sales:0,expense:0,labor:0};
+  S.ledger.forEach(l=>{
+    if(!l.date)return;
+    t[ledgerGroup(l.type)]+=l.amount;
+  });
+  return t;
+}
+
+// 1〜12月の計画を合計する（年間計画）
+function planYearTotal(){
+  const t={sales:0,expense:0,labor:0};
+  for(let i=0;i<12;i++){
+    const pl=planOf(i);
+    t.sales+=pl.sales;t.expense+=pl.expense;t.labor+=pl.labor;
+  }
+  return t;
+}
+
+// グラフ用の万円表記。0は空文字（棒の上に何も出さない）
+function fmtMan(v){
+  if(!v)return'';
+  const man=v/10000;
+  return (Math.abs(man)>=10?Math.round(man):Math.round(man*10)/10)+'万';
+}
+
 // 収支一覧のバッジ（売上=緑 / 役員報酬=アンバー / 経費系=赤）
 function ledgerBadge(type){
   const g=ledgerGroup(type);
@@ -921,18 +955,61 @@ function updateDashboard(){
   document.getElementById('d-profit').textContent=fmt(profit);
   document.getElementById('d-profit').className='metric-value '+(profit>=0?'green':'red');
   document.getElementById('d-margin').textContent='利益率: '+margin+'%';
+
+  // 年間累計（1〜12月の合計）
+  const y=sumLedgerYear();
+  const yProfit=y.sales-y.expense-y.labor;
+  document.getElementById('d-sales-year').textContent='年間累計: '+fmt(y.sales);
+  document.getElementById('d-expense-year').textContent='年間累計: '+fmt(y.expense);
+  document.getElementById('d-labor-year').textContent='年間累計: '+fmt(y.labor);
+  document.getElementById('d-profit-year').textContent='年間累計: '+fmt(yProfit);
+
   const pl=planOf(mi);
-  const diffs=[
-    {label:'売上',actual:sales,plan:pl.sales,invert:false},
-    {label:'経費合計',actual:exp,plan:pl.expense,invert:true},
-    {label:'役員報酬',actual:lab,plan:pl.labor,invert:true}
-  ];
-  ['sales','expense','labor'].forEach((k,i)=>{
-    const d=diffs[i].actual-diffs[i].plan;
+  ['sales','expense','labor'].forEach(k=>{
+    const d=({sales:sales,expense:exp,labor:lab})[k]-pl[k];
     document.getElementById('d-'+k+'-diff').textContent='計画比: '+(d>=0?'+':'')+fmt(d);
   });
-  const dl=document.getElementById('diff-list');
-  dl.innerHTML=diffs.map(it=>{
+  renderDiffList(mi);
+  const mc=document.getElementById('monthly-chart');
+  const months=['1','2','3','4','5','6','7','8','9','10','11','12'];
+  const maxV=Math.max(...S.monthlyData,1);
+  mc.innerHTML=S.monthlyData.map((v,i)=>
+    `<div class="chart-bar-wrap">
+      <div class="chart-value">${fmtMan(v)}</div>
+      <div class="chart-bar" style="height:${Math.round(v/maxV*92)}px;background:${i===mi?'#378ADD':'#B5D4F4'}"></div>
+      <div class="chart-label">${months[i]}</div>
+    </div>`
+  ).join('');
+  const dp=document.getElementById('dash-projects');
+  const active=S.projects.filter(p=>p.status!=='完了'&&p.status!=='失注');
+  dp.innerHTML=active.slice(0,5).map(p=>
+    `<tr><td><div style="font-weight:500">${p.name}</div><div style="font-size:12px;color:var(--text-secondary)">${p.client||'-'}</div></td><td>${fmt(p.amount)}</td><td>${statusBadge(p.status)}</td><td style="font-size:12px;color:var(--text-secondary)">${p.end}</td></tr>`
+  ).join('');
+  document.getElementById('dash-projects-empty').style.display=active.length===0?'':'none';
+  renderAlerts();
+}
+
+// 計画差異の表示モード（月間 / 年間）
+let diffMode='month';
+
+function setDiffMode(mode){
+  diffMode=mode;
+  document.getElementById('diff-tab-month').className='btn sm'+(mode==='month'?' primary':'');
+  document.getElementById('diff-tab-year').className='btn sm'+(mode==='year'?' primary':'');
+  updateDashboard();
+}
+
+// mi = 選択中の月（0=1月）。年間モードでは1〜12月の合計で比較する。
+function renderDiffList(mi){
+  const isYear=diffMode==='year';
+  const actual=isYear?sumLedgerYear():sumLedger(mi);
+  const plan=isYear?planYearTotal():planOf(mi);
+  const diffs=[
+    {label:'売上',actual:actual.sales,plan:plan.sales,invert:false},
+    {label:'経費合計',actual:actual.expense,plan:plan.expense,invert:true},
+    {label:'役員報酬',actual:actual.labor,plan:plan.labor,invert:true}
+  ];
+  document.getElementById('diff-list').innerHTML=diffs.map(it=>{
     const pct=it.plan>0?Math.min(100,Math.round(it.actual/it.plan*100)):0;
     const good=it.invert?(it.actual<=it.plan):(it.actual>=it.plan);
     const color=good?'#1D9E75':'#E24B4A';
@@ -944,22 +1021,6 @@ function updateDashboard(){
       <div class="diff-bar"><div class="diff-fill" style="width:${pct}%;background:${color}"></div></div>
     </div>`;
   }).join('');
-  const mc=document.getElementById('monthly-chart');
-  const months=['1','2','3','4','5','6','7','8','9','10','11','12'];
-  const maxV=Math.max(...S.monthlyData,1);
-  mc.innerHTML=S.monthlyData.map((v,i)=>
-    `<div class="chart-bar-wrap">
-      <div class="chart-bar" style="height:${Math.round(v/maxV*78)}px;background:${i===mi?'#378ADD':'#B5D4F4'}"></div>
-      <div class="chart-label">${months[i]}</div>
-    </div>`
-  ).join('');
-  const dp=document.getElementById('dash-projects');
-  const active=S.projects.filter(p=>p.status!=='完了'&&p.status!=='失注');
-  dp.innerHTML=active.slice(0,5).map(p=>
-    `<tr><td><div style="font-weight:500">${p.name}</div><div style="font-size:12px;color:var(--text-secondary)">${p.client||'-'}</div></td><td>${fmt(p.amount)}</td><td>${statusBadge(p.status)}</td><td style="font-size:12px;color:var(--text-secondary)">${p.end}</td></tr>`
-  ).join('');
-  document.getElementById('dash-projects-empty').style.display=active.length===0?'':'none';
-  renderAlerts();
 }
 
 function renderAlerts(){
