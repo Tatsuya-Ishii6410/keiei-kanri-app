@@ -36,7 +36,12 @@ jobs:
           cp keiei-kanri.html _site/index.html
 
       - name: Pages の設定を読み込む
+        # enablement: true を付けると、リポジトリでPagesが未設定でも
+        # ここで「GitHub Actions」ソースとして有効化を試みる。
+        # （Settings → Pages で手動設定済みならそのまま使われる）
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: 成果物をアップロード
         uses: actions/upload-pages-artifact@v3
