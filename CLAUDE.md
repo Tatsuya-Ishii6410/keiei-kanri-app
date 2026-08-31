@@ -3,7 +3,7 @@
 ## プロジェクト概要
 アスリンク株式会社の経営管理アプリ。
 単一HTMLファイル（keiei-kanri.html）で構成。
-Netlify（keiei-kanri-app.netlify.app）にデプロイ済み。
+GitHub Pages（https://tatsuya-ishii6410.github.io/keiei-kanri-app/）で公開。
 GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 
 ## 修正後の作業
@@ -13,8 +13,13 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 3. git push origin main
 
 ## ファイル構成
-- keiei-kanri.html：アプリ本体（全機能がこの1ファイルに集約）
+- keiei-kanri.html：アプリ本体（全機能がこの1ファイルに集約）。編集するのは常にこのファイル
+- index.html：keiei-kanri.html のコピー。GitHub Pagesのトップページ用
+  ※ keiei-kanri.html を直したら `cp keiei-kanri.html index.html` で揃えてからコミットする
+  （揃え忘れてもデプロイ時にワークフローが keiei-kanri.html から作り直すので、公開版は常に最新）
 - gas-code.js：Google Apps Script用のコード（GASエディタに貼り付けて使う。ブラウザからは読み込まれない）
+- .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
+- netlify.toml：旧Netlify用の設定（移行後も念のため残している）
 
 ## データ保存
 - 保存先は Google スプレッドシート（projects / quotes / ledger / settings の4シート）
@@ -24,7 +29,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - gas-code.js を修正したら、GAS側で「デプロイを管理」→新バージョンとしてデプロイし直すこと
 
 ## 注意事項
-- pushすればNetlifyが自動でデプロイする（1〜2分）
+- pushすればGitHub Actionsが自動でGitHub Pagesにデプロイする（1〜2分）
+  公開URL：https://tatsuya-ishii6410.github.io/keiei-kanri-app/
 
 ## 請求書・見積書 デザイン仕様
 - メインカラー：#1a2e4a（ネイビー）

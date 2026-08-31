@@ -1,0 +1,48 @@
+# main へ push されたら GitHub Pages に自動デプロイする。
+# 静的HTML1枚なのでビルドは不要。公開するのは index.html だけ。
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# GitHub Pages へのデプロイに必要な権限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時に複数のデプロイが走らないようにする（進行中のものは止めない）
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v4
+
+      - name: 公開用フォルダを用意する
+        # keiei-kanri.html を index.html として配置する。
+        # リポジトリの index.html が古くても、公開されるのは常に最新の本体になる。
+        run: |
+          mkdir -p _site
+          cp keiei-kanri.html _site/index.html
+
+      - name: Pages の設定を読み込む
+        uses: actions/configure-pages@v5
+
+      - name: 成果物をアップロード
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: デプロイ
+        id: deployment
+        uses: actions/deploy-pages@v4

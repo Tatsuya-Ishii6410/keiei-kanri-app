@@ -1,0 +1,4046 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>経営管理アプリ</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-primary:#ffffff;--bg-secondary:#f5f5f4;--bg-tertiary:#f0efeb;
+  --text-primary:#1a1a1a;--text-secondary:#6b6b6b;--text-muted:#9b9b9b;
+  --border:#e5e5e5;--border-hover:#cccccc;
+  --blue:#378ADD;--blue-bg:#E6F1FB;--blue-text:#185FA5;
+  --green:#1D9E75;--green-bg:#EAF3DE;--green-text:#3B6D11;
+  --amber:#EF9F27;--amber-bg:#FAEEDA;--amber-text:#854F0B;
+  --red:#E24B4A;--red-bg:#FCEBEB;--red-text:#A32D2D;
+  --gray-bg:#F1EFE8;--gray-text:#5F5E5A;
+  --purple-bg:#EFE9FA;--purple-text:#6B3FA0;
+  --radius-md:8px;--radius-lg:12px;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg-primary:#1e1e1e;--bg-secondary:#2a2a2a;--bg-tertiary:#242424;
+    --text-primary:#f0f0f0;--text-secondary:#a0a0a0;--text-muted:#686868;
+    --border:#3a3a3a;--border-hover:#555;
+    --blue-bg:#0c2d4a;--blue-text:#7bb8f0;
+    --green-bg:#0a2e1e;--green-text:#5ec99a;
+    --amber-bg:#2e1e05;--amber-text:#f0b865;
+    --red-bg:#2e0a0a;--red-text:#f09090;
+    --gray-bg:#2a2a2a;--gray-text:#a0a0a0;
+    --purple-bg:#251a3a;--purple-text:#bda3ea;
+  }
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',Meiryo,sans-serif;color:var(--text-primary);background:var(--bg-tertiary);font-size:14px;line-height:1.6}
+.app{display:flex;flex-direction:column;min-height:100vh;max-width:1200px;margin:0 auto;background:var(--bg-tertiary)}
+.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:52px;background:var(--bg-primary);border-bottom:0.5px solid var(--border);box-shadow:0 1px 4px rgba(0,0,0,0.05)}
+.logo{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--text-primary)}
+.logo-icon{width:28px;height:28px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px}
+.nav{display:flex;gap:2px}
+.nav-btn{padding:6px 14px;font-size:13px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;border-radius:var(--radius-md);transition:all 0.15s;display:flex;align-items:center;gap:5px;font-family:inherit}
+.nav-btn:hover{background:var(--bg-secondary);color:var(--text-primary)}
+.nav-btn.active{background:var(--bg-secondary);color:var(--text-primary);font-weight:500}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.save-indicator{font-size:12px;color:var(--text-muted);display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:color 0.2s}
+.save-indicator.ok{color:var(--green)}
+.save-indicator.sync{color:var(--text-secondary)}
+.save-indicator.err{color:var(--red)}
+.sync-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;margin-bottom:12px}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--text-muted);flex:none}
+.sync-dot.ok{background:var(--green)}
+.sync-dot.sync{background:var(--amber)}
+.sync-dot.err{background:var(--red)}
+.content{flex:1;padding:24px 20px}
+.page{display:none}
+.page.active{display:block}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.section-title{font-size:17px;font-weight:600;display:flex;align-items:center;gap:8px}
+.card{background:var(--bg-primary);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:16px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.card-title{font-size:14px;font-weight:500}
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.metric-card{background:var(--bg-secondary);border-radius:var(--radius-md);padding:14px 16px}
+.metric-label{font-size:12px;color:var(--text-secondary);margin-bottom:6px}
+.metric-value{font-size:24px;font-weight:600;letter-spacing:-0.5px}
+.metric-value.blue{color:var(--blue)}
+.metric-value.green{color:var(--green)}
+.metric-value.red{color:var(--red)}
+.metric-value.amber{color:var(--amber)}
+.metric-sub{font-size:11px;color:var(--text-muted);margin-top:4px}
+.btn{padding:7px 14px;font-size:13px;border:0.5px solid var(--border-hover);border-radius:var(--radius-md);background:transparent;color:var(--text-primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;font-family:inherit;white-space:nowrap}
+.btn:hover{background:var(--bg-secondary)}
+.btn:active{transform:scale(0.98)}
+.btn.primary{background:var(--blue-bg);color:var(--blue-text);border-color:rgba(55,138,221,0.3)}
+.btn.primary:hover{opacity:0.85}
+.btn.success{background:var(--green-bg);color:var(--green-text);border-color:rgba(29,158,117,0.3)}
+.btn.danger{background:var(--red-bg);color:var(--red-text);border-color:rgba(226,75,74,0.3)}
+.btn.sm{padding:4px 10px;font-size:12px}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:9px 12px;font-size:12px;font-weight:500;color:var(--text-secondary);border-bottom:0.5px solid var(--border);white-space:nowrap}
+td{padding:11px 12px;border-bottom:0.5px solid var(--border);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--bg-secondary)}
+.badge{display:inline-block;padding:2px 8px;border-radius:var(--radius-md);font-size:11px;font-weight:500;white-space:nowrap}
+.badge-blue{background:var(--blue-bg);color:var(--blue-text)}
+.badge-green{background:var(--green-bg);color:var(--green-text)}
+.badge-amber{background:var(--amber-bg);color:var(--amber-text)}
+.badge-red{background:var(--red-bg);color:var(--red-text)}
+.badge-gray{background:var(--gray-bg);color:var(--gray-text)}
+.badge-purple{background:var(--purple-bg);color:var(--purple-text)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.form-row.three{grid-template-columns:1fr 1fr 1fr}
+.form-row.single{grid-template-columns:1fr}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-label{font-size:12px;color:var(--text-secondary);font-weight:500}
+input,select,textarea{font-family:inherit;font-size:13px;width:100%;padding:7px 10px;border:0.5px solid var(--border);border-radius:var(--radius-md);background:var(--bg-primary);color:var(--text-primary);transition:border-color 0.15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue)}
+textarea{resize:vertical;min-height:70px}
+input[type=number]{-moz-appearance:textfield}
+input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
+.chart-container{display:flex;gap:4px;align-items:flex-end;height:130px;margin-top:8px}
+.chart-wrap{position:relative;margin-top:8px}
+.chart-wrap canvas{width:100%;display:block}
+.chart-tooltip{position:absolute;display:none;pointer-events:none;background:var(--bg-primary);border:0.5px solid var(--border);border-radius:var(--radius-md);box-shadow:0 4px 14px rgba(0,0,0,0.12);padding:8px 10px;font-size:12px;line-height:1.7;white-space:nowrap;z-index:10}
+.chart-value{font-size:10px;color:var(--text-secondary);line-height:1.2;white-space:nowrap}
+.chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+.chart-bar{width:100%;border-radius:3px 3px 0 0;transition:height 0.4s ease;min-height:2px}
+.chart-label{font-size:10px;color:var(--text-muted)}
+.diff-bar{height:6px;border-radius:3px;background:var(--bg-secondary);overflow:hidden;margin-top:4px}
+.diff-fill{height:100%;border-radius:3px;transition:width 0.4s ease}
+.tab-group{display:flex;gap:4px;margin-bottom:16px;border-bottom:0.5px solid var(--border);padding-bottom:0}
+.tab{padding:8px 14px;font-size:13px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;border-radius:var(--radius-md) var(--radius-md) 0 0;font-family:inherit;border-bottom:2px solid transparent;margin-bottom:-0.5px}
+.tab:hover{color:var(--text-primary)}
+.tab.active{color:var(--blue-text);border-bottom-color:var(--blue);font-weight:500}
+.upload-zone{border:1.5px dashed var(--border-hover);border-radius:var(--radius-lg);padding:36px;text-align:center;cursor:pointer;transition:all 0.2s}
+.upload-zone:hover{background:var(--bg-secondary);border-color:var(--blue)}
+.alert{padding:11px 14px;border-radius:var(--radius-md);font-size:13px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.alert-warning{background:var(--amber-bg);color:var(--amber-text);border:0.5px solid var(--amber)}
+.alert-success{background:var(--green-bg);color:var(--green-text);border:0.5px solid rgba(29,158,117,0.4)}
+.alert-error{background:var(--red-bg);color:var(--red-text);border:0.5px solid rgba(226,75,74,0.4)}
+.alert-info{background:var(--blue-bg);color:var(--blue-text);border:0.5px solid rgba(55,138,221,0.4)}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg-primary);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;border:0.5px solid var(--border);box-shadow:0 8px 32px rgba(0,0,0,0.15)}
+.modal.wide{max-width:680px}
+.modal.doc{max-width:720px}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.modal-title{font-size:16px;font-weight:600}
+.actions-row{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.empty-state{text-align:center;padding:40px;color:var(--text-muted);font-size:13px}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin 0.7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* CSV Import styles */
+.csv-type-toggle{display:flex;gap:8px;margin-bottom:20px}
+.csv-type-btn{padding:8px 18px;border:0.5px solid var(--border-hover);border-radius:var(--radius-md);font-size:13px;cursor:pointer;background:none;color:var(--text-secondary);font-family:inherit}
+.csv-type-btn.active{background:var(--blue-bg);color:var(--blue-text);border-color:rgba(55,138,221,0.3);font-weight:500}
+.csv-drop-zone{border:1.5px dashed var(--border-hover);border-radius:var(--radius-lg);padding:40px;text-align:center;cursor:pointer;transition:all 0.2s;margin-bottom:16px}
+.csv-drop-zone:hover{background:var(--bg-secondary);border-color:var(--blue)}
+.csv-drop-zone.dragover{background:var(--blue-bg);border-color:var(--blue)}
+.csv-preview-table{width:100%;border-collapse:collapse;font-size:12px}
+.csv-preview-table th{padding:7px 10px;background:var(--bg-secondary);border-bottom:0.5px solid var(--border);font-weight:500;font-size:11px;color:var(--text-secondary);text-align:left}
+.csv-preview-table td{padding:8px 10px;border-bottom:0.5px solid var(--border);color:var(--text-primary)}
+.csv-result-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:13px}
+.csv-result-row:not(:last-child){border-bottom:0.5px solid var(--border)}
+.progress-wrap{background:var(--bg-secondary);border-radius:99px;height:6px;margin:12px 0;display:none}
+.progress-bar{height:6px;border-radius:99px;background:var(--blue);width:0%;transition:width 0.3s}
+.log-box{background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px;margin-top:12px;font-size:12px;font-family:monospace;max-height:180px;overflow-y:auto;display:none}
+.log-line{padding:2px 0;color:var(--text-secondary)}
+.log-line.ok{color:var(--green-text)}
+.log-line.err{color:var(--red-text)}
+.log-line.info{color:var(--blue-text)}
+.tmpl-code{background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px;font-family:monospace;font-size:11px;color:var(--text-primary);white-space:pre;overflow-x:auto;margin:8px 0}
+.col-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.col-item{background:var(--bg-secondary);border-radius:var(--radius-md);padding:8px 12px}
+.col-name{font-size:13px;font-weight:500}
+.col-note{font-size:11px;color:var(--text-secondary);margin-top:2px}
+.col-req{color:var(--red-text);font-size:10px;margin-left:4px}
+.col-opt{color:var(--green-text);font-size:10px;margin-left:4px}
+/* 月次決算レポート */
+.report-sheet{background:#fff;color:#111;border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:28px}
+.report-head{text-align:center;border-bottom:2px solid #1a2e4a;padding-bottom:14px;margin-bottom:20px;color:#111}
+.report-card{border:1px solid #e0e0e0;border-radius:8px;padding:16px 18px;margin-bottom:16px;background:#fff}
+.report-card-title{font-size:13px;font-weight:bold;color:#1a2e4a;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #e0e0e0}
+@media print{
+  body{background:#fff}
+  .topbar,.report-actions,.section-header,.tab-group,.no-print{display:none!important}
+  .app,.content{max-width:none;margin:0;padding:0;background:#fff}
+  .page{display:none!important}
+  #page-report{display:block!important}
+  .report-sheet{border:none;border-radius:0;padding:0}
+  .report-card{break-inside:avoid;page-break-inside:avoid}
+  @page{size:A4 portrait;margin:14mm}
+}
+@media(max-width:768px){
+  .two-col,.three-col{grid-template-columns:1fr}
+  .form-row{grid-template-columns:1fr}
+  .form-row.three{grid-template-columns:1fr 1fr}
+  .nav-btn span{display:none}
+  .si-text{display:none}
+  .topbar{padding:0 12px}
+  .content{padding:16px 12px}
+  .col-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header class="topbar">
+  <div class="logo">
+    <div class="logo-icon">📊</div>
+    経営管理
+  </div>
+  <nav class="nav">
+    <button class="nav-btn active" onclick="showPage('dashboard',this)">📈 <span>ダッシュボード</span></button>
+    <button class="nav-btn" onclick="showPage('projects',this)">💼 <span>案件</span></button>
+    <button class="nav-btn" onclick="showPage('quotes',this)">📄 <span>見積・請求</span></button>
+    <button class="nav-btn" onclick="showPage('ledger',this)">💰 <span>収支</span></button>
+    <button class="nav-btn" onclick="showPage('csv',this)">📥 <span>CSV取込</span></button>
+    <button class="nav-btn" onclick="showPage('report',this)">📊 <span>月次レポート</span></button>
+    <button class="nav-btn" onclick="showPage('settings',this)">⚙️ <span>設定</span></button>
+  </nav>
+  <div class="topbar-right">
+    <span class="save-indicator" id="save-indicator" title="データの保存状態"></span>
+  </div>
+</header>
+
+<main class="content">
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page active">
+  <div class="section-header">
+    <h1 class="section-title">経営ダッシュボード</h1>
+    <div style="display:flex;gap:8px;align-items:center">
+    <select id="fiscal-select" onchange="updateDashboard()" style="width:auto;font-size:13px"></select>
+    <select id="month-select" onchange="updateDashboard()" style="width:auto;font-size:13px">
+      <option value="0">1月</option><option value="1">2月</option><option value="2">3月</option>
+      <option value="3">4月</option><option value="4">5月</option><option value="5" selected>6月</option>
+      <option value="6">7月</option><option value="7">8月</option><option value="8">9月</option>
+      <option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
+    </select>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">📊 期間サマリー</span></div>
+    <div id="fiscal-summary"></div>
+  </div>
+  <div class="metric-grid">
+    <div class="metric-card"><div class="metric-label">売上</div><div class="metric-value blue" id="d-sales">¥0</div><div class="metric-sub" id="d-sales-year">年間累計: ¥0</div><div class="metric-sub" id="d-sales-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">経費合計</div><div class="metric-value" id="d-expense">¥0</div><div class="metric-sub" id="d-expense-year">年間累計: ¥0</div><div class="metric-sub" id="d-expense-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">役員報酬</div><div class="metric-value" id="d-labor">¥0</div><div class="metric-sub" id="d-labor-year">年間累計: ¥0</div><div class="metric-sub" id="d-labor-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">税金・公課</div><div class="metric-value" id="d-tax">¥0</div><div class="metric-sub" id="d-tax-year">年間累計: ¥0</div><div class="metric-sub" id="d-tax-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">営業利益</div><div class="metric-value green" id="d-profit">¥0</div><div class="metric-sub" id="d-profit-year">年間累計: ¥0</div><div class="metric-sub" id="d-margin">利益率: -%</div></div>
+    <div class="metric-card"><div class="metric-label">営業利益率</div><div class="metric-value" id="d-margin-rate">-%</div><div class="metric-sub" id="d-margin-year">年間累計: -%</div></div>
+  </div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">計画差異</span>
+        <div style="display:flex;gap:4px">
+          <button class="btn sm primary" id="diff-tab-month" onclick="setDiffMode('month')">月間</button>
+          <button class="btn sm" id="diff-tab-year" onclick="setDiffMode('year')">年間</button>
+        </div>
+      </div>
+      <div id="diff-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">月次推移</span>
+        <div style="display:flex;gap:12px;font-size:11px;color:var(--text-secondary)">
+          <span><span style="color:#378ADD">●</span> 売上</span>
+          <span><span style="color:#1D9E75">●</span> 営業利益</span>
+          <span><span style="color:#EF9F27">●</span> 利益率</span>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="monthly-chart" onmousemove="chartHover(event)" onmouseleave="chartLeave()"></canvas>
+        <div id="chart-tooltip" class="chart-tooltip"></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">進行中の案件 <span class="badge badge-green" id="dash-active-count">0件</span></span>
+      <button class="btn sm" onclick="showPage('projects', document.querySelectorAll('.nav-btn')[1])">一覧へ →</button>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>案件名・顧客名</th><th>金額</th><th>状態</th><th>期限</th></tr></thead><tbody id="dash-projects"></tbody></table></div>
+    <div id="dash-projects-empty" class="empty-state" style="display:none">案件がありません</div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">⚠️ 更新アラート（30日以内）</span></div>
+    <div id="renewal-alerts"><div class="empty-state">更新予定の案件はありません</div></div>
+  </div>
+</div>
+
+<!-- PROJECTS -->
+<div id="page-projects" class="page">
+  <div class="section-header">
+    <h1 class="section-title">案件管理</h1>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="project-month" onchange="renderProjects()" style="width:auto;font-size:13px">
+        <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
+      </select>
+      <button class="btn" onclick="openBulkInvoiceModal()">📄 一括請求書作成</button>
+      <button class="btn primary" onclick="openProjectModal()">+ 案件追加</button>
+    </div>
+  </div>
+  <div class="metric-grid" style="grid-template-columns:minmax(200px,300px)">
+    <div class="metric-card">
+      <div class="metric-label" id="project-total-label">売上合計</div>
+      <div class="metric-value blue" id="project-total">¥0</div>
+      <div class="metric-sub" id="project-total-sub">対象: 0件</div>
+      <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border)">
+        <div style="font-size:12px;color:var(--amber-text)">+ 売上見込み <strong id="project-forecast">¥0</strong></div>
+        <div class="metric-sub" id="project-forecast-sub">（商談中 0件）</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="table-wrap"><table>
+      <thead><tr><th>案件名</th><th>顧客</th><th>金額</th><th>状態</th><th>期間・種別</th><th>操作</th></tr></thead>
+      <tbody id="project-list"></tbody>
+    </table></div>
+    <div id="project-empty" class="empty-state" style="display:none">案件がありません。「案件追加」から登録してください。</div>
+  </div>
+</div>
+
+<!-- QUOTES -->
+<div id="page-quotes" class="page">
+  <div class="section-header">
+    <h1 class="section-title">見積・請求管理</h1>
+    <select id="quote-month" onchange="renderQuotes()" style="width:auto;font-size:13px">
+      <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
+    </select>
+  </div>
+  <div class="tab-group">
+    <button class="tab active" onclick="switchQuoteTab('estimate',this)">📄 見積書</button>
+    <button class="tab" onclick="switchQuoteTab('invoice',this)">💴 請求書</button>
+    <button class="tab" onclick="switchQuoteTab('upload',this)">📤 PDF取込</button>
+  </div>
+  <div id="q-estimate">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title" id="estimate-summary">0件　合計: ¥0（税込）</span>
+        <button class="btn primary" onclick="openCreateQuoteModal()">+ 見積書作成</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>番号</th><th>件名</th><th>顧客</th><th>金額</th><th>発行日</th><th>操作</th></tr></thead>
+        <tbody id="estimate-list"></tbody>
+      </table></div>
+      <div id="estimate-empty" class="empty-state" style="display:none">この期間の見積書はありません。</div>
+    </div>
+  </div>
+  <div id="q-invoice" style="display:none">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title" id="invoice-summary">0件　合計: ¥0（税込）</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="openBulkInvoiceModal()">📄 一括請求書作成</button>
+          <button class="btn primary" onclick="openCreateInvoiceModal()">+ 請求書作成</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>番号</th><th>件名</th><th>顧客</th><th>金額</th><th>発行日</th><th>支払期限</th><th>操作</th></tr></thead>
+        <tbody id="invoice-list"></tbody>
+      </table></div>
+      <div id="invoice-empty" class="empty-state" style="display:none">この期間の請求書はありません。</div>
+    </div>
+  </div>
+  <div id="q-upload" style="display:none">
+    <div class="card">
+      <div class="upload-zone" onclick="document.getElementById('pdf-input').click()">
+        <div style="font-size:36px;margin-bottom:10px">📤</div>
+        <div style="font-size:14px;font-weight:500;margin-bottom:4px">PDFをクリックして選択</div>
+        <div style="font-size:12px;color:var(--text-secondary)">見積書・請求書のPDFをアップロードするとAIが内容を読み取り、自動で登録します</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px">※ テキストが埋め込まれたPDFのみ対応</div>
+        <input type="file" id="pdf-input" accept=".pdf" style="display:none" onchange="handlePDFUpload(event)">
+      </div>
+      <div id="upload-result" style="margin-top:16px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- LEDGER -->
+<div id="page-ledger" class="page">
+  <div class="section-header">
+    <h1 class="section-title">収支管理</h1>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn" onclick="openDriveImportModal()">☁️ ドライブから取込</button>
+      <button class="btn" onclick="openFixedCostsModal()">🔁 固定費管理</button>
+      <button class="btn primary" onclick="openLedgerModal()">+ 入力</button>
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">計画 vs 実績（<span id="plan-month-label">今月</span>）</span>
+        <button class="btn sm" onclick="openPlanModal()">✏️ 計画編集</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>区分</th><th>計画</th><th>実績</th><th>差異</th></tr></thead>
+        <tbody id="plan-table"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">直近の収支</span></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>日付</th><th>区分</th><th>摘要</th><th>金額</th><th>操作</th></tr></thead>
+        <tbody id="ledger-list"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<!-- CSV IMPORT -->
+<div id="page-csv" class="page">
+  <div class="section-header">
+    <h1 class="section-title">📥 CSV取込</h1>
+  </div>
+
+  <div class="tab-group">
+    <button class="tab active" id="csv-tab-import" onclick="switchCsvTab('import',this)">データ取込</button>
+    <button class="tab" id="csv-tab-template" onclick="switchCsvTab('template',this)">テンプレート</button>
+  </div>
+
+  <!-- 取込パネル -->
+  <div id="csv-panel-import">
+    <div class="card">
+      <div class="card-header"><span class="card-title">取込種別を選択</span></div>
+      <div class="csv-type-toggle">
+        <button class="csv-type-btn active" id="csvbtn-project" onclick="setCsvType('project')">💼 新規案件追加</button>
+        <button class="csv-type-btn" id="csvbtn-ledger" onclick="setCsvType('ledger')">💰 収支データ追加</button>
+        <button class="csv-type-btn" id="csvbtn-bank" onclick="setCsvType('bank')">🏦 銀行明細取込</button>
+      </div>
+
+      <div class="csv-drop-zone" id="csv-drop-zone"
+        onclick="document.getElementById('csv-file-input').click()"
+        ondragover="csvDragOver(event)"
+        ondragleave="csvDragLeave(event)"
+        ondrop="csvDrop(event)">
+        <div style="font-size:36px;margin-bottom:10px">📂</div>
+        <div style="font-size:14px;font-weight:500;margin-bottom:4px">CSVファイルをドラッグ＆ドロップ</div>
+        <div style="font-size:12px;color:var(--text-secondary)">またはクリックして選択　UTF-8 / Shift-JIS 対応</div>
+      </div>
+      <input type="file" id="csv-file-input" accept=".csv" style="display:none" onchange="csvHandleFile(this.files[0])">
+
+      <div id="bank-zone" style="display:none">
+        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">
+          GMOあおぞらネット銀行の入出金明細CSV（取引日 / 摘要 / お支払金額 / お預り金額 / 残高 / メモ）に対応しています。<br>
+          お支払金額は支出、お預り金額は収入として取り込みます。区分は摘要から自動で推測し、取込前に修正できます。
+        </div>
+        <div class="csv-drop-zone" id="bank-drop-zone"
+          onclick="document.getElementById('bank-file-input').click()"
+          ondragover="bankDragOver(event)"
+          ondragleave="bankDragLeave(event)"
+          ondrop="bankDrop(event)">
+          <div style="font-size:36px;margin-bottom:10px">🏦</div>
+          <div style="font-size:14px;font-weight:500;margin-bottom:4px">銀行明細CSVをドラッグ＆ドロップ</div>
+          <div style="font-size:12px;color:var(--text-secondary)">またはクリックして選択　Shift-JIS / UTF-8 自動判別</div>
+        </div>
+        <input type="file" id="bank-file-input" accept=".csv" style="display:none" onchange="bankHandleFile(this.files[0])">
+      </div>
+    </div>
+
+    <div id="bank-area" style="display:none">
+      <div id="bank-msg" style="margin-bottom:12px"></div>
+      <div class="card" id="bank-actions" style="display:none">
+        <div class="card-header">
+          <span class="card-title">取込内容の確認</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm" onclick="setBankCheckAll(true)">全選択</button>
+            <button class="btn sm" onclick="setBankCheckAll(false)">全解除</button>
+          </div>
+        </div>
+        <div id="bank-result"></div>
+        <div class="actions-row">
+          <button class="btn" onclick="bankReset()">やり直す</button>
+          <button class="btn primary" onclick="bankRegister()">✓ 選択したデータを収支に登録</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="csv-preview-area" style="display:none">
+      <div class="card">
+        <div class="card-header"><span class="card-title">プレビュー（先頭5件）</span></div>
+        <div class="table-wrap"><table class="csv-preview-table" id="csv-preview-table"></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">取込チェック</span></div>
+        <div id="csv-check-result"></div>
+        <div class="progress-wrap" id="csv-progress-wrap">
+          <div class="progress-bar" id="csv-progress-bar"></div>
+        </div>
+        <div id="csv-status" style="font-size:13px;color:var(--text-secondary);margin-top:8px;min-height:18px"></div>
+        <div class="log-box" id="csv-log"></div>
+        <div class="actions-row">
+          <button class="btn" onclick="csvReset()">やり直す</button>
+          <button class="btn primary" id="csv-execute-btn" onclick="csvExecute()">✓ アプリに取込む</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- テンプレートパネル -->
+  <div id="csv-panel-template" style="display:none">
+    <div class="card">
+      <div class="card-header"><span class="card-title">🏦 銀行明細の取込について</span></div>
+      <p style="font-size:13px;color:var(--text-secondary)">
+        GMOあおぞらネット銀行の明細CSVをそのままドロップするだけで取込できます。<br>
+        テンプレートに合わせて作り直す必要はありません。「データ取込」タブで「🏦 銀行明細取込」を選んでください。
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">① 新規案件追加テンプレート</span></div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">新しい案件をまとめて登録するためのCSVテンプレートです。</p>
+      <div class="col-grid">
+        <div class="col-item"><div class="col-name">案件名<span class="col-req">必須</span></div><div class="col-note">案件・サービスの名称</div></div>
+        <div class="col-item"><div class="col-name">顧客名<span class="col-opt">任意</span></div><div class="col-note">会社名・顧客名</div></div>
+        <div class="col-item"><div class="col-name">金額<span class="col-req">必須</span></div><div class="col-note">税抜金額（数値のみ）</div></div>
+        <div class="col-item"><div class="col-name">状態<span class="col-opt">任意</span></div><div class="col-note">商談中／契約済／進行中／完了／失注</div></div>
+        <div class="col-item"><div class="col-name">開始日<span class="col-opt">任意</span></div><div class="col-note">YYYY-MM-DD形式</div></div>
+        <div class="col-item"><div class="col-name">終了日<span class="col-opt">任意</span></div><div class="col-note">YYYY-MM-DD形式</div></div>
+        <div class="col-item"><div class="col-name">契約種別<span class="col-opt">任意</span></div><div class="col-note">single／monthly／annual</div></div>
+        <div class="col-item"><div class="col-name">メモ<span class="col-opt">任意</span></div><div class="col-note">備考・メモ</div></div>
+      </div>
+      <div class="tmpl-code" id="tmpl-project-code"></div>
+      <button class="btn" onclick="csvDownloadTemplate('project')">📥 テンプレートをダウンロード</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">② 収支データ追加テンプレート</span></div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">売上・経費・人件費をまとめて登録するためのCSVテンプレートです。</p>
+      <div class="col-grid">
+        <div class="col-item"><div class="col-name">日付<span class="col-req">必須</span></div><div class="col-note">YYYY-MM-DD形式</div></div>
+        <div class="col-item"><div class="col-name">区分<span class="col-req">必須</span></div><div class="col-note">売上／家賃（レンタルオフィス利用料）／通信料／システム利用料／交通費／交際費／役員報酬／その他経費／社会保険料／住民税（特別徴収）／消費税（納付）／源泉所得税（納付）／法人税・住民税・事業税（納付）／その他税金・公課</div></div>
+        <div class="col-item"><div class="col-name">摘要<span class="col-req">必須</span></div><div class="col-note">内容・説明</div></div>
+        <div class="col-item"><div class="col-name">金額<span class="col-req">必須</span></div><div class="col-note">数値のみ（税抜）</div></div>
+      </div>
+      <div class="tmpl-code" id="tmpl-ledger-code"></div>
+      <button class="btn" onclick="csvDownloadTemplate('ledger')">📥 テンプレートをダウンロード</button>
+    </div>
+  </div>
+</div>
+
+<!-- MONTHLY REPORT -->
+<div id="page-report" class="page">
+  <div class="section-header">
+    <h1 class="section-title">レポート</h1>
+  </div>
+  <div class="tab-group no-print">
+    <button class="tab active" onclick="switchReportTab('monthly',this)">📊 月次レポート</button>
+    <button class="tab" onclick="switchReportTab('loan',this)">💰 融資力診断</button>
+  </div>
+  <div id="report-pane-monthly">
+    <div class="report-actions" style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-bottom:16px">
+      <select id="report-month" style="width:auto;font-size:13px"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option></select>
+      <button class="btn primary" onclick="generateReport()">レポートを生成</button>
+      <button class="btn" onclick="printReport()">🖨️ 印刷する</button>
+    </div>
+    <div class="report-sheet"><div id="report-body"></div></div>
+  </div>
+  <div id="report-pane-loan" style="display:none">
+    <div id="loan-body"></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="page-settings" class="page">
+  <div class="section-header"><h1 class="section-title">会社情報設定</h1></div>
+  <div class="card">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">会社名</label><input id="s-name" type="text" placeholder="株式会社〇〇"></div>
+      <div class="form-group"><label class="form-label">代表者名</label><input id="s-rep" type="text" placeholder="山田 太郎"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">郵便番号</label><input id="s-zip" type="text" placeholder="123-4567"></div>
+      <div class="form-group"><label class="form-label">住所</label><input id="s-addr" type="text" placeholder="東京都渋谷区〇〇1-2-3"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">電話番号</label><input id="s-tel" type="text" placeholder="03-0000-0000"></div>
+      <div class="form-group"><label class="form-label">メールアドレス</label><input id="s-email" type="text" placeholder="info@example.com"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">銀行名</label><input id="s-bankName" type="text" placeholder="GMOあおぞらネット銀行"></div>
+      <div class="form-group"><label class="form-label">支店名</label><input id="s-bankBranch" type="text" placeholder="法人第二営業部"></div>
+    </div>
+    <div class="form-row three">
+      <div class="form-group"><label class="form-label">口座種別</label><input id="s-accountType" type="text" placeholder="普通"></div>
+      <div class="form-group"><label class="form-label">口座番号</label><input id="s-accountNumber" type="text" placeholder="2428016"></div>
+      <div class="form-group"><label class="form-label">口座名義</label><input id="s-accountHolder" type="text" placeholder="アスリンク株式会社"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">インボイス登録番号</label><input id="s-invoice" type="text" placeholder="T1234567890123"></div>
+      <div class="form-group"><label class="form-label">支払条件</label><input id="s-payment" type="text" placeholder="発行日から30日以内"></div>
+    </div>
+    <div class="form-row single">
+      <div class="form-group"><label class="form-label">備考・特記事項</label><textarea id="s-note" placeholder="例: 本見積有効期限は発行日より30日間です。"></textarea></div>
+    </div>
+    <div class="actions-row">
+      <button class="btn primary" onclick="saveSettings()">✓ 保存する</button>
+    </div>
+    <div id="settings-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">期の管理</span>
+      <button class="btn primary" onclick="openFiscalForm()">+ 新しい期を追加</button>
+    </div>
+    <div style="font-size:13px;margin-bottom:12px">現在の期：<strong id="fiscal-current">-</strong></div>
+    <div id="fiscal-list"></div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:10px">
+      アクティブな期は、ダッシュボードの初期表示と月次計画の入力月の並びに使われます。
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">財務情報（融資力診断に使用）</span></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">現預金残高（円）</label><input id="f-cash" type="number" placeholder="1500000"></div>
+      <div class="form-group"><label class="form-label">既存借入残高（円）</label><input id="f-loan" type="number" placeholder="0"></div>
+    </div>
+    <div class="actions-row">
+      <button class="btn primary" onclick="saveFinance()">✓ 保存する</button>
+    </div>
+    <div id="finance-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">データ保存先（Google Sheets）</span></div>
+    <div class="sync-row">
+      <span class="sync-dot" id="gas-dot"></span>
+      <span id="gas-status">確認中...</span>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <button class="btn" onclick="reloadFromGAS()">🔄 スプレッドシートから再読み込み</button>
+      <button class="btn" onclick="pushToGAS(true)">☁️ 今すぐスプレッドシートへ保存</button>
+      <a class="btn" id="gas-sheet-link" href="https://docs.google.com/spreadsheets/d/1gdtg7q3NwG3FQmWGc7lMpNEKROyvyRwuoIRKNSPsi4k/edit" target="_blank" rel="noopener" style="text-decoration:none">📗 スプレッドシートを開く</a>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:10px">
+      データは Google スプレッドシート（projects / quotes / ledger / settings の4シート）に保存されます。<br>
+      同時に、このブラウザのlocalStorageにも控えを保存しています。読み込みに失敗したときは自動でそちらを使います。
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">データ管理</span></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <button class="btn" onclick="exportData()">📥 データをエクスポート（JSON）</button>
+      <button class="btn" onclick="document.getElementById('import-input').click()">📤 データをインポート（JSON）</button>
+      <input type="file" id="import-input" accept=".json" style="display:none" onchange="importData(event)">
+      <button class="btn danger" onclick="confirmClearData()">🗑️ 全データをリセット</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:10px">エクスポートしたJSONはスプレッドシートとは別のバックアップとして保管できます。</div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal-add-project">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title" id="modal-project-title">案件を追加</span><button class="btn sm" onclick="closeModal('modal-add-project')">✕</button></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">案件名 *</label><input id="p-name" type="text" placeholder="Webサイトリニューアル"></div>
+    <div class="form-group"><label class="form-label">顧客名</label><input id="p-client" type="text" placeholder="株式会社〇〇"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">金額（税抜）</label><input id="p-amount" type="number" placeholder="500000"></div>
+    <div class="form-group"><label class="form-label">状態</label><select id="p-status"><option>商談中</option><option>契約済</option><option>進行中</option><option>完了</option><option>失注</option></select></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">開始日</label><input id="p-start" type="date"></div>
+    <div class="form-group"><label class="form-label">終了日</label><input id="p-end" type="date"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">契約種別</label><select id="p-contract"><option value="single">単発</option><option value="monthly">月次継続</option><option value="annual">年次継続</option></select></div>
+    <div class="form-group"><label class="form-label">メモ</label><input id="p-memo" type="text" placeholder="備考など"></div>
+  </div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-add-project')">キャンセル</button>
+    <button class="btn primary" id="modal-project-submit" onclick="saveProject()">+ 追加</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-renew-project">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title">契約更新</span><button class="btn sm" onclick="closeModal('modal-renew-project')">✕</button></div>
+  <div class="alert alert-info" id="renew-info" style="margin-bottom:16px"></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">新しい開始日</label><input id="r-start" type="date"></div>
+    <div class="form-group"><label class="form-label">新しい終了日</label><input id="r-end" type="date"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">更新後の金額（税抜）</label><input id="r-amount" type="number"></div>
+  </div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-renew-project')">キャンセル</button>
+    <button class="btn success" onclick="renewProject()">🔄 更新して見積書を生成</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-create-quote">
+<div class="modal wide">
+  <div class="modal-header"><span class="modal-title" id="modal-doc-title">見積書を作成</span><button class="btn sm" onclick="closeModal('modal-create-quote')">✕</button></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">件名 *</label><input id="q-subject" type="text" placeholder="Webサイト制作一式"></div>
+    <div class="form-group"><label class="form-label">宛先（顧客名）</label><input id="q-client" type="text" placeholder="株式会社〇〇 御中"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label" id="q-date-label">見積日</label><input id="q-date" type="date"></div>
+    <div class="form-group"><label class="form-label" id="q-expire-label">有効期限</label><input id="q-expire" type="date"></div>
+  </div>
+  <div class="form-row three">
+    <div class="form-group"><label class="form-label">契約開始月</label><input id="q-cstart" type="month" onchange="updateContractHint()"></div>
+    <div class="form-group"><label class="form-label">契約終了月</label><input id="q-cend" type="month" onchange="updateContractHint()"></div>
+    <div class="form-group"><label class="form-label">支払い方法</label>
+      <select id="q-payment">
+        <option>毎月末日払い</option><option>一括払い</option><option>分割払い（要相談）</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-row single" style="margin-bottom:6px">
+    <label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input id="q-monthly" type="checkbox" checked onchange="updateContractHint()" style="width:auto"> 月額固定（明細の金額を月額として扱う）
+    </label>
+  </div>
+  <div id="q-contract-hint" style="font-size:12px;margin-bottom:10px;min-height:18px"></div>
+  <div style="margin-bottom:8px">
+    <div style="display:grid;grid-template-columns:2.5fr 0.8fr 1fr 1fr auto;gap:6px;font-size:12px;color:var(--text-secondary);padding:0 4px 6px;border-bottom:0.5px solid var(--border)">
+      <span>品名・作業内容</span><span>数量</span><span>単価</span><span>金額</span><span></span>
+    </div>
+    <div id="q-items" style="margin-top:6px"></div>
+  </div>
+  <button class="btn sm" onclick="addQuoteItem()">+ 明細追加</button>
+  <div id="q-total-display" style="text-align:right;font-size:13px;margin-top:12px;padding:10px;background:var(--bg-secondary);border-radius:var(--radius-md)"></div>
+  <div class="form-row single" style="margin-top:12px">
+    <div class="form-group"><label class="form-label">備考</label><textarea id="q-note" placeholder="会社設定の備考が自動入力されます"></textarea></div>
+  </div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-create-quote')">キャンセル</button>
+    <button class="btn primary" onclick="createQuote()">📄 作成してプレビュー</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-drive-import">
+<div class="modal wide">
+  <div class="modal-header"><span class="modal-title">ドライブから経費を取込</span><button class="btn sm" onclick="closeModal('modal-drive-import')">✕</button></div>
+  <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
+    取込フォルダ <a href="https://drive.google.com/drive/folders/1YLUeZuWj6QAVWaXAOLaKE5sZXz4NQhxA" target="_blank" rel="noopener">アスリンク_経費取込フォルダ</a> の
+    PDF・画像をAIで読み取り、経費として登録します。<br>
+    登録したファイルは「処理済み_」を付けてリネームされ、次回以降は初期状態で選択されません。
+  </div>
+  <div class="actions-row" style="justify-content:flex-start;margin-top:0">
+    <button class="btn primary" id="drive-load-btn" onclick="driveLoadFiles()">📂 フォルダを確認する</button>
+  </div>
+  <div id="drive-msg" style="margin:12px 0"></div>
+  <div id="drive-file-list"></div>
+  <div class="actions-row" style="justify-content:flex-start">
+    <button class="btn primary" id="drive-extract-btn" onclick="driveExtractSelected()" style="display:none">🤖 選択したファイルをAIで読み取る</button>
+  </div>
+  <div id="drive-result"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-drive-import')">閉じる</button>
+    <button class="btn success" id="drive-register-btn" onclick="driveRegister()" style="display:none">✓ 収支に登録する</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-fiscal">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title" id="fy-title">期を追加</span><button class="btn sm" onclick="closeModal('modal-fiscal')">✕</button></div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">期の名前</label><input id="fy-name" type="text" placeholder="第2期"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">開始月</label><input id="fy-start" type="month"></div>
+    <div class="form-group"><label class="form-label">終了月</label><input id="fy-end" type="month"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">売上目標（円）</label><input id="fy-sales" type="number" placeholder="6500000"></div>
+    <div class="form-group"><label class="form-label">利益目標（円）</label><input id="fy-profit" type="number" placeholder="1060000"></div>
+  </div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-fiscal')">キャンセル</button>
+    <button class="btn primary" id="fy-submit" onclick="saveFiscal()">+ 追加</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-fixed-costs">
+<div class="modal wide">
+  <div class="modal-header"><span class="modal-title">固定費管理</span><button class="btn sm" onclick="closeModal('modal-fixed-costs')">✕</button></div>
+  <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
+    毎月同額で発生する費用を登録すると、開始月から今月までのぶんが収支に自動で追加されます。<br>
+    計上日はその月の末日です。すでに追加済みの月は二重に登録されません。
+  </div>
+  <div id="fixed-cost-list"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="applyFixedCostsManually()">🔁 固定費を反映</button>
+    <button class="btn primary" onclick="openFixedCostForm()">+ 固定費を追加</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-fixed-cost-form">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title" id="fc-title">固定費を追加</span><button class="btn sm" onclick="closeModal('modal-fixed-cost-form')">✕</button></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">区分</label>
+      <select id="fc-type"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option><option>社会保険料</option><option>住民税（特別徴収）</option><option>消費税（納付）</option><option>源泉所得税（納付）</option><option>法人税・住民税・事業税（納付）</option><option>その他税金・公課</option></select>
+    </div>
+    <div class="form-group"><label class="form-label">金額</label><input id="fc-amount" type="number" placeholder="300000"></div>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">摘要</label><input id="fc-desc" type="text" placeholder="例: 役員報酬、オフィス利用料"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">開始月</label><input id="fc-start" type="month"></div>
+    <div class="form-group"><label class="form-label">終了月（空欄で無期限）</label><input id="fc-end" type="month"></div>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px">
+      <input id="fc-enabled" type="checkbox" checked style="width:auto"> 有効にする（オフにすると自動追加を止めます）
+    </label></div>
+  </div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-fixed-cost-form')">キャンセル</button>
+    <button class="btn primary" id="fc-submit" onclick="saveFixedCost()">+ 追加</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-bulk-invoice">
+<div class="modal wide">
+  <div class="modal-header"><span class="modal-title">一括請求書作成</span><button class="btn sm" onclick="closeModal('modal-bulk-invoice')">✕</button></div>
+  <div class="form-row three">
+    <div class="form-group"><label class="form-label">対象月</label>
+      <select id="bulk-month" onchange="updateBulkInvoiceForm()"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option></select>
+    </div>
+    <div class="form-group"><label class="form-label">発行日</label><input id="bulk-date" type="date"></div>
+    <div class="form-group"><label class="form-label">支払期限</label><input id="bulk-due" type="date"></div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:16px 0 8px">
+    <span class="form-label" id="bulk-count"></span>
+    <span style="display:flex;gap:6px">
+      <button class="btn sm" onclick="setBulkCheckAll(true)">全選択</button>
+      <button class="btn sm" onclick="setBulkCheckAll(false)">全解除</button>
+    </span>
+  </div>
+  <div id="bulk-list"></div>
+  <div class="form-row single" style="margin-top:14px">
+    <label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input id="bulk-merge" type="checkbox" onchange="updateBulkCount()" style="width:auto"> 同一顧客はまとめて発行する（1枚に複数明細）
+    </label>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">備考</label><textarea id="bulk-note" placeholder="請求書に記載する備考"></textarea></div>
+  </div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-bulk-invoice')">キャンセル</button>
+    <button class="btn primary" id="bulk-submit" onclick="createBulkInvoices()">📄 選択した案件で請求書を一括作成</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-preview-quote">
+<div class="modal doc">
+  <div class="modal-header"><span class="modal-title" id="preview-modal-title">見積書プレビュー</span><button class="btn sm" onclick="closeModal('modal-preview-quote')">✕</button></div>
+  <div id="quote-preview-content"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-preview-quote')">閉じる</button>
+    <button class="btn primary" onclick="downloadQuote()">📥 HTMLダウンロード（印刷→PDF化）</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-add-ledger">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title" id="modal-ledger-title">収支を入力</span><button class="btn sm" onclick="closeModal('modal-add-ledger')">✕</button></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">日付</label><input id="l-date" type="date"></div>
+    <div class="form-group"><label class="form-label">区分</label><select id="l-type"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option><option>社会保険料</option><option>住民税（特別徴収）</option><option>消費税（納付）</option><option>源泉所得税（納付）</option><option>法人税・住民税・事業税（納付）</option><option>その他税金・公課</option></select></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">摘要</label><input id="l-desc" type="text" placeholder="例: 〇〇案件 6月分"></div>
+    <div class="form-group"><label class="form-label">金額</label><input id="l-amount" type="number" placeholder="100000"></div>
+  </div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-add-ledger')">キャンセル</button>
+    <button class="btn primary" id="modal-ledger-submit" onclick="saveLedger()">+ 追加</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-edit-plan">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title">月次計画を編集</span><button class="btn sm" onclick="closeModal('modal-edit-plan')">✕</button></div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">対象月</label>
+      <select id="plan-month" onchange="loadPlanForm()"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option></select>
+    </div>
+  </div>
+  <div class="form-row three">
+    <div class="form-group"><label class="form-label">売上計画</label><input id="plan-sales" type="number"></div>
+    <div class="form-group"><label class="form-label">経費合計の計画</label><input id="plan-expense" type="number"></div>
+    <div class="form-group"><label class="form-label">役員報酬の計画</label><input id="plan-labor" type="number"></div>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">税金・公課の計画</label><input id="plan-tax" type="number"></div>
+  </div>
+  <div style="font-size:12px;color:var(--text-muted);margin-top:6px">月を切り替えると、その月の計画値を編集できます。</div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-edit-plan')">キャンセル</button>
+    <button class="btn" onclick="applyPlanToAllMonths()">全月に適用</button>
+    <button class="btn primary" onclick="savePlan()">✓ この月を保存</button>
+  </div>
+</div>
+</div>
+
+<script>
+/* =====================================================================
+   Google Sheets（GAS）連携の設定
+   ---------------------------------------------------------------------
+   gas-code.js の中身をGASエディタに貼り付け、ウェブアプリとしてデプロイし、
+   発行された URL（https://script.google.com/macros/s/.../exec）を
+   下の GAS_URL に貼り付けてください。
+   空のままでも、これまで通りブラウザのlocalStorageだけで動作します。
+   ===================================================================== */
+const GAS_URL='https://script.google.com/macros/s/AKfycbypwiuWcOJQqLkJtEDHrew4ML3J_PNzOQrJXXNTTyUzcwqF5yAQHn5OqQvJfKFnWLtZ/exec';
+
+// 保存先スプレッドシート（表示用リンク）
+const SHEET_URL='https://docs.google.com/spreadsheets/d/1gdtg7q3NwG3FQmWGc7lMpNEKROyvyRwuoIRKNSPsi4k/edit';
+
+const STORAGE_KEY='bizapp_v1';
+const defaultState={
+  company:{
+    name:'アスリンク株式会社',
+    rep:'石井 達也',
+    zip:'651-0094',
+    addr:'兵庫県神戸市中央区琴ノ緒町5-7-11 ONLYONE神戸・三宮2階',
+    tel:'080-5760-5988',
+    email:'tatsuya-ishii@us-links.com',
+    bankName:'GMOあおぞらネット銀行',
+    bankBranch:'法人第二営業部',
+    accountType:'普通',
+    accountNumber:'2428016',
+    accountHolder:'アスリンク株式会社',
+    invoice:'',
+    payment:'発行日から30日以内',
+    note:''
+  },
+  projects:[],
+  quotes:[],
+  ledger:[],
+  // 月次計画。添字0が1月、11が12月。
+  plan:[
+    {sales:0,expense:0,labor:0},  // 1月
+    {sales:0,expense:0,labor:0},  // 2月
+    {sales:0,expense:0,labor:0},  // 3月
+    {sales:0,expense:0,labor:0},  // 4月
+    {sales:0,expense:0,labor:0},  // 5月
+    {sales:0,expense:0,labor:0},  // 6月
+    {sales:0,expense:0,labor:0},  // 7月
+    {sales:0,expense:0,labor:0},  // 8月
+    {sales:0,expense:0,labor:0},  // 9月
+    {sales:0,expense:0,labor:0},  // 10月
+    {sales:0,expense:0,labor:0},  // 11月
+    {sales:0,expense:0,labor:0}  // 12月
+  ],
+  // 期（会計年度）
+  fiscalYears:[
+    {
+      id:1,
+      name:'第1期',
+      startMonth:'2026-03',
+      endMonth:'2027-02',
+      salesTarget:6500000,
+      profitTarget:1060000,
+      active:true
+    }
+  ],
+  currentFiscalYearId:1,
+  nextFiscalYearId:2,
+  // 財務情報（融資力診断で使う）
+  finance:{cash:0,loan:0},
+  // 固定費: {id,type,desc,amount,startMonth,endMonth,enabled}
+  fixedCosts:[],
+  nextProjectId:1,nextQuoteNum:1,nextLedgerId:1,nextFixedCostId:1
+};
+
+let S=loadState();
+let renewTarget=null;
+let editProjectId=null;
+let editLedgerId=null;
+let currentQuoteItems=[{name:'',qty:1,unit:0,total:0}];
+let currentQuoteData=null;
+let currentDocType='見積書';
+
+// CSV state
+let csvType='project';
+let csvParsedData=null;
+let csvParsedHeaders=[];
+
+// 月次計画を必ず12ヶ月分の配列にそろえる（旧形式 {sales,expense,labor} からの移行にも対応）
+function normalizePlan(plan){
+  const out=[];
+  for(let i=0;i<12;i++)out.push({sales:0,expense:0,labor:0,tax:0});
+  if(!plan)return out;
+  if(Array.isArray(plan)){
+    for(let i=0;i<12;i++){
+      const v=plan[i]||{};
+      out[i]={sales:parseInt(v.sales)||0,expense:parseInt(v.expense)||0,labor:parseInt(v.labor)||0,tax:parseInt(v.tax)||0};
+    }
+    return out;
+  }
+  // 旧形式（月の区別なし）は、同じ値を全ての月に適用する
+  const legacy={sales:parseInt(plan.sales)||0,expense:parseInt(plan.expense)||0,labor:parseInt(plan.labor)||0,tax:parseInt(plan.tax)||0};
+  for(let i=0;i<12;i++)out[i]=Object.assign({},legacy);
+  return out;
+}
+
+// 指定した月（0=1月）の計画を取得する
+function planOf(mi){
+  if(!Array.isArray(S.plan))S.plan=normalizePlan(S.plan);
+  return S.plan[mi]||{sales:0,expense:0,labor:0,tax:0};
+}
+
+function mergeState(parsed){
+  const base=JSON.parse(JSON.stringify(defaultState));
+  const s=Object.assign(base,parsed||{},{
+    company:Object.assign({},defaultState.company,(parsed&&parsed.company)||{})
+  });
+  s.plan=normalizePlan(parsed&&parsed.plan);
+  if(!Array.isArray(s.projects))s.projects=[];
+  if(!Array.isArray(s.quotes))s.quotes=[];
+  if(!Array.isArray(s.ledger))s.ledger=[];
+  if(!Array.isArray(s.fixedCosts))s.fixedCosts=[];
+  if(!Array.isArray(s.fiscalYears))s.fiscalYears=[];
+  s.fiscalYears=s.fiscalYears.map(f=>({
+    id:parseInt(f.id)||0,
+    name:String(f.name||''),
+    startMonth:String(f.startMonth||''),
+    endMonth:String(f.endMonth||''),
+    salesTarget:parseInt(f.salesTarget)||0,
+    profitTarget:parseInt(f.profitTarget)||0,
+    active:!!f.active
+  })).filter(f=>f.id&&f.name);
+  if(!s.nextFiscalYearId)s.nextFiscalYearId=Math.max(0,...s.fiscalYears.map(f=>f.id))+1;
+  if(!s.currentFiscalYearId){
+    const a=s.fiscalYears.find(f=>f.active)||s.fiscalYears[0];
+    s.currentFiscalYearId=a?a.id:null;
+  }
+  s.finance=Object.assign({cash:0,loan:0},(parsed&&parsed.finance)||{});
+  s.finance.cash=parseInt(s.finance.cash)||0;
+  s.finance.loan=parseInt(s.finance.loan)||0;
+  if(!s.nextFixedCostId)s.nextFixedCostId=1;
+  return s;
+}
+
+function loadState(){
+  try{
+    const saved=localStorage.getItem(STORAGE_KEY);
+    if(saved)return mergeState(JSON.parse(saved));
+  }catch(e){}
+  return JSON.parse(JSON.stringify(defaultState));
+}
+
+function saveLocal(){
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(S));}catch(e){}
+}
+
+// データを変更したら必ずこれを呼ぶ。localStorageに控えを取り、GASへ書き込む。
+function saveState(){
+  saveLocal();
+  scheduleGasSave();
+}
+
+/* ===== Google Sheets 同期 ========================================== */
+
+let gasSaveTimer=null;
+let gasSaving=false;
+let gasPendingSave=false;
+
+function gasEnabled(){return typeof GAS_URL==='string'&&/^https:\/\/script\.google\.com\//.test(GAS_URL)}
+
+// state: 'off' | 'sync' | 'ok' | 'err'
+function setSyncStatus(state,detail){
+  const ind=document.getElementById('save-indicator');
+  const dot=document.getElementById('gas-dot');
+  const txt=document.getElementById('gas-status');
+  const map={
+    off:{cls:'',icon:'💾',short:'ローカル保存',long:'GAS_URLが未設定です。データはこのブラウザのlocalStorageにのみ保存されます。'},
+    sync:{cls:'sync',icon:'⟳',short:'同期中...',long:'スプレッドシートと同期しています...'},
+    ok:{cls:'ok',icon:'✓',short:'同期済み',long:'スプレッドシートと同期済みです。'},
+    err:{cls:'err',icon:'⚠',short:'同期エラー',long:'スプレッドシートに接続できませんでした。localStorageのデータで動作しています。'}
+  };
+  const m=map[state]||map.off;
+  if(ind){
+    ind.className='save-indicator '+m.cls;
+    ind.innerHTML=m.icon+' <span class="si-text">'+m.short+'</span>';
+    ind.title=m.long+(detail?'\n'+detail:'');
+  }
+  if(dot)dot.className='sync-dot '+m.cls;
+  if(txt)txt.textContent=m.long+(detail?'（'+detail+'）':'');
+}
+
+// GASのウェブアプリはCORSで弾かれることがあるため、失敗したらJSONPで取り直す
+function gasJsonp(url){
+  return new Promise((resolve,reject)=>{
+    const cb='gasCb_'+Date.now()+'_'+Math.floor(Math.random()*10000);
+    const s=document.createElement('script');
+    const timer=setTimeout(()=>{cleanup();reject(new Error('タイムアウトしました'))},20000);
+    function cleanup(){clearTimeout(timer);delete window[cb];if(s.parentNode)s.parentNode.removeChild(s);}
+    window[cb]=d=>{cleanup();resolve(d);};
+    s.onerror=()=>{cleanup();reject(new Error('スクリプトの読み込みに失敗しました'));};
+    s.src=url+(url.indexOf('?')>=0?'&':'?')+'callback='+cb;
+    document.body.appendChild(s);
+  });
+}
+
+async function gasLoadRaw(){
+  const url=GAS_URL+'?action=load';
+  try{
+    const res=await fetch(url,{method:'GET',redirect:'follow'});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    return await res.json();
+  }catch(e){
+    return await gasJsonp(url);
+  }
+}
+
+function isRemoteEmpty(d){
+  if(!d)return true;
+  const n=(d.projects||[]).length+(d.quotes||[]).length+(d.ledger||[]).length;
+  return n===0;
+}
+
+// アプリ起動時にスプレッドシートから読み込む
+async function loadFromGAS(){
+  if(!gasEnabled()){setSyncStatus('off');return;}
+  setSyncStatus('sync');
+  let json;
+  try{
+    json=await gasLoadRaw();
+  }catch(e){
+    setSyncStatus('err',e.message);return;
+  }
+  if(!json||!json.ok){
+    setSyncStatus('err',(json&&json.error)||'応答が不正です');return;
+  }
+  if(isRemoteEmpty(json.data)){
+    // シートがまだ空のときは、手元のデータを初期投入する（消さない）
+    await pushToGAS();
+    refreshAll();
+    return;
+  }
+  S=mergeState(json.data);
+  saveLocal();
+  setSyncStatus('ok');
+  renderFiscalSelects();
+  updatePlanMonthOptions();
+  refreshAll();
+}
+
+function reloadFromGAS(){
+  if(!gasEnabled()){alert('GAS_URL が設定されていません。keiei-kanri.html の先頭にウェブアプリURLを貼り付けてください。');return;}
+  if(!confirm('スプレッドシートの内容を読み込み、画面のデータを置き換えます。よろしいですか？'))return;
+  loadFromGAS();
+}
+
+function scheduleGasSave(){
+  if(!gasEnabled()){setSyncStatus('off');return;}
+  setSyncStatus('sync');
+  clearTimeout(gasSaveTimer);
+  gasSaveTimer=setTimeout(()=>{pushToGAS();},600);
+}
+
+// 現在の全データをスプレッドシートへ書き込む
+async function pushToGAS(manual){
+  if(!gasEnabled()){
+    setSyncStatus('off');
+    if(manual)alert('GAS_URL が設定されていません。keiei-kanri.html の先頭にウェブアプリURLを貼り付けてください。');
+    return;
+  }
+  if(gasSaving){gasPendingSave=true;return;}
+  gasSaving=true;
+  setSyncStatus('sync');
+  try{
+    // Content-Type を text/plain にしてプリフライト(OPTIONS)を回避する
+    const res=await fetch(GAS_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'save',data:S}),
+      redirect:'follow'
+    });
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const json=await res.json();
+    if(!json.ok)throw new Error(json.error||'保存に失敗しました');
+    setSyncStatus('ok');
+  }catch(e){
+    setSyncStatus('err',e.message);
+    if(manual)alert('スプレッドシートへの保存に失敗しました。\n'+e.message);
+  }finally{
+    gasSaving=false;
+    if(gasPendingSave){gasPendingSave=false;pushToGAS();}
+  }
+}
+
+// 表示中のページを描画し直す
+function refreshAll(){
+  const active=document.querySelector('.page.active');
+  const id=active?active.id.replace('page-',''):'dashboard';
+  updateDashboard();
+  if(id==='projects')renderProjects();
+  if(id==='quotes')renderQuotes();
+  if(id==='ledger')renderLedger();
+  if(id==='settings')loadSettingsForm();
+}
+
+function showPage(p,btn){
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  if(btn)btn.classList.add('active');
+  if(p==='dashboard')updateDashboard();
+  if(p==='projects')renderProjects();
+  if(p==='quotes')renderQuotes();
+  if(p==='ledger')initLedgerPage();
+  if(p==='csv')initCsvPage();
+  if(p==='report')initReportPage();
+  if(p==='settings')loadSettingsForm();
+}
+
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')});
+});
+
+/* ===== 収支の区分 =====================================================
+   売上 / 経費系 / 役員報酬 の3グループに分けて集計する。
+   旧データの「経費」「人件費」も読めるように扱いを残してある。
+   =================================================================== */
+const LEDGER_TYPES=['売上','家賃（レンタルオフィス利用料）','通信料','システム利用料','交通費','交際費','役員報酬','その他経費',
+  '社会保険料','住民税（特別徴収）','消費税（納付）','源泉所得税（納付）','法人税・住民税・事業税（納付）','その他税金・公課'];
+const LABOR_TYPES=['役員報酬','人件費'];
+// 税金・社会保険料。経費とは分けて集計し、営業利益の計算には含めない。
+const TAX_TYPES=['社会保険料','住民税（特別徴収）','消費税（納付）','源泉所得税（納付）','法人税・住民税・事業税（納付）','その他税金・公課'];
+
+// 区分を集計グループ（sales / expense / labor）に振り分ける
+function ledgerGroup(type){
+  if(type==='売上')return'sales';
+  if(LABOR_TYPES.indexOf(type)>=0)return'labor';
+  if(TAX_TYPES.indexOf(type)>=0)return'tax';
+  return'expense'; // 経費系と、旧「経費」や未知の区分はまとめて経費に含める
+}
+
+// 指定した月（0=1月）の実績をグループごとに集計する
+function sumLedger(mi){
+  const t={sales:0,expense:0,labor:0,tax:0};
+  S.ledger.forEach(l=>{
+    if(!l.date||new Date(l.date).getMonth()!==mi)return;
+    t[ledgerGroup(l.type)]+=l.amount;
+  });
+  return t;
+}
+
+// 営業利益率の色分け（20%以上=緑 / 10〜19%=アンバー / 9%以下=赤）
+function marginClass(rate){return rate>=20?'green':rate>=10?'amber':'red'}
+function marginColor(rate){return rate>=20?'#1D9E75':rate>=10?'#EF9F27':'#E24B4A'}
+
+/* ===== 月次推移グラフ（Canvasの折れ線） ==============================
+   売上・営業利益（左軸・円）と利益率（右軸・%）を12ヶ月ぶん描く。
+   ライブラリは使わず、色はテーマに合わせてCSS変数から読む。
+   =================================================================== */
+
+const CHART_COLORS={sales:'#378ADD',profit:'#1D9E75',rate:'#EF9F27'};
+let chartSeries=null;   // 描画中のデータ（ツールチップで参照する）
+let chartPoints=null;   // 月ごとのX座標
+
+// 月ごとの売上・営業利益・利益率・有効案件数
+function monthlySeries(){
+  const rows=[];
+  fiscalMonths(dashboardFiscalYear()).forEach(i=>{
+    const t=sumLedger(i);
+    const sales=salesByMonth(i);
+    const profit=sales-t.expense-t.labor;
+    const projects=S.projects.filter(p=>
+      (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,i)).length;
+    rows.push({index:i,month:i+1,sales,profit,rate:sales>0?profit/sales*100:0,projects});
+  });
+  return rows;
+}
+
+function cssVar(name,fallback){
+  const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v||fallback;
+}
+
+function drawMonthlyChart(){
+  const cv=document.getElementById('monthly-chart');
+  if(!cv)return;
+  const rows=chartSeries=monthlySeries();
+  const mi=rows.findIndex(r=>r.index===getMonth());
+
+  const cssW=cv.clientWidth||600, cssH=180;
+  const dpr=window.devicePixelRatio||1;
+  cv.width=Math.round(cssW*dpr);
+  cv.height=Math.round(cssH*dpr);
+  cv.style.height=cssH+'px';
+  const ctx=cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const line=cssVar('--border','#e5e5e5');
+  const muted=cssVar('--text-muted','#9b9b9b');
+  const L=48,R=44,T=14,B=22;
+  const w=cssW-L-R, h=cssH-T-B;
+
+  // 左軸（金額）と右軸（利益率）のスケール
+  const amts=rows.map(r=>r.sales).concat(rows.map(r=>r.profit));
+  let aMax=Math.max(...amts,1), aMin=Math.min(...amts,0);
+  if(aMax===aMin)aMax=aMin+1;
+  const rates=rows.map(r=>r.rate);
+  let rMax=Math.max(30,...rates), rMin=Math.min(0,...rates);
+  if(rMax===rMin)rMax=rMin+1;
+
+  const y=v=>T+h-(v-aMin)/(aMax-aMin)*h;
+  const yr=v=>T+h-(v-rMin)/(rMax-rMin)*h;
+  const span=Math.max(1,rows.length-1);
+  const x=i=>L+(w/span)*i;
+  chartPoints=rows.map((_,i)=>x(i));
+
+  // 目盛りとグリッド
+  ctx.font='10px -apple-system,BlinkMacSystemFont,sans-serif';
+  ctx.strokeStyle=line;ctx.lineWidth=1;
+  for(let g=0;g<=4;g++){
+    const yy=Math.round(T+h/4*g)+0.5;
+    ctx.beginPath();ctx.moveTo(L,yy);ctx.lineTo(L+w,yy);ctx.stroke();
+    const av=aMax-(aMax-aMin)/4*g;
+    const rv=rMax-(rMax-rMin)/4*g;
+    ctx.fillStyle=muted;
+    ctx.textAlign='right';ctx.fillText(fmtMan(av)||'0',L-6,yy+3);
+    ctx.textAlign='left';ctx.fillText(Math.round(rv)+'%',L+w+6,yy+3);
+  }
+  // 0円のライン
+  if(aMin<0){
+    const yz=Math.round(y(0))+0.5;
+    ctx.strokeStyle=muted;ctx.beginPath();ctx.moveTo(L,yz);ctx.lineTo(L+w,yz);ctx.stroke();
+  }
+  ctx.fillStyle=muted;ctx.textAlign='center';
+  rows.forEach((r,i)=>ctx.fillText(r.month,x(i),T+h+15));
+
+  // 折れ線。売上が0の月をまたぐ区間は点線にする。
+  const stroke=(vals,color,mapY)=>{
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineJoin='round';
+    for(let i=0;i<vals.length-1;i++){
+      const zero=rows[i].sales===0||rows[i+1].sales===0;
+      ctx.setLineDash(zero?[4,3]:[]);
+      ctx.beginPath();
+      ctx.moveTo(x(i),mapY(vals[i]));
+      ctx.lineTo(x(i+1),mapY(vals[i+1]));
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    vals.forEach((v,i)=>{
+      const cur=i===mi;
+      ctx.beginPath();
+      ctx.arc(x(i),mapY(v),cur?5:3,0,Math.PI*2);
+      ctx.fillStyle=color;ctx.fill();
+      if(cur){ctx.strokeStyle=cssVar('--bg-primary','#fff');ctx.lineWidth=2;ctx.stroke();}
+    });
+  };
+  stroke(rows.map(r=>r.rate),CHART_COLORS.rate,yr);
+  stroke(rows.map(r=>r.profit),CHART_COLORS.profit,y);
+  stroke(rows.map(r=>r.sales),CHART_COLORS.sales,y);
+}
+
+// マウス位置から一番近い月を探してツールチップを出す
+function chartHover(ev){
+  if(!chartSeries||!chartPoints)return;
+  const cv=document.getElementById('monthly-chart');
+  const tip=document.getElementById('chart-tooltip');
+  const rect=cv.getBoundingClientRect();
+  const mx=ev.clientX-rect.left;
+  let best=0;
+  chartPoints.forEach((px,i)=>{if(Math.abs(px-mx)<Math.abs(chartPoints[best]-mx))best=i;});
+  const r=chartSeries[best];
+  tip.innerHTML=`<div style="font-weight:600;margin-bottom:4px">${r.month}月</div>`
+    +`<div><span style="color:${CHART_COLORS.sales}">●</span> 売上: ${fmt(r.sales)}</div>`
+    +`<div><span style="color:${CHART_COLORS.profit}">●</span> 営業利益: ${fmt(r.profit)}</div>`
+    +`<div><span style="color:${CHART_COLORS.rate}">●</span> 利益率: ${r.sales>0?r.rate.toFixed(1)+'%':'-'}</div>`
+    +`<div style="margin-top:3px;color:var(--text-secondary)">有効案件数: ${r.projects}件</div>`;
+  tip.style.display='block';
+  const tw=tip.offsetWidth;
+  let left=chartPoints[best]+10;
+  if(left+tw>rect.width)left=chartPoints[best]-tw-10;
+  tip.style.left=Math.max(0,left)+'px';
+  tip.style.top='8px';
+}
+
+function chartLeave(){
+  const tip=document.getElementById('chart-tooltip');
+  if(tip)tip.style.display='none';
+}
+
+// 幅が変わったら描き直す
+window.addEventListener('resize',()=>{
+  if(document.getElementById('page-dashboard').classList.contains('active'))drawMonthlyChart();
+});
+
+/* ===== 案件ベースの売上 ==============================================
+   契約済・進行中・完了の案件から、月ごとの売上を計算する。
+     単発（single）  : 開始月のみ金額を計上
+     月次継続（monthly）: 開始月〜終了月まで毎月、金額を計上
+     年次継続（annual）: 開始月〜終了月まで毎月、金額÷12を計上
+   月は「何月か」だけで扱うため、年をまたぐ契約（例 2026-08〜2027-02）は
+   開始から終了まで1ヶ月ずつ進めながら、該当する月に加算していく。
+   =================================================================== */
+
+// monthIndex: 0=1月, 1=2月 … 11=12月
+function calcProjectSalesByMonth(monthIndex){
+  let total=0;
+  S.projects.forEach(p=>{
+    if(p.status!=='契約済'&&p.status!=='進行中'&&p.status!=='完了')return;
+    if(!p.start)return;
+    const start=new Date(p.start);
+    if(isNaN(start.getTime()))return;
+    const amount=p.amount||0;
+    const startAbs=start.getFullYear()*12+start.getMonth();
+
+    // 単発、または終了日が無い案件は開始月だけ計上する
+    const end=p.end?new Date(p.end):null;
+    if(p.contract==='single'||!end||isNaN(end.getTime())){
+      if(start.getMonth()===monthIndex)total+=amount;
+      return;
+    }
+
+    const endAbs=end.getFullYear()*12+end.getMonth();
+    if(endAbs<startAbs)return;
+    const per=p.contract==='annual'?Math.round(amount/12):amount;
+    const last=startAbs+Math.min(endAbs-startAbs,119); // 念のための上限
+    for(let a=startAbs;a<=last;a++){
+      if(a%12===monthIndex)total+=per;
+    }
+  });
+  return total;
+}
+
+/* ===== 案件ページの月フィルター =====================================
+   mi は 0=1月 … 11=12月。null は「全期間」。
+   =================================================================== */
+
+// その案件がその月に売上を生むか
+function projectHasMonth(p,mi){
+  if(mi===null)return true;
+  if(!p.start)return false;
+  const start=new Date(p.start);
+  if(isNaN(start.getTime()))return false;
+  const end=p.end?new Date(p.end):null;
+  // 単発、終了日が無い案件は開始月のみ
+  if(p.contract==='single'||!end||isNaN(end.getTime()))return start.getMonth()===mi;
+  const sa=start.getFullYear()*12+start.getMonth();
+  const ea=end.getFullYear()*12+end.getMonth();
+  if(ea<sa)return false;
+  const last=sa+Math.min(ea-sa,119);
+  for(let a=sa;a<=last;a++)if(a%12===mi)return true;
+  return false;
+}
+
+// 開始月から終了月までの月数（両端を含む）。日付が無い・不正なら1ヶ月とみなす。
+// 例: 2026-04-01〜2027-02-28 → (2027-2026)*12 + (1-3) + 1 = 11ヶ月
+function projectMonthCount(p){
+  if(!p.start||!p.end)return 1;
+  const s=new Date(p.start),e=new Date(p.end);
+  if(isNaN(s.getTime())||isNaN(e.getTime()))return 1;
+  const n=(e.getFullYear()-s.getFullYear())*12+(e.getMonth()-s.getMonth())+1;
+  return n>0?n:1;
+}
+
+// その月に計上される金額。
+//   月別   : 月次継続と単発はその金額、年次継続は12等分
+//   全期間 : 単発と年次継続（年額）はそのまま、月次継続は金額×契約月数
+function projectMonthAmount(p,mi){
+  const amount=p.amount||0;
+  if(mi===null){
+    return p.contract==='monthly'?amount*projectMonthCount(p):amount;
+  }
+  return p.contract==='annual'?Math.round(amount/12):amount;
+}
+
+// 1〜12月の案件売上を合計する（年間累計）
+function calcProjectSalesYear(){
+  let t=0;
+  for(let i=0;i<12;i++)t+=calcProjectSalesByMonth(i);
+  return t;
+}
+
+/* ダッシュボードで使う売上は、案件ベースの売上と
+   収支ページで区分「売上」として入力した金額の合算とする。 */
+
+// monthIndex: 0=1月 … 11=12月
+function salesByMonth(mi){
+  return calcProjectSalesByMonth(mi)+sumLedger(mi).sales;
+}
+
+function salesYearTotal(){
+  return calcProjectSalesYear()+sumLedgerYear().sales;
+}
+
+// 12ヶ月分の売上を配列で返す（月次推移グラフ用）
+function salesSeries(){
+  const a=[];
+  for(let i=0;i<12;i++)a.push(salesByMonth(i));
+  return a;
+}
+
+// 1〜12月すべての実績をグループごとに集計する（年間累計）
+function sumLedgerYear(){
+  const t={sales:0,expense:0,labor:0,tax:0};
+  S.ledger.forEach(l=>{
+    if(!l.date)return;
+    t[ledgerGroup(l.type)]+=l.amount;
+  });
+  return t;
+}
+
+// 1〜12月の計画を合計する（年間計画）
+function planYearTotal(){
+  const t={sales:0,expense:0,labor:0,tax:0};
+  for(let i=0;i<12;i++){
+    const pl=planOf(i);
+    t.sales+=pl.sales;t.expense+=pl.expense;t.labor+=pl.labor;t.tax+=pl.tax||0;
+  }
+  return t;
+}
+
+// グラフ用の万円表記。0は空文字（棒の上に何も出さない）
+function fmtMan(v){
+  if(!v)return'';
+  const man=v/10000;
+  return (Math.abs(man)>=10?Math.round(man):Math.round(man*10)/10)+'万';
+}
+
+// 収支一覧のバッジ（売上=緑 / 役員報酬=アンバー / 経費系=赤）
+function ledgerBadge(type){
+  const g=ledgerGroup(type);
+  const cls=g==='sales'?'badge-green':g==='labor'?'badge-amber':g==='tax'?'badge-purple':'badge-red';
+  return`<span class="badge ${cls}">${type}</span>`;
+}
+
+function fmt(n){return'¥'+Math.round(n||0).toLocaleString('ja-JP')}
+function today(){return new Date().toISOString().split('T')[0]}
+function getMonth(){return parseInt(document.getElementById('month-select').value)}
+function statusBadge(s){
+  const m={商談中:'badge-amber',契約済:'badge-blue',進行中:'badge-green',完了:'badge-gray',失注:'badge-red'};
+  return`<span class="badge ${m[s]||'badge-gray'}">${s}</span>`;
+}
+
+function updateDashboard(){
+  const mi=getMonth();
+  const t=sumLedger(mi);
+  // 売上は「案件ベース + 収支の売上入力」、経費・役員報酬は収支の入力から集計する
+  const sales=salesByMonth(mi),exp=t.expense,lab=t.labor,tax=t.tax;
+  const profit=sales-exp-lab;
+  const margin=sales>0?Math.round(profit/sales*100):0;
+  document.getElementById('d-sales').textContent=fmt(sales);
+  document.getElementById('d-expense').textContent=fmt(exp);
+  document.getElementById('d-labor').textContent=fmt(lab);
+  document.getElementById('d-tax').textContent=fmt(tax);
+  document.getElementById('d-profit').textContent=fmt(profit);
+  document.getElementById('d-profit').className='metric-value '+(profit>=0?'green':'red');
+  document.getElementById('d-margin').textContent='利益率: '+margin+'%';
+
+  // 営業利益率（20%以上=緑 / 10〜19%=アンバー / 9%以下=赤）
+  const rate=sales>0?profit/sales*100:null;
+  const rateEl=document.getElementById('d-margin-rate');
+  rateEl.textContent=rate===null?'-%':rate.toFixed(1)+'%';
+  rateEl.className='metric-value '+(rate===null?'':marginClass(rate));
+
+  // 年間累計（1〜12月の合計）
+  const y=sumLedgerYear();
+  const ySales=salesYearTotal();
+  const yProfit=ySales-y.expense-y.labor;
+  document.getElementById('d-sales-year').textContent='年間累計: '+fmt(ySales);
+  document.getElementById('d-expense-year').textContent='年間累計: '+fmt(y.expense);
+  document.getElementById('d-labor-year').textContent='年間累計: '+fmt(y.labor);
+  document.getElementById('d-tax-year').textContent='年間累計: '+fmt(y.tax);
+  const yRate=ySales>0?yProfit/ySales*100:null;
+  const yRateEl=document.getElementById('d-margin-year');
+  yRateEl.textContent='年間累計: '+(yRate===null?'-%':yRate.toFixed(1)+'%');
+  yRateEl.style.color=yRate===null?'':marginColor(yRate);
+  document.getElementById('d-profit-year').textContent='年間累計: '+fmt(yProfit);
+
+  const pl=planOf(mi);
+  ['sales','expense','labor','tax'].forEach(k=>{
+    const d=({sales:sales,expense:exp,labor:lab,tax:tax})[k]-(pl[k]||0);
+    document.getElementById('d-'+k+'-diff').textContent='計画比: '+(d>=0?'+':'')+fmt(d);
+  });
+  renderDiffList(mi);
+  renderFiscalSummary();
+  drawMonthlyChart();
+  const dp=document.getElementById('dash-projects');
+  const active=S.projects.filter(p=>p.status!=='完了'&&p.status!=='失注');
+  dp.innerHTML=active.slice(0,5).map(p=>
+    `<tr><td><div style="font-weight:500">${p.name}</div><div style="font-size:12px;color:var(--text-secondary)">${p.client||'-'}</div></td><td>${fmt(p.amount)}</td><td>${statusBadge(p.status)}</td><td style="font-size:12px;color:var(--text-secondary)">${p.end}</td></tr>`
+  ).join('');
+  document.getElementById('dash-projects-empty').style.display=active.length===0?'':'none';
+  document.getElementById('dash-active-count').textContent='進行中 '+active.length+'件';
+  renderAlerts();
+}
+
+// 計画差異の表示モード（月間 / 年間）
+let diffMode='month';
+
+function setDiffMode(mode){
+  diffMode=mode;
+  document.getElementById('diff-tab-month').className='btn sm'+(mode==='month'?' primary':'');
+  document.getElementById('diff-tab-year').className='btn sm'+(mode==='year'?' primary':'');
+  updateDashboard();
+}
+
+// mi = 選択中の月（0=1月）。年間モードでは1〜12月の合計で比較する。
+function renderDiffList(mi){
+  const isYear=diffMode==='year';
+  const actual=isYear?sumLedgerYear():sumLedger(mi);
+  const actualSales=isYear?salesYearTotal():salesByMonth(mi);
+  const plan=isYear?planYearTotal():planOf(mi);
+  const diffs=[
+    {label:'売上',actual:actualSales,plan:plan.sales,invert:false},
+    {label:'経費合計',actual:actual.expense,plan:plan.expense,invert:true},
+    {label:'役員報酬',actual:actual.labor,plan:plan.labor,invert:true},
+    {label:'税金・公課',actual:actual.tax,plan:plan.tax||0,invert:true}
+  ];
+  document.getElementById('diff-list').innerHTML=diffs.map(it=>{
+    const pct=it.plan>0?Math.min(100,Math.round(it.actual/it.plan*100)):0;
+    const good=it.invert?(it.actual<=it.plan):(it.actual>=it.plan);
+    const color=good?'#1D9E75':'#E24B4A';
+    return`<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span>${it.label}</span>
+        <span style="color:${color};font-weight:500">${fmt(it.actual)} <span style="font-weight:400;color:var(--text-muted)">/ ${fmt(it.plan)}</span></span>
+      </div>
+      <div class="diff-bar"><div class="diff-fill" style="width:${pct}%;background:${color}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderAlerts(){
+  const el=document.getElementById('renewal-alerts');
+  const now=new Date();
+  const alerts=S.projects.filter(p=>{
+    if(p.contract==='single'||p.status==='完了'||p.status==='失注')return false;
+    const end=new Date(p.end);
+    const days=(end-now)/(1000*60*60*24);
+    return days<=30&&days>0;
+  });
+  if(alerts.length===0){el.innerHTML='<div class="empty-state">更新予定の案件はありません</div>';return;}
+  el.innerHTML=alerts.map(p=>{
+    const days=Math.round((new Date(p.end)-now)/(1000*60*60*24));
+    return`<div class="alert alert-warning">⚠️ <strong>${p.name}</strong>（${p.client}）が <strong>${days}日後</strong> に終了します（${p.end}）<button class="btn sm" style="margin-left:auto" onclick="openRenewModal(${p.id})">🔄 更新</button></div>`;
+  }).join('');
+}
+
+// 案件ページで選択中の月。「全期間」なら null を返す。
+function currentProjectMonth(){
+  const el=document.getElementById('project-month');
+  if(!el||el.value==='')return null;
+  return parseInt(el.value);
+}
+
+function renderProjects(){
+  const tb=document.getElementById('project-list');
+  const mi=currentProjectMonth();
+  // 失注の案件は一覧にも合計にも含めない
+  const list=S.projects.filter(p=>p.status!=='失注'&&projectHasMonth(p,mi));
+
+  // 合計カード。確定売上（契約済・進行中・完了）と見込み（商談中）に分ける。
+  // 失注はどちらにも含めない（listの時点で除外済み）。
+  const confirmed=list.filter(p=>p.status!=='商談中');
+  const pipeline=list.filter(p=>p.status==='商談中');
+  const total=confirmed.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
+  const forecast=pipeline.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
+  document.getElementById('project-total-label').textContent=(mi===null?'全期間':(mi+1)+'月')+'の売上合計';
+  document.getElementById('project-total').textContent=fmt(total);
+  document.getElementById('project-total-sub').textContent='対象: '+confirmed.length+'件（契約済・進行中・完了）';
+  document.getElementById('project-forecast').textContent=fmt(forecast);
+  document.getElementById('project-forecast-sub').textContent='（商談中 '+pipeline.length+'件）';
+
+  if(list.length===0){
+    tb.innerHTML='';
+    const empty=document.getElementById('project-empty');
+    empty.style.display='';
+    empty.textContent=S.projects.length===0
+      ?'案件がありません。「案件追加」から登録してください。'
+      :(mi===null?'表示できる案件がありません。':(mi+1)+'月に売上が発生する案件はありません。（失注は除いています）');
+    return;
+  }
+  document.getElementById('project-empty').style.display='none';
+  tb.innerHTML=list.map(p=>`<tr>
+    <td style="font-weight:500">${p.name}</td>
+    <td style="font-size:12px;color:var(--text-secondary)">${p.client||'-'}</td>
+    <td>${fmt(p.amount)}</td>
+    <td>${statusBadge(p.status)}</td>
+    <td style="font-size:12px"><div>${p.start} 〜 ${p.end}</div><span class="badge badge-gray" style="margin-top:3px">${{single:'単発',monthly:'月次継続',annual:'年次継続'}[p.contract]||p.contract}</span></td>
+    <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+      <button class="btn sm" onclick="openProjectModal(${p.id})">✏️ 編集</button>
+      <button class="btn sm" onclick="openRenewModal(${p.id})" ${p.contract==='single'?'disabled':''}>🔄 更新</button>
+      <button class="btn sm" onclick="quickQuote(${p.id})">📄 見積</button>
+      <button class="btn sm danger" onclick="deleteProject(${p.id})">削除</button>
+    </div></td>
+  </tr>`).join('');
+}
+
+// id を渡すと編集、省略すると新規追加モードでモーダルを開く
+function openProjectModal(id){
+  const p=(id!==undefined&&id!==null)?S.projects.find(x=>x.id===id):null;
+  editProjectId=p?p.id:null;
+  document.getElementById('p-name').value=p?p.name:'';
+  document.getElementById('p-client').value=p?(p.client||''):'';
+  document.getElementById('p-amount').value=p?p.amount:'';
+  document.getElementById('p-status').value=p?p.status:'商談中';
+  document.getElementById('p-start').value=p?(p.start||''):'';
+  document.getElementById('p-end').value=p?(p.end||''):'';
+  document.getElementById('p-contract').value=p?p.contract:'single';
+  document.getElementById('p-memo').value=p?(p.memo||''):'';
+  document.getElementById('modal-project-title').textContent=p?'案件を編集':'案件を追加';
+  document.getElementById('modal-project-submit').textContent=p?'✓ 保存':'+ 追加';
+  openModal('modal-add-project');
+}
+
+function saveProject(){
+  const name=document.getElementById('p-name').value.trim();
+  if(!name){alert('案件名を入力してください');return;}
+  const values={
+    name,
+    client:document.getElementById('p-client').value.trim(),
+    amount:parseInt(document.getElementById('p-amount').value)||0,
+    status:document.getElementById('p-status').value,
+    start:document.getElementById('p-start').value,
+    end:document.getElementById('p-end').value,
+    contract:document.getElementById('p-contract').value,
+    memo:document.getElementById('p-memo').value.trim()
+  };
+  if(editProjectId!==null){
+    const p=S.projects.find(x=>x.id===editProjectId);
+    if(!p){alert('対象の案件が見つかりませんでした');return;}
+    Object.assign(p,values);
+  }else{
+    S.projects.push(Object.assign({id:S.nextProjectId++},values));
+  }
+  editProjectId=null;
+  saveState();closeModal('modal-add-project');refreshAll();
+}
+
+function deleteProject(id){
+  if(!confirm('この案件を削除しますか？'))return;
+  S.projects=S.projects.filter(p=>p.id!==id);saveState();refreshAll();
+}
+
+function openRenewModal(id){
+  const p=S.projects.find(x=>x.id===id);if(!p)return;
+  renewTarget=id;
+  document.getElementById('renew-info').textContent=`案件: ${p.name}（${p.client}）　現在の期間: ${p.start} 〜 ${p.end}`;
+  const end=new Date(p.end);end.setDate(end.getDate()+1);
+  document.getElementById('r-start').value=end.toISOString().split('T')[0];
+  const newEnd=new Date(end);
+  if(p.contract==='monthly')newEnd.setMonth(newEnd.getMonth()+1);else newEnd.setFullYear(newEnd.getFullYear()+1);
+  newEnd.setDate(newEnd.getDate()-1);
+  document.getElementById('r-end').value=newEnd.toISOString().split('T')[0];
+  document.getElementById('r-amount').value=p.amount;
+  openModal('modal-renew-project');
+}
+
+function renewProject(){
+  const p=S.projects.find(x=>x.id===renewTarget);if(!p)return;
+  const ns=document.getElementById('r-start').value;
+  const ne=document.getElementById('r-end').value;
+  const na=parseInt(document.getElementById('r-amount').value)||p.amount;
+  p.start=ns;p.end=ne;p.amount=na;p.status='契約済';
+  const qid=makeDocNumber('見積書');
+  const qdata={id:qid,subject:`${p.name} 更新（${ns}〜${ne}）`,client:(p.client||'')+' 御中',amount:na+Math.round(na*0.1),type:'見積書',date:today(),expire:ne,items:[{name:p.name+'（更新）',qty:1,unit:na,total:na}],note:S.company.note||''};
+  S.quotes.push(qdata);saveState();closeModal('modal-renew-project');
+  currentQuoteData=qdata;showPreviewModal();renderProjects();
+}
+
+// 見積・請求ページで選択中の月。「全期間」なら null。
+function currentQuoteMonth(){
+  const el=document.getElementById('quote-month');
+  if(!el||el.value==='')return null;
+  return parseInt(el.value);
+}
+
+// 種別と選択月で書類を絞り込む（新しいものが上）
+function quotesOfType(type){
+  const mi=currentQuoteMonth();
+  return S.quotes.filter(q=>{
+    if((q.type||'見積書')!==type)return false;
+    if(mi===null)return true;
+    if(!q.date)return false;
+    const d=new Date(q.date);
+    return !isNaN(d.getTime())&&d.getMonth()===mi;
+  }).reverse();
+}
+
+function renderQuotes(){
+  renderQuoteTable('見積書','estimate');
+  renderQuoteTable('請求書','invoice');
+}
+
+function renderQuoteTable(type,prefix){
+  const list=quotesOfType(type);
+  const total=list.reduce((a,q)=>a+(q.amount||0),0);
+  document.getElementById(prefix+'-summary').textContent=
+    list.length+'件　合計: '+fmt(total)+'（税込）';
+
+  const tb=document.getElementById(prefix+'-list');
+  const empty=document.getElementById(prefix+'-empty');
+  if(list.length===0){tb.innerHTML='';empty.style.display='';return;}
+  empty.style.display='none';
+
+  const isInvoice=type==='請求書';
+  const nowYmd=today();
+  tb.innerHTML=list.map(q=>{
+    const due=q.due||q.expire||'';
+    const overdue=isInvoice&&due&&due<nowYmd;   // 支払期限切れ
+    return`<tr>
+      <td style="font-size:12px;color:var(--text-muted);white-space:nowrap">${q.id}</td>
+      <td style="font-weight:500">${q.subject}</td>
+      <td style="font-size:12px">${q.client||''}</td>
+      <td style="white-space:nowrap">${fmt(q.amount)}</td>
+      <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap">${q.date||'-'}</td>
+      ${isInvoice?`<td style="font-size:12px;white-space:nowrap;${overdue?'color:#E24B4A;font-weight:600':'color:var(--text-secondary)'}">${due||'-'}${overdue?' ⚠ 期限超過':''}</td>`:''}
+      <td><div style="display:flex;gap:4px">
+        <button class="btn sm" onclick="previewQuoteById('${q.id}')">👁 表示</button>
+        <button class="btn sm danger" onclick="deleteQuote('${q.id}')">削除</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function switchQuoteTab(name,btn){
+  btn.closest('.tab-group').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('q-estimate').style.display=name==='estimate'?'':'none';
+  document.getElementById('q-invoice').style.display=name==='invoice'?'':'none';
+  document.getElementById('q-upload').style.display=name==='upload'?'':'none';
+}
+
+// 作成モーダルの見出し・項目名を書類の種別に合わせる
+function applyDocTypeLabels(type){
+  currentDocType=type;
+  const inv=type==='請求書';
+  document.getElementById('modal-doc-title').textContent=inv?'請求書を作成':'見積書を作成';
+  document.getElementById('q-date-label').textContent=inv?'請求日':'見積日';
+  document.getElementById('q-expire-label').textContent=inv?'支払期限':'有効期限';
+}
+
+function openCreateQuoteModal(type){
+  applyDocTypeLabels(type||'見積書');
+  currentQuoteItems=[{name:'',qty:1,unit:0,total:0}];
+  ['q-subject','q-client','q-expire'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('q-date').value=today();
+  document.getElementById('q-note').value=S.company.note||'';
+  resetContractFields();
+  renderQuoteItems();openModal('modal-create-quote');
+}
+
+// 契約期間の初期値。当月から3ヶ月（最低契約期間）を入れる。
+function resetContractFields(){
+  const now=new Date();
+  const start=now.getFullYear()*12+now.getMonth();
+  document.getElementById('q-cstart').value=absToYm(start);
+  document.getElementById('q-cend').value=absToYm(start+2);
+  document.getElementById('q-payment').value='毎月末日払い';
+  document.getElementById('q-monthly').checked=true;
+  updateContractHint();
+}
+
+function openCreateInvoiceModal(){
+  openCreateQuoteModal('請求書');
+}
+
+function addQuoteItem(){currentQuoteItems.push({name:'',qty:1,unit:0,total:0});renderQuoteItems();}
+function removeQuoteItem(i){currentQuoteItems.splice(i,1);renderQuoteItems();}
+
+function renderQuoteItems(){
+  const el=document.getElementById('q-items');
+  el.innerHTML=currentQuoteItems.map((it,i)=>
+    `<div style="display:grid;grid-template-columns:2.5fr 0.8fr 1fr 1fr auto;gap:6px;margin-bottom:7px">
+      <input type="text" placeholder="品名・作業内容" value="${it.name}" oninput="currentQuoteItems[${i}].name=this.value">
+      <input type="number" value="${it.qty}" min="1" step="1" oninput="currentQuoteItems[${i}].qty=parseInt(this.value)||1;updateQuoteItemTotal(${i})">
+      <input type="number" value="${it.unit}" placeholder="0" oninput="currentQuoteItems[${i}].unit=parseInt(this.value)||0;updateQuoteItemTotal(${i})">
+      <input type="number" value="${it.total}" readonly>
+      <button class="btn sm danger" onclick="removeQuoteItem(${i})">✕</button>
+    </div>`
+  ).join('');
+  calcQuoteTotal();
+}
+
+function updateQuoteItemTotal(i){
+  currentQuoteItems[i].total=currentQuoteItems[i].qty*currentQuoteItems[i].unit;
+  const inputs=document.getElementById('q-items').querySelectorAll('input[readonly]');
+  if(inputs[i])inputs[i].value=currentQuoteItems[i].total;
+  calcQuoteTotal();
+}
+
+function calcQuoteTotal(){
+  const sub=currentQuoteItems.reduce((a,it)=>a+(it.qty*it.unit),0);
+  const tax=Math.round(sub*0.1);
+  document.getElementById('q-total-display').innerHTML=`小計: ${fmt(sub)}　消費税（10%）: ${fmt(tax)}　<strong>合計: ${fmt(sub+tax)}</strong>`;
+}
+
+function createQuote(){
+  const subject=document.getElementById('q-subject').value.trim();
+  if(!subject){alert('件名を入力してください');return;}
+  const sub=currentQuoteItems.reduce((a,it)=>a+it.qty*it.unit,0);
+  const type=currentDocType||'見積書';
+  const expire=document.getElementById('q-expire').value;
+  const isMonthly=document.getElementById('q-monthly').checked;
+  const contractStart=document.getElementById('q-cstart').value;
+  const contractEnd=document.getElementById('q-cend').value;
+  const nMonths=contractMonths(contractStart,contractEnd);
+  if(isMonthly&&nMonths!==null&&nMonths<3&&
+     !confirm('契約期間が'+nMonths+'ヶ月です。最低契約期間は3ヶ月ですが、このまま作成しますか？'))return;
+  const qdata={
+    id:makeDocNumber(type),
+    subject,
+    client:document.getElementById('q-client').value.trim()||'御中',
+    // 一覧では契約全体の金額が分かるようにする（月額固定なら月額×契約月数）
+    amount:(sub+Math.round(sub*0.1))*((isMonthly&&nMonths)?nMonths:1),
+    type,
+    date:document.getElementById('q-date').value||today(),
+    expire,
+    due:type==='請求書'?expire:'',
+    contractStart,
+    contractEnd,
+    paymentMethod:document.getElementById('q-payment').value,
+    isMonthly,
+    items:currentQuoteItems.map(it=>({...it})),
+    note:document.getElementById('q-note').value.trim()
+  };
+  S.quotes.push(qdata);saveState();currentQuoteData=qdata;
+  closeModal('modal-create-quote');showPreviewModal();renderQuotes();
+}
+
+function quickQuote(pid){
+  const p=S.projects.find(x=>x.id===pid);if(!p)return;
+  applyDocTypeLabels('見積書');
+  resetContractFields();
+  currentQuoteItems=[{name:p.name,qty:1,unit:p.amount,total:p.amount}];
+  document.getElementById('q-subject').value=p.name;
+  document.getElementById('q-client').value=(p.client||'')+' 御中';
+  document.getElementById('q-date').value=today();
+  document.getElementById('q-expire').value='';
+  document.getElementById('q-note').value=S.company.note||'';
+  renderQuoteItems();openModal('modal-create-quote');
+}
+
+function deleteQuote(id){
+  if(!confirm('この書類を削除しますか？'))return;
+  S.quotes=S.quotes.filter(q=>q.id!==id);saveState();renderQuotes();
+}
+
+function previewQuoteById(id){
+  const q=S.quotes.find(x=>x.id===id);if(!q)return;
+  currentQuoteData=q;showPreviewModal();
+}
+
+/* ===== Googleドライブからの経費取込 ==================================
+   専用フォルダ内のPDF・画像をGAS経由でAIに読み取らせ、経費として登録する。
+   Driveの操作もAI呼び出しもGAS側で行う（APIキーをブラウザに置かないため）。
+   ===================================================================== */
+
+let driveFiles=[];    // フォルダ内のファイル一覧
+let driveRows=[];     // 読み取り結果 {fileId,fileName,date,type,desc,amount,error}
+
+// GASへPOSTして応答をそのまま返す（ok判定は呼び出し側で行う）
+async function gasCall(body){
+  if(!gasEnabled())throw new Error('GAS_URL が設定されていません');
+  const res=await fetch(GAS_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify(body),
+    redirect:'follow'
+  });
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  return await res.json();
+}
+
+function driveMsg(html){document.getElementById('drive-msg').innerHTML=html||''}
+
+function openDriveImportModal(){
+  driveFiles=[];driveRows=[];
+  document.getElementById('drive-file-list').innerHTML='';
+  document.getElementById('drive-result').innerHTML='';
+  document.getElementById('drive-extract-btn').style.display='none';
+  document.getElementById('drive-register-btn').style.display='none';
+  driveMsg('');
+  openModal('modal-drive-import');
+}
+
+// フォルダ内のファイル一覧を取得する
+async function driveLoadFiles(){
+  const btn=document.getElementById('drive-load-btn');
+  btn.disabled=true;
+  driveMsg('<div class="alert alert-info"><span class="spinner"></span> フォルダを確認しています...</div>');
+  try{
+    const json=await gasCall({action:'driveList'});
+    if(!json.ok)throw new Error(json.error||'一覧を取得できませんでした');
+    driveFiles=json.files||[];
+  }catch(e){
+    driveMsg(`<div class="alert alert-error">❌ フォルダを確認できませんでした<br><small>${e.message}</small></div>`);
+    btn.disabled=false;return;
+  }
+  btn.disabled=false;
+  renderDriveFileList();
+}
+
+function renderDriveFileList(){
+  const el=document.getElementById('drive-file-list');
+  if(driveFiles.length===0){
+    driveMsg('<div class="alert alert-warning">フォルダにファイルがありません</div>');
+    el.innerHTML='';
+    document.getElementById('drive-extract-btn').style.display='none';
+    return;
+  }
+  const yet=driveFiles.filter(f=>!f.processed).length;
+  driveMsg(`<div class="alert alert-info">${driveFiles.length}件のファイルが見つかりました（未処理 ${yet}件）</div>`);
+  el.innerHTML='<div class="table-wrap"><table><thead><tr>'
+    +'<th style="width:36px"></th><th>ファイル名</th><th>種類</th><th style="text-align:right">サイズ</th><th>状態</th>'
+    +'</tr></thead><tbody>'
+    +driveFiles.map((f,i)=>`<tr>
+      <td><input type="checkbox" class="drive-check" value="${i}" ${f.processed?'':'checked'} style="width:auto"></td>
+      <td style="font-size:12px">${f.name}</td>
+      <td style="font-size:12px;color:var(--text-secondary)">${f.mimeType==='application/pdf'?'PDF':'画像'}</td>
+      <td style="text-align:right;font-size:12px">${Math.max(1,Math.round(f.size/1024))} KB</td>
+      <td>${f.processed?'<span class="badge badge-gray">処理済み</span>':'<span class="badge badge-blue">未処理</span>'}</td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+  document.getElementById('drive-extract-btn').style.display='';
+}
+
+function selectedDriveFiles(){
+  return Array.from(document.querySelectorAll('.drive-check'))
+    .filter(c=>c.checked)
+    .map(c=>driveFiles[parseInt(c.value)]);
+}
+
+// 選択したファイルを1件ずつAIで読み取る
+async function driveExtractSelected(){
+  const files=selectedDriveFiles();
+  if(files.length===0){alert('読み取るファイルを選択してください');return;}
+  const btn=document.getElementById('drive-extract-btn');
+  btn.disabled=true;
+  driveRows=[];
+  for(let i=0;i<files.length;i++){
+    const f=files[i];
+    driveMsg(`<div class="alert alert-info"><span class="spinner"></span> AIで読み取り中... ${i+1}/${files.length}　${f.name}</div>`);
+    let row={fileId:f.id,fileName:f.name,date:'',type:'その他経費',desc:f.name,amount:0,error:''};
+    try{
+      const json=await gasCall({action:'driveExtract',fileId:f.id});
+      if(json.ok&&json.data){
+        row.date=json.data.date||today();
+        row.type=json.data.type||'その他経費';
+        row.desc=json.data.desc||f.name;
+        row.amount=json.data.amount||0;
+      }else{
+        row.error=json.error||'読取失敗';
+      }
+    }catch(e){
+      row.error=e.message;
+    }
+    driveRows.push(row);
+  }
+  btn.disabled=false;
+  renderDriveResult();
+}
+
+function renderDriveResult(){
+  const ng=driveRows.filter(r=>r.error).length;
+  driveMsg(ng===0
+    ? `<div class="alert alert-success">✓ ${driveRows.length}件を読み取りました。内容を確認して登録してください。</div>`
+    : `<div class="alert alert-warning">${driveRows.length}件中 ${ng}件が読取失敗です。手入力で補ってから登録してください。</div>`);
+
+  const opts=t=>LEDGER_TYPES.filter(x=>x!=='売上')
+    .map(x=>`<option ${x===t?'selected':''}>${x}</option>`).join('');
+
+  document.getElementById('drive-result').innerHTML='<div class="table-wrap"><table><thead><tr>'
+    +'<th style="width:36px"></th><th>ファイル</th><th style="min-width:130px">日付</th><th style="min-width:150px">区分</th>'
+    +'<th style="min-width:160px">摘要</th><th style="min-width:110px">金額</th>'
+    +'</tr></thead><tbody>'
+    +driveRows.map((r,i)=>`<tr>
+      <td><input type="checkbox" class="drive-row-check" value="${i}" checked style="width:auto"></td>
+      <td style="font-size:11px;color:var(--text-secondary)">${r.fileName}${r.error?`<br><span class="badge badge-red">読取失敗</span>`:''}</td>
+      <td><input type="date" value="${r.date}" oninput="driveRows[${i}].date=this.value" style="font-size:12px"></td>
+      <td><select oninput="driveRows[${i}].type=this.value" onchange="driveRows[${i}].type=this.value" style="font-size:12px">${opts(r.type)}</select></td>
+      <td><input type="text" value="${escAttr(r.desc)}" oninput="driveRows[${i}].desc=this.value" style="font-size:12px"></td>
+      <td><input type="number" value="${r.amount}" oninput="driveRows[${i}].amount=parseInt(this.value)||0" style="font-size:12px"></td>
+    </tr>`).join('')
+    +'</tbody></table></div>'
+    +(ng>0?`<div style="font-size:11px;color:var(--text-muted);margin-top:8px">読取失敗の行: ${driveRows.filter(r=>r.error).map(r=>r.fileName+'（'+r.error+'）').join(' / ')}</div>`:'');
+
+  document.getElementById('drive-register-btn').style.display='';
+}
+
+// 確認した内容を収支に登録し、元ファイルを「処理済み_」にリネームする
+async function driveRegister(){
+  const idx=Array.from(document.querySelectorAll('.drive-row-check'))
+    .filter(c=>c.checked).map(c=>parseInt(c.value));
+  const rows=idx.map(i=>driveRows[i]).filter(r=>r.date&&r.desc&&r.amount);
+  if(rows.length===0){alert('登録できる行がありません。日付・摘要・金額を入力してください。');return;}
+
+  const btn=document.getElementById('drive-register-btn');
+  btn.disabled=true;
+  rows.forEach(r=>{
+    S.ledger.push({id:S.nextLedgerId++,date:r.date,type:r.type,desc:r.desc,amount:r.amount});
+  });
+  saveState();
+
+  let renamed=0;
+  try{
+    const json=await gasCall({action:'driveProcessed',fileIds:rows.map(r=>r.fileId)});
+    if(json.ok)renamed=json.renamed||0;
+  }catch(e){
+    // リネームに失敗しても収支の登録は済んでいるので、続行して警告だけ出す
+    driveMsg(`<div class="alert alert-warning">収支は登録しましたが、ファイルのリネームに失敗しました（次回も一覧に出ます）<br><small>${e.message}</small></div>`);
+  }
+  btn.disabled=false;
+  closeModal('modal-drive-import');
+  alert(rows.length+'件を収支に登録しました'+(renamed>0?`\n（${renamed}件のファイルを「処理済み_」にリネームしました）`:''));
+  refreshAll();
+}
+
+/* ===== 固定費 =========================================================
+   毎月同額で発生する費用（役員報酬・家賃など）を登録しておき、
+   収支に自動で展開する。展開済みかどうかは ledger の fixedCostId と
+   年月の組み合わせで判定するので、同じ月が二重に入ることはない。
+   ===================================================================== */
+
+let editFixedCostId=null;
+
+// YYYY-MM を「年*12＋月」の通し番号にする。形式が違えば null。
+function ymToAbs(ym){
+  const m=/^(\d{4})-(\d{1,2})$/.exec(String(ym||'').trim());
+  if(!m)return null;
+  const mm=parseInt(m[2],10);
+  if(mm<1||mm>12)return null;
+  return parseInt(m[1],10)*12+(mm-1);
+}
+
+function absToYm(abs){
+  return Math.floor(abs/12)+'-'+String(abs%12+1).padStart(2,'0');
+}
+
+// その年月の月末日を YYYY-MM-DD で返す（固定費はその月の末日で計上する）
+function absToLastDate(abs){
+  const y=Math.floor(abs/12),m=abs%12;
+  const d=new Date(y,m+1,0);
+  return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function ymLabel(ym){
+  const abs=ymToAbs(ym);
+  return abs===null?'':(Math.floor(abs/12)+'年'+(abs%12+1)+'月');
+}
+
+// 有効な固定費を、まだ収支に無い月のぶんだけ追加する。追加した件数を返す。
+function applyFixedCosts(){
+  if(!Array.isArray(S.fixedCosts))S.fixedCosts=[];
+  const now=new Date();
+  const nowAbs=now.getFullYear()*12+now.getMonth();
+
+  // すでに展開済みの「固定費ID@年月」
+  const done={};
+  S.ledger.forEach(l=>{
+    if(!l.fixedCostId||!l.date)return;
+    done[l.fixedCostId+'@'+String(l.date).slice(0,7)]=true;
+  });
+
+  let added=0;
+  S.fixedCosts.forEach(fc=>{
+    if(!fc.enabled)return;
+    const start=ymToAbs(fc.startMonth);
+    if(start===null)return;
+    const end=ymToAbs(fc.endMonth);
+    // 終了月が未設定なら今月まで。未来の月は先に作らない。
+    const last=Math.min(end===null?nowAbs:end,nowAbs);
+    for(let a=start;a<=Math.min(last,start+119);a++){
+      const key=fc.id+'@'+absToYm(a);
+      if(done[key])continue;
+      S.ledger.push({
+        id:S.nextLedgerId++,
+        date:absToLastDate(a),
+        type:fc.type,
+        desc:fc.desc,
+        amount:fc.amount,
+        fixedCostId:fc.id
+      });
+      done[key]=true;
+      added++;
+    }
+  });
+  if(added>0)saveState();
+  return added;
+}
+
+// 収支管理ページを開いたときの処理（固定費を反映してから描画する）
+function initLedgerPage(){
+  applyFixedCosts();
+  renderLedger();
+}
+
+function applyFixedCostsManually(){
+  const n=applyFixedCosts();
+  renderFixedCostList();
+  refreshAll();
+  alert(n>0?n+'件の収支を追加しました':'追加する収支はありませんでした（すべて反映済みです）');
+}
+
+function openFixedCostsModal(){
+  renderFixedCostList();
+  openModal('modal-fixed-costs');
+}
+
+function renderFixedCostList(){
+  const el=document.getElementById('fixed-cost-list');
+  if(!Array.isArray(S.fixedCosts)||S.fixedCosts.length===0){
+    el.innerHTML='<div class="empty-state">固定費が登録されていません。「+ 固定費を追加」から登録してください。</div>';
+    return;
+  }
+  el.innerHTML='<div class="table-wrap"><table><thead><tr>'
+    +'<th>区分</th><th>摘要</th><th style="text-align:right">金額</th><th>期間</th><th>有効</th><th>操作</th>'
+    +'</tr></thead><tbody>'
+    +S.fixedCosts.map(fc=>`<tr>
+      <td>${ledgerBadge(fc.type)}</td>
+      <td style="font-weight:500">${fc.desc}</td>
+      <td style="text-align:right">${fmt(fc.amount)}</td>
+      <td style="font-size:12px;white-space:nowrap">${ymLabel(fc.startMonth)} 〜 ${fc.endMonth?ymLabel(fc.endMonth):'無期限'}</td>
+      <td><label style="display:flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap"><input type="checkbox" ${fc.enabled?'checked':''} onchange="toggleFixedCost(${fc.id},this.checked)" style="width:auto"> ${fc.enabled?'有効':'無効'}</label></td>
+      <td><div style="display:flex;gap:4px">
+        <button class="btn sm" onclick="openFixedCostForm(${fc.id})">✏️ 編集</button>
+        <button class="btn sm danger" onclick="deleteFixedCost(${fc.id})">削除</button>
+      </div></td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+}
+
+function toggleFixedCost(id,checked){
+  const fc=S.fixedCosts.find(x=>x.id===id);
+  if(!fc)return;
+  fc.enabled=checked;
+  saveState();
+  renderFixedCostList();
+}
+
+// id を渡すと編集、省略すると新規登録モードでフォームを開く
+function openFixedCostForm(id){
+  const fc=(id!==undefined&&id!==null)?S.fixedCosts.find(x=>x.id===id):null;
+  editFixedCostId=fc?fc.id:null;
+  const now=new Date();
+  const nowYm=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('fc-type').value=fc?fc.type:LEDGER_TYPES[1];
+  document.getElementById('fc-desc').value=fc?fc.desc:'';
+  document.getElementById('fc-amount').value=fc?fc.amount:'';
+  document.getElementById('fc-start').value=fc?fc.startMonth:nowYm;
+  document.getElementById('fc-end').value=fc?(fc.endMonth||''):'';
+  document.getElementById('fc-enabled').checked=fc?!!fc.enabled:true;
+  document.getElementById('fc-title').textContent=fc?'固定費を編集':'固定費を追加';
+  document.getElementById('fc-submit').textContent=fc?'✓ 保存':'+ 追加';
+  openModal('modal-fixed-cost-form');
+}
+
+function saveFixedCost(){
+  const type=document.getElementById('fc-type').value;
+  const desc=document.getElementById('fc-desc').value.trim();
+  const amount=parseInt(document.getElementById('fc-amount').value)||0;
+  const startMonth=document.getElementById('fc-start').value;
+  const endMonth=document.getElementById('fc-end').value;
+  const enabled=document.getElementById('fc-enabled').checked;
+  if(!desc||!amount||!startMonth){alert('摘要・金額・開始月を入力してください');return;}
+  if(ymToAbs(startMonth)===null){alert('開始月の形式が正しくありません');return;}
+  if(endMonth&&ymToAbs(endMonth)<ymToAbs(startMonth)){alert('終了月は開始月と同じか、それより後にしてください');return;}
+
+  const values={type,desc,amount,startMonth,endMonth,enabled};
+  if(editFixedCostId!==null){
+    const fc=S.fixedCosts.find(x=>x.id===editFixedCostId);
+    if(!fc){alert('対象の固定費が見つかりませんでした');return;}
+    Object.assign(fc,values);
+  }else{
+    S.fixedCosts.push(Object.assign({id:S.nextFixedCostId++},values));
+  }
+  editFixedCostId=null;
+  saveState();
+  closeModal('modal-fixed-cost-form');
+  applyFixedCosts();
+  renderFixedCostList();
+  refreshAll();
+}
+
+function deleteFixedCost(id){
+  if(!confirm('この固定費を削除しますか？\n（すでに収支に追加された分はそのまま残ります）'))return;
+  S.fixedCosts=S.fixedCosts.filter(fc=>fc.id!==id);
+  saveState();
+  renderFixedCostList();
+}
+
+/* ===== 期（会計年度） ===============================================
+   このアプリの集計は「何月か」だけで行うため、期の範囲は月インデックス
+   （0=1月）の並びとして扱う。例: 2026-03〜2027-02 なら [2,3,...,11,0,1]。
+   =================================================================== */
+
+let editFiscalId=null;
+
+function fiscalList(){
+  if(!Array.isArray(S.fiscalYears))S.fiscalYears=[];
+  return S.fiscalYears;
+}
+
+function fiscalById(id){
+  return fiscalList().find(f=>f.id===id)||null;
+}
+
+// アクティブな期。無ければ先頭を使う。
+function activeFiscalYear(){
+  const list=fiscalList();
+  if(list.length===0)return null;
+  return fiscalById(S.currentFiscalYearId)||list.find(f=>f.active)||list[0];
+}
+
+// ダッシュボードで選択中の期
+function dashboardFiscalYear(){
+  const el=document.getElementById('fiscal-select');
+  if(el&&el.value)return fiscalById(parseInt(el.value))||activeFiscalYear();
+  return activeFiscalYear();
+}
+
+// 期に含まれる月インデックスを、期の並び順で返す
+function fiscalMonths(fy){
+  const all=[0,1,2,3,4,5,6,7,8,9,10,11];
+  if(!fy)return all;
+  const s=ymToAbs(fy.startMonth),e=ymToAbs(fy.endMonth);
+  if(s===null||e===null||e<s)return all;
+  const out=[];
+  for(let a=s;a<=Math.min(e,s+23);a++)out.push(a%12);
+  return out;
+}
+
+function fiscalLabel(fy){
+  if(!fy)return'';
+  const s=ymToAbs(fy.startMonth),e=ymToAbs(fy.endMonth);
+  if(s===null||e===null)return fy.name||'';
+  return`${Math.floor(s/12)}年${s%12+1}月〜${Math.floor(e/12)}年${e%12+1}月`;
+}
+
+// 残り月数（当月を含む）
+function fiscalRemaining(fy){
+  const e=fy?ymToAbs(fy.endMonth):null;
+  if(e===null)return 0;
+  const now=new Date();
+  return Math.max(0,e-(now.getFullYear()*12+now.getMonth())+1);
+}
+
+// 期の実績。uptoIndex を渡すと期初からその月までの累計になる。
+function fiscalTotals(fy,uptoIndex){
+  const months=fiscalMonths(fy);
+  let list=months;
+  if(uptoIndex!==undefined&&uptoIndex!==null){
+    const at=months.indexOf(uptoIndex);
+    list=at>=0?months.slice(0,at+1):months;
+  }
+  let sales=0,expense=0,labor=0,tax=0;
+  list.forEach(m=>{
+    const t=sumLedger(m);
+    sales+=salesByMonth(m);expense+=t.expense;labor+=t.labor;tax+=t.tax;
+  });
+  return{months:list,sales,expense,labor,tax,profit:sales-expense-labor};
+}
+
+// 期の月次計画の合計
+function fiscalPlanTotals(fy,uptoIndex){
+  const months=fiscalMonths(fy);
+  let list=months;
+  if(uptoIndex!==undefined&&uptoIndex!==null){
+    const at=months.indexOf(uptoIndex);
+    list=at>=0?months.slice(0,at+1):months;
+  }
+  let sales=0,expense=0,labor=0,tax=0;
+  list.forEach(m=>{
+    const p=planOf(m);
+    sales+=p.sales;expense+=p.expense;labor+=p.labor;tax+=p.tax||0;
+  });
+  return{sales,expense,labor,tax,profit:sales-expense-labor};
+}
+
+function pct(actual,target){
+  if(!target)return null;
+  return Math.round(actual/target*1000)/10;
+}
+
+function progressBar(rate){
+  const r=rate===null?0:Math.max(0,Math.min(100,rate));
+  const color=rate===null?'#9b9b9b':rate>=100?'#1D9E75':rate>=70?'#EF9F27':'#E24B4A';
+  return`<div class="diff-bar"><div class="diff-fill" style="width:${r}%;background:${color}"></div></div>`;
+}
+
+function rateText(rate){return rate===null?'-':rate.toFixed(1)+'%'}
+
+/* ---- ダッシュボードの期間サマリー ---- */
+
+function renderFiscalSummary(){
+  const fy=dashboardFiscalYear();
+  const card=document.getElementById('fiscal-summary');
+  if(!fy){
+    card.innerHTML='<div class="empty-state">期が登録されていません。設定ページの「期の管理」から追加してください。</div>';
+    return;
+  }
+  const act=fiscalTotals(fy);
+  const plan=fiscalPlanTotals(fy);
+  const salesRate=pct(act.sales,fy.salesTarget);
+  const profitRate=pct(act.profit,fy.profitTarget);
+  const targetMargin=fy.salesTarget>0?fy.profitTarget/fy.salesTarget*100:null;
+  const actualMargin=act.sales>0?act.profit/act.sales*100:null;
+  const planSalesRate=pct(act.sales,plan.sales);
+  const planProfitRate=pct(act.profit,plan.profit);
+
+  const row=(label,target,actual,rate,extra)=>`<tr>
+    <td style="padding:9px 12px;border-bottom:0.5px solid var(--border)">${label}</td>
+    <td style="padding:9px 12px;border-bottom:0.5px solid var(--border);text-align:right;color:var(--text-secondary)">${target}</td>
+    <td style="padding:9px 12px;border-bottom:0.5px solid var(--border);text-align:right;font-weight:600">${actual}</td>
+    <td style="padding:9px 12px;border-bottom:0.5px solid var(--border);text-align:right;min-width:120px">
+      ${rate===null?'-':`<div style="font-weight:600;color:${rate>=100?'#1D9E75':rate>=70?'#EF9F27':'#E24B4A'}">${rateText(rate)}</div>${progressBar(rate)}`}
+    </td>
+  </tr>`;
+
+  card.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600">${fy.name} 進捗<span style="font-size:12px;font-weight:400;color:var(--text-secondary)">（${fiscalLabel(fy)}）</span></div>
+      <span class="badge badge-blue">残り ${fiscalRemaining(fy)}ヶ月（当月含む）</span>
+    </div>
+    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr>
+        <th style="padding:8px 12px;text-align:left;border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text-secondary)">項目</th>
+        <th style="padding:8px 12px;text-align:right;border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text-secondary)">目標</th>
+        <th style="padding:8px 12px;text-align:right;border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text-secondary)">実績</th>
+        <th style="padding:8px 12px;text-align:right;border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text-secondary)">達成率</th>
+      </tr></thead>
+      <tbody>
+        ${row('売上',fmt(fy.salesTarget),fmt(act.sales),salesRate)}
+        ${row('営業利益',fmt(fy.profitTarget),fmt(act.profit),profitRate)}
+        ${row('利益率',targetMargin===null?'-':targetMargin.toFixed(1)+'%',actualMargin===null?'-':actualMargin.toFixed(1)+'%',null)}
+        ${row('月次計画合計（売上）',fmt(plan.sales),fmt(act.sales),planSalesRate)}
+        ${row('月次計画合計（営業利益）',fmt(plan.profit),fmt(act.profit),planProfitRate)}
+      </tbody>
+    </table></div>`;
+}
+
+/* ---- 期の選択セレクト ---- */
+
+function renderFiscalSelects(){
+  const list=fiscalList();
+  const sel=document.getElementById('fiscal-select');
+  if(sel){
+    const keep=sel.value;
+    sel.innerHTML=list.map(f=>`<option value="${f.id}">${f.name}</option>`).join('');
+    const act=activeFiscalYear();
+    sel.value=list.some(f=>String(f.id)===keep)?keep:(act?String(act.id):'');
+  }
+}
+
+/* ---- 設定ページの期の管理 ---- */
+
+function renderFiscalList(){
+  const el=document.getElementById('fiscal-list');
+  if(!el)return;
+  const list=fiscalList();
+  const act=activeFiscalYear();
+  document.getElementById('fiscal-current').textContent=
+    act?`${act.name}：${fiscalLabel(act)}`:'期が登録されていません';
+  if(list.length===0){
+    el.innerHTML='<div class="empty-state">期が登録されていません。</div>';
+    return;
+  }
+  el.innerHTML='<div class="table-wrap"><table><thead><tr>'
+    +'<th>期</th><th>期間</th><th style="text-align:right">売上目標</th><th style="text-align:right">利益目標</th><th>状態</th><th>操作</th>'
+    +'</tr></thead><tbody>'
+    +list.map(f=>`<tr>
+      <td style="font-weight:500">${f.name}</td>
+      <td style="font-size:12px;white-space:nowrap">${fiscalLabel(f)}</td>
+      <td style="text-align:right">${fmt(f.salesTarget)}</td>
+      <td style="text-align:right">${fmt(f.profitTarget)}</td>
+      <td>${act&&act.id===f.id?'<span class="badge badge-green">アクティブ</span>':''}</td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+        ${act&&act.id===f.id?'':`<button class="btn sm" onclick="activateFiscal(${f.id})">この期をアクティブにする</button>`}
+        <button class="btn sm" onclick="openFiscalForm(${f.id})">✏️ 編集</button>
+        <button class="btn sm danger" onclick="deleteFiscal(${f.id})">削除</button>
+      </div></td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+}
+
+function activateFiscal(id){
+  const fy=fiscalById(id);
+  if(!fy)return;
+  fiscalList().forEach(f=>{f.active=f.id===id});
+  S.currentFiscalYearId=id;
+  saveState();
+  renderFiscalList();renderFiscalSelects();updatePlanMonthOptions();refreshAll();
+}
+
+function openFiscalForm(id){
+  const fy=(id!==undefined&&id!==null)?fiscalById(id):null;
+  editFiscalId=fy?fy.id:null;
+  document.getElementById('fy-name').value=fy?fy.name:'第'+(fiscalList().length+1)+'期';
+  document.getElementById('fy-start').value=fy?fy.startMonth:'';
+  document.getElementById('fy-end').value=fy?fy.endMonth:'';
+  document.getElementById('fy-sales').value=fy?fy.salesTarget:'';
+  document.getElementById('fy-profit').value=fy?fy.profitTarget:'';
+  document.getElementById('fy-title').textContent=fy?'期を編集':'期を追加';
+  document.getElementById('fy-submit').textContent=fy?'✓ 保存':'+ 追加';
+  openModal('modal-fiscal');
+}
+
+function saveFiscal(){
+  const name=document.getElementById('fy-name').value.trim();
+  const startMonth=document.getElementById('fy-start').value;
+  const endMonth=document.getElementById('fy-end').value;
+  const salesTarget=parseInt(document.getElementById('fy-sales').value)||0;
+  const profitTarget=parseInt(document.getElementById('fy-profit').value)||0;
+  if(!name||!startMonth||!endMonth){alert('期の名前・開始月・終了月を入力してください');return;}
+  if(ymToAbs(endMonth)<ymToAbs(startMonth)){alert('終了月は開始月と同じか、それより後にしてください');return;}
+
+  const values={name,startMonth,endMonth,salesTarget,profitTarget};
+  if(editFiscalId!==null){
+    const fy=fiscalById(editFiscalId);
+    if(!fy){alert('対象の期が見つかりませんでした');return;}
+    Object.assign(fy,values);
+  }else{
+    const first=fiscalList().length===0;
+    fiscalList().push(Object.assign({id:S.nextFiscalYearId++,active:first},values));
+    if(first)S.currentFiscalYearId=S.nextFiscalYearId-1;
+  }
+  editFiscalId=null;
+  saveState();closeModal('modal-fiscal');
+  renderFiscalList();renderFiscalSelects();updatePlanMonthOptions();refreshAll();
+}
+
+function deleteFiscal(id){
+  if(!confirm('この期を削除しますか？（収支や案件のデータは消えません）'))return;
+  S.fiscalYears=fiscalList().filter(f=>f.id!==id);
+  if(S.currentFiscalYearId===id){
+    const first=fiscalList()[0];
+    S.currentFiscalYearId=first?first.id:null;
+    if(first)first.active=true;
+  }
+  saveState();
+  renderFiscalList();renderFiscalSelects();updatePlanMonthOptions();refreshAll();
+}
+
+// 月次計画の対象月セレクトを、アクティブな期の並びに合わせる
+function updatePlanMonthOptions(){
+  const sel=document.getElementById('plan-month');
+  if(!sel)return;
+  const keep=sel.value;
+  const months=fiscalMonths(activeFiscalYear());
+  sel.innerHTML=months.map(m=>`<option value="${m}">${m+1}月</option>`).join('');
+  if(months.map(String).indexOf(keep)>=0)sel.value=keep;
+  else sel.value=String(months[0]);
+}
+
+/* ===== 融資力診断 =====================================================
+   アプリ内のデータから、融資審査でよく見られる5項目を採点して表示する。
+   AIによるアドバイスはGAS経由で取得する（APIキーをブラウザに置かないため）。
+   ===================================================================== */
+
+// 直近nヶ月の月インデックス（0=1月）。年をまたぐ場合は12で折り返す。
+function recentMonths(n){
+  const c=new Date().getMonth();
+  const a=[];
+  for(let i=n-1;i>=0;i--)a.push((c-i+12)%12);
+  return a;
+}
+
+// その月の営業利益
+function profitOfMonth(mi){
+  const t=sumLedger(mi);
+  return salesByMonth(mi)-t.expense-t.labor;
+}
+
+// その月の「安定売上」＝継続契約（月次・年次）から生まれる金額
+function recurringSalesOfMonth(mi){
+  let total=0;
+  S.projects.forEach(p=>{
+    if(p.status!=='契約済'&&p.status!=='進行中'&&p.status!=='完了')return;
+    if(p.contract!=='monthly'&&p.contract!=='annual')return;
+    if(!projectHasMonth(p,mi))return;
+    total+=projectMonthAmount(p,mi);
+  });
+  return total;
+}
+
+// 診断に使う数字をまとめて作る
+function loanMetrics(){
+  const mi=new Date().getMonth();
+  const months=recentMonths(3);
+  const sales3=months.map(m=>salesByMonth(m));
+  const profit3=months.map(m=>profitOfMonth(m));
+  const avgSales=Math.round(sales3.reduce((a,b)=>a+b,0)/months.length);
+  const avgProfit=Math.round(profit3.reduce((a,b)=>a+b,0)/months.length);
+  const recurring=recurringSalesOfMonth(mi);
+  const monthSales=salesByMonth(mi);
+
+  // 計画の入力状況と、計画に対する売上の乖離率
+  let plannedMonths=0;
+  for(let i=0;i<12;i++){
+    const p=planOf(i);
+    if(p.sales||p.expense||p.labor)plannedMonths++;
+  }
+  const gaps=[];
+  months.forEach(m=>{
+    const p=planOf(m);
+    if(p.sales>0)gaps.push(Math.abs(salesByMonth(m)-p.sales)/p.sales);
+  });
+  const gapRate=gaps.length?gaps.reduce((a,b)=>a+b,0)/gaps.length:null;
+
+  const fin=S.finance||{cash:0,loan:0};
+  return {
+    monthIndex:mi,
+    months,
+    avgSales,
+    avgProfit,
+    marginRate:avgSales>0?Math.round(avgProfit/avgSales*100):0,
+    monthSales,
+    recurring,
+    recurringRate:monthSales>0?Math.round(recurring/monthSales*100):0,
+    yearSales:salesYearTotal(),
+    cash:fin.cash||0,
+    loan:fin.loan||0,
+    cashMonths:avgSales>0?Math.round((fin.cash||0)/avgSales*10)/10:0,
+    plannedMonths,
+    gapRate
+  };
+}
+
+// 5項目の採点（各20点・合計100点）
+function loanScores(m){
+  // ①売上の継続性
+  const r=m.recurringRate;
+  const s1=r>=70?20:r>=50?16:r>=30?12:r>0?8:2;
+  // ②現預金水準（月商の何ヶ月分か）
+  const cm=m.cashMonths;
+  const s2=cm>=6?20:cm>=3?16:cm>=2?12:cm>=1?8:cm>0?4:0;
+  // ③収益性（営業利益率）
+  const mg=m.marginRate;
+  const s3=mg>=20?20:mg>=10?16:mg>=5?12:mg>0?8:2;
+  // ④借入状況（年商に対する借入残高の比率。少ないほど余力がある）
+  const lev=m.yearSales>0?m.loan/m.yearSales:(m.loan>0?2:0);
+  const s4=m.loan<=0?20:lev<=0.3?18:lev<=0.5?14:lev<=1?10:5;
+  // ⑤事業計画の精度（入力済み月数12点＋計画との乖離8点）
+  const sPlan=Math.round(m.plannedMonths/12*12);
+  const g=m.gapRate;
+  const sGap=g===null?0:(g<=0.1?8:g<=0.2?6:g<=0.3?4:2);
+  const s5=sPlan+sGap;
+
+  return [
+    {key:'sales',label:'売上の継続性',score:s1},
+    {key:'cash',label:'現預金水準',score:s2},
+    {key:'profit',label:'収益性',score:s3},
+    {key:'loan',label:'借入状況',score:s4},
+    {key:'plan',label:'事業計画の精度',score:s5}
+  ];
+}
+
+function scoreColor(pct){return pct>=80?'#1D9E75':pct>=60?'#EF9F27':'#E24B4A'}
+
+function scoreBadge(score){
+  if(score>=16)return'<span class="badge badge-green">◎良好</span>';
+  if(score>=12)return'<span class="badge badge-amber">○普通</span>';
+  return'<span class="badge badge-red">△要改善</span>';
+}
+
+// 5項目のレーダーチャート（SVG）
+function loanRadar(items){
+  const cx=125,cy=120,R=88;
+  const pt=(i,ratio)=>{
+    const a=(-90+i*72)*Math.PI/180;
+    return[cx+Math.cos(a)*R*ratio,cy+Math.sin(a)*R*ratio];
+  };
+  const poly=ratio=>items.map((_,i)=>pt(i,ratio).map(Math.round).join(',')).join(' ');
+  const grid=[0.25,0.5,0.75,1]
+    .map(r=>`<polygon points="${poly(r)}" fill="none" stroke="var(--border)" stroke-width="1"/>`).join('');
+  const axes=items.map((_,i)=>{
+    const[x,y]=pt(i,1);
+    return`<line x1="${cx}" y1="${cy}" x2="${Math.round(x)}" y2="${Math.round(y)}" stroke="var(--border)" stroke-width="1"/>`;
+  }).join('');
+  const shape=items.map((it,i)=>pt(i,Math.max(0.04,it.score/20)).map(Math.round).join(',')).join(' ');
+  const labels=items.map((it,i)=>{
+    const[x,y]=pt(i,1.24);
+    const anchor=i===0?'middle':(x<cx?'end':'start');
+    return`<text x="${Math.round(x)}" y="${Math.round(y)+4}" text-anchor="${anchor}" font-size="10" fill="var(--text-secondary)">${it.label}</text>`;
+  }).join('');
+  return`<svg viewBox="0 0 250 245" style="width:100%;max-width:250px;height:auto">
+    ${grid}${axes}
+    <polygon points="${shape}" fill="rgba(55,138,221,0.28)" stroke="#378ADD" stroke-width="2"/>
+    ${labels}
+  </svg>`;
+}
+
+function loanCard(title,badge,rows,comment){
+  return`<div class="card">
+    <div class="card-header"><span class="card-title">${title}</span>${badge}</div>
+    <div class="metric-grid" style="margin-bottom:12px">${rows}</div>
+    <div style="font-size:13px;line-height:1.8">${comment}</div>
+  </div>`;
+}
+
+function loanStat(label,value,sub,color){
+  return`<div class="metric-card">
+    <div class="metric-label">${label}</div>
+    <div class="metric-value" style="font-size:20px;${color?'color:'+color:''}">${value}</div>
+    ${sub?`<div class="metric-sub">${sub}</div>`:''}
+  </div>`;
+}
+
+function generateLoanReport(){
+  const m=loanMetrics();
+  const items=loanScores(m);
+  const total=items.reduce((a,it)=>a+it.score,0);
+  const color=scoreColor(total);
+  const by={};items.forEach(it=>by[it.key]=it.score);
+
+  // ①売上の継続性
+  const c1=m.recurringRate>=70
+    ?'継続契約の比率が高く、売上の見通しが立てやすい状態です。審査でも安定性を評価されやすい構成です。'
+    :m.recurringRate>=30
+    ?'継続契約はあるものの、単発案件への依存も残ります。月次契約を増やすと安定性の評価が上がります。'
+    :'単発案件が中心で、月ごとの売上が読みにくい状態です。まずは月次継続の契約を1〜2件つくることを優先しましょう。';
+  const card1=loanCard('① 売上の継続性',scoreBadge(by.sales),
+    loanStat('安定売上（今月の継続契約）',fmt(m.recurring))
+    +loanStat('月商（直近3ヶ月平均）',fmt(m.avgSales))
+    +loanStat('継続案件比率',m.recurringRate+'%')
+    +loanStat('融資目安額',fmt(m.avgSales*3)+' 〜 '+fmt(m.avgSales*4),'月商の3〜4倍'),
+    c1);
+
+  // ②現預金
+  const c2=m.cashMonths>=6
+    ?'月商の6ヶ月分以上の現預金があり、資金繰りの安全度は高い水準です。'
+    :m.cashMonths>=3
+    ?'月商の3ヶ月分以上を確保できています。もう一段積み増せると評価が安定します。'
+    :m.cash>0
+    ?'現預金が月商の3ヶ月分を下回っています。手元資金の厚みは審査で重視されるため、増強を優先しましょう。'
+    :'現預金残高が未入力です。設定ページの「財務情報」に入力すると診断精度が上がります。';
+  const card2=loanCard('② 現預金',scoreBadge(by.cash),
+    loanStat('現預金残高',fmt(m.cash))
+    +loanStat('月商の何ヶ月分か',m.cashMonths+'ヶ月分')
+    +loanStat('融資目安額',fmt(m.cash*2)+' 〜 '+fmt(m.cash*3),'現預金の2〜3倍'),
+    c2);
+
+  // ③収益性
+  const c3=m.avgProfit<=0
+    ?'直近3ヶ月の平均が赤字です。まずは単月黒字化が最優先です。黒字化の見通しを示す資料を用意しましょう。'
+    :m.marginRate>=10
+    ?'安定して黒字を確保できています。利益率も十分で、返済原資を説明しやすい状態です。'
+    :'黒字は確保していますが利益率は高くありません。経費の見直しか単価の改善で利益率を上げたいところです。';
+  const card3=loanCard('③ 収益性',scoreBadge(by.profit),
+    loanStat('営業利益（直近3ヶ月平均）',fmt(m.avgProfit),'',m.avgProfit>=0?'#1D9E75':'#E24B4A')
+    +loanStat('営業利益率',m.marginRate+'%')
+    +loanStat('判定',m.avgProfit>=0?'黒字':'赤字','',m.avgProfit>=0?'#1D9E75':'#E24B4A'),
+    c3);
+
+  // ④借入・個人ローン状況
+  const lev=m.yearSales>0?Math.round(m.loan/m.yearSales*100):0;
+  const c4=m.loan<=0
+    ?'借入残高はありません。返済負担がない一方で、金融機関との取引実績も無い状態です。少額でも実績をつくると次の調達がしやすくなります。'
+    :lev<=30
+    ?'年商に対する借入残高は軽く、追加調達の余力があります。'
+    :lev<=100
+    ?'借入残高が年商の一定割合を占めています。返済計画を明確に示せるようにしておきましょう。'
+    :'年商を超える借入残高があります。まずは返済実績を積み、既存借入の条件見直しも検討しましょう。';
+  const card4=loanCard('④ 借入・個人ローン状況',scoreBadge(by.loan),
+    loanStat('既存借入残高',fmt(m.loan))
+    +loanStat('年商に対する比率',m.yearSales>0?lev+'%':'-')
+    +loanStat('年商（案件＋収支）',fmt(m.yearSales)),
+    c4);
+
+  // ⑤事業計画の精度
+  const gapText=m.gapRate===null?'計画未入力':Math.round(m.gapRate*100)+'%';
+  const c5=m.plannedMonths===0
+    ?'月次計画が未入力です。収支管理の「計画編集」から入力すると、計画と実績の比較を示せるようになります。'
+    :m.gapRate===null
+    ?'計画は入力済みですが、直近3ヶ月の売上計画が0のため乖離を計算できません。'
+    :m.gapRate<=0.2
+    ?'計画と実績の乖離が小さく、見通しの精度が高い状態です。審査でも計画の信頼性を評価されやすくなります。'
+    :'計画と実績の乖離が大きめです。計画値を実態に合わせて見直すと、説明力のある資料になります。';
+  const card5=loanCard('⑤ 事業計画の精度',scoreBadge(by.plan),
+    loanStat('計画入力済み',m.plannedMonths+' / 12ヶ月')
+    +loanStat('計画との乖離率（売上・直近3ヶ月）',gapText),
+    c5);
+
+  document.getElementById('loan-body').innerHTML=`
+  <div class="card">
+    <div class="card-header"><span class="card-title">融資力 総合スコア</span>
+      <span style="font-size:12px;color:var(--text-secondary)">${new Date().getFullYear()}年${m.monthIndex+1}月時点</span>
+    </div>
+    <div class="two-col" style="align-items:center">
+      <div style="text-align:center">
+        <div style="font-size:52px;font-weight:700;letter-spacing:-1px;color:${color}">${total}<span style="font-size:20px;color:var(--text-muted)"> / 100</span></div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-top:4px">${total>=80?'融資を狙える水準です':total>=60?'あと一歩。改善余地があります':'まずは足元の改善から'}</div>
+        <div style="margin-top:14px">
+          ${items.map(it=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:0.5px solid var(--border)">
+            <span>${it.label}</span><span style="font-weight:600;color:${scoreColor(it.score/20*100)}">${it.score} / 20</span>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;justify-content:center">${loanRadar(items)}</div>
+    </div>
+  </div>
+  ${card1}${card2}${card3}${card4}${card5}
+  <div class="card">
+    <div class="card-header"><span class="card-title">🤖 AIによる融資戦略アドバイス</span>
+      <button class="btn primary" id="loan-advice-btn" onclick="requestLoanAdvice()">AIに融資戦略を相談する</button>
+    </div>
+    <div id="loan-advice"><div class="empty-state">ボタンを押すと、上の数値をもとにAIがアドバイスを作成します。</div></div>
+  </div>`;
+}
+
+// GAS経由でAIにアドバイスを作らせる
+async function requestLoanAdvice(){
+  const btn=document.getElementById('loan-advice-btn');
+  const el=document.getElementById('loan-advice');
+  const m=loanMetrics();
+  const items=loanScores(m);
+  btn.disabled=true;
+  el.innerHTML='<div class="alert alert-info"><span class="spinner"></span> AIが分析しています...</div>';
+  try{
+    const json=await gasCall({action:'advise',data:{
+      company:S.company.name||'',
+      monthSales:m.avgSales,
+      recurring:m.recurring,
+      recurringRate:m.recurringRate,
+      profit:m.avgProfit,
+      marginRate:m.marginRate,
+      cash:m.cash,
+      cashMonths:m.cashMonths,
+      loan:m.loan,
+      yearSales:m.yearSales,
+      plannedMonths:m.plannedMonths,
+      totalScore:items.reduce((a,it)=>a+it.score,0)
+    }});
+    if(!json.ok)throw new Error(json.error||'アドバイスを取得できませんでした');
+    el.innerHTML=`<div style="font-size:13px;line-height:1.9;white-space:pre-wrap">${json.text}</div>`;
+  }catch(e){
+    el.innerHTML=`<div class="alert alert-error">❌ アドバイスを取得できませんでした<br><small>${e.message}</small></div>`;
+  }
+  btn.disabled=false;
+}
+
+function switchReportTab(name,btn){
+  btn.closest('.tab-group').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('report-pane-monthly').style.display=name==='monthly'?'':'none';
+  document.getElementById('report-pane-loan').style.display=name==='loan'?'':'none';
+  if(name==='loan')generateLoanReport();
+}
+
+/* ===== 月次決算レポート =============================================
+   対象月を選んでレポートを生成する。印刷（PDF化）を前提に、
+   白背景・カード区切りのシンプルなビジネスレポート形式で組む。
+   =================================================================== */
+
+// 経費として集計する区分（勘定科目）。役員報酬は別枠なので含めない。
+const EXPENSE_ACCOUNTS=LEDGER_TYPES.filter(t=>t!=='売上'&&LABOR_TYPES.indexOf(t)<0&&TAX_TYPES.indexOf(t)<0);
+
+// レポート内の金額。マイナスは赤字にする。
+function repYen(n){
+  const v=Math.round(n||0);
+  const color=v<0?'#e53e3e':'inherit';
+  return`<span style="color:${color}">${fmt(v)}</span>`;
+}
+
+function repRow(label,value,opt){
+  const o=opt||{};
+  const bg=o.bg?`background:${o.bg};`:'';
+  const weight=o.bold?'font-weight:bold;':'';
+  const color=o.color?`color:${o.color};`:'';
+  return`<tr style="${bg}">
+    <td style="padding:9px 12px;border-bottom:1px solid #e0e0e0;${weight}${color}">${label}</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e0e0e0;text-align:right;${weight}${color}">${value}</td>
+  </tr>`;
+}
+
+function repSection(title,inner){
+  return`<div class="report-card">
+    <div class="report-card-title">${title}</div>
+    ${inner}
+  </div>`;
+}
+
+function repEmpty(msg){
+  return`<div style="padding:14px 12px;color:#888;font-size:12px">${msg}</div>`;
+}
+
+function initReportPage(){
+  const sel=document.getElementById('report-month');
+  if(sel.value===''){
+    // 既定は前月
+    const m=new Date().getMonth();
+    sel.value=String(m===0?11:m-1);
+  }
+  if(!document.getElementById('report-body').innerHTML.trim())generateReport();
+}
+
+function generateReport(){
+  const mi=parseInt(document.getElementById('report-month').value)||0;
+  const y=new Date().getFullYear();
+  const c=S.company;
+
+  // 案件ベースの売上は【2】の明細と同じ範囲（契約済・進行中・完了）で集計し、
+  // サマリーと明細の合計が必ず一致するようにする。
+  const kinds={single:'単発',monthly:'月次継続',annual:'年次継続'};
+  const projects=S.projects.filter(p=>
+    (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,mi));
+  const projectTotal=projects.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
+  const projectSales=projectTotal;
+  const t=sumLedger(mi);
+  const ledgerSales=t.sales;
+  const sales=projectSales+ledgerSales;
+  const exp=t.expense, lab=t.labor, tax=t.tax;
+  const profit=sales-exp-lab;
+  const margin=sales>0?Math.round(profit/sales*100):0;
+  const pl=planOf(mi);
+  const planProfit=pl.sales-pl.expense-pl.labor;
+
+  /* --- 0. 期間累計サマリー（期初からこの月まで） --- */
+  const fy=activeFiscalYear();
+  const cum=fy?fiscalTotals(fy,mi):null;
+  const fiscalSummary=!fy?repEmpty('期が登録されていません。設定ページの「期の管理」から追加してください。'):
+  `<div style="font-size:12px;color:#555;margin-bottom:8px">${fy.name}（${fiscalLabel(fy)}）／ 経過 ${cum.months.length}ヶ月</div>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    ${repRow('累計売上',repYen(cum.sales))}
+    ${repRow('累計営業利益',repYen(cum.profit))}
+    ${repRow('累計利益率',cum.sales>0?(cum.profit/cum.sales*100).toFixed(1)+'%':'-')}
+    ${repRow('売上目標に対する進捗',fmt(fy.salesTarget)+' に対して '+rateText(pct(cum.sales,fy.salesTarget)),{bold:true})}
+    ${repRow('利益目標に対する進捗',fmt(fy.profitTarget)+' に対して '+rateText(pct(cum.profit,fy.profitTarget)),{bold:true})}
+  </table>`;
+
+  /* --- 1. サマリー --- */
+  const summary=`<table style="width:100%;border-collapse:collapse;font-size:13px">
+    ${repRow('売上高（案件ベース）',repYen(projectSales))}
+    ${repRow('売上高（収支入力分）',repYen(ledgerSales))}
+    ${repRow('売上高 合計',repYen(sales),{bold:true,bg:'#f5f5f5'})}
+    ${repRow('経費合計',repYen(exp))}
+    ${repRow('役員報酬',repYen(lab))}
+    ${repRow('営業利益',repYen(profit),{bold:true,bg:'#f5f5f5'})}
+    ${repRow('税金・公課（営業利益には含めない）',repYen(tax))}
+    ${repRow('営業利益率',(sales>0?(profit/sales*100).toFixed(1)+'%':'-'),{bold:true,color:sales>0?marginColor(profit/sales*100):''})}
+  </table>
+  <div style="font-size:12px;font-weight:bold;margin:18px 0 6px">計画比</div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f5f5f5">
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">項目</th>
+      <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e0e0e0">計画</th>
+      <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e0e0e0">実績</th>
+      <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e0e0e0">差異</th>
+    </tr></thead>
+    <tbody>
+      ${[{k:'売上高',plan:pl.sales,actual:sales},
+         {k:'経費合計',plan:pl.expense,actual:exp},
+         {k:'役員報酬',plan:pl.labor,actual:lab},
+         {k:'税金・公課',plan:pl.tax||0,actual:tax},
+         {k:'営業利益',plan:planProfit,actual:profit}].map(r=>`<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${r.k}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right;color:#666">${fmt(r.plan)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${fmt(r.actual)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${repYen(r.actual-r.plan)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+
+  /* --- 2. 案件別売上明細 --- */
+  const projectTable=projects.length===0?repEmpty('この月に売上が発生する案件はありません。'):
+  `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f5f5f5">
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">顧客名</th>
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">案件名</th>
+      <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e0e0e0">金額</th>
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">種別</th>
+    </tr></thead>
+    <tbody>${projects.map(p=>`<tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${p.client||'-'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${p.name}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${fmt(projectMonthAmount(p,mi))}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${kinds[p.contract]||p.contract}</td>
+    </tr>`).join('')}
+    <tr style="background:#f5f5f5;font-weight:bold">
+      <td colspan="2" style="padding:9px 12px">合計（${projects.length}件）</td>
+      <td style="padding:9px 12px;text-align:right">${fmt(projectTotal)}</td>
+      <td style="padding:9px 12px"></td>
+    </tr></tbody>
+  </table></div>`;
+
+  /* --- 3. 収支入力明細（売上区分のみ） --- */
+  const salesRows=S.ledger
+    .filter(l=>l.type==='売上'&&l.date&&new Date(l.date).getMonth()===mi)
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  const salesTable=salesRows.length===0?repEmpty('この月の「売上」区分の入力はありません。'):
+  `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f5f5f5">
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">日付</th>
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">摘要</th>
+      <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e0e0e0">金額</th>
+    </tr></thead>
+    <tbody>${salesRows.map(l=>`<tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;white-space:nowrap">${l.date}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${l.desc}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${fmt(l.amount)}</td>
+    </tr>`).join('')}
+    <tr style="background:#f5f5f5;font-weight:bold">
+      <td colspan="2" style="padding:9px 12px">合計（${salesRows.length}件）</td>
+      <td style="padding:9px 12px;text-align:right">${fmt(ledgerSales)}</td>
+    </tr></tbody>
+  </table></div>`;
+
+  /* --- 4. 経費明細（勘定科目別） --- */
+  const byAccount={};
+  EXPENSE_ACCOUNTS.forEach(k=>{byAccount[k]=0});
+  S.ledger.forEach(l=>{
+    if(!l.date||new Date(l.date).getMonth()!==mi)return;
+    if(ledgerGroup(l.type)!=='expense')return;
+    if(byAccount[l.type]===undefined)byAccount[l.type]=0; // 旧区分「経費」など
+    byAccount[l.type]+=l.amount;
+  });
+  const accountKeys=Object.keys(byAccount).filter(k=>byAccount[k]!==0);
+  const expenseTable=accountKeys.length===0?repEmpty('この月の経費入力はありません。'):
+  `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    ${accountKeys.map(k=>repRow(k,repYen(byAccount[k]))).join('')}
+    ${repRow('経費合計',repYen(exp),{bold:true,bg:'#f5f5f5'})}
+  </table>`;
+
+  /* --- 5. 税金・公課明細（勘定科目別） --- */
+  const byTax={};
+  TAX_TYPES.forEach(k=>{byTax[k]=0});
+  S.ledger.forEach(l=>{
+    if(!l.date||new Date(l.date).getMonth()!==mi)return;
+    if(ledgerGroup(l.type)!=='tax')return;
+    if(byTax[l.type]===undefined)byTax[l.type]=0;
+    byTax[l.type]+=l.amount;
+  });
+  const taxKeys=Object.keys(byTax).filter(k=>byTax[k]!==0);
+  const taxTable=taxKeys.length===0?repEmpty('この月の税金・社会保険料の入力はありません。'):
+  `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    ${taxKeys.map(k=>repRow(k,repYen(byTax[k]))).join('')}
+    ${repRow('税金・公課 合計',repYen(tax),{bold:true,bg:'#f5f5f5'})}
+  </table>`;
+
+  /* --- 6. 請求書発行状況 --- */
+  const invoices=S.quotes.filter(q=>
+    q.type==='請求書'&&q.date&&new Date(q.date).getMonth()===mi);
+  const invoiceTotal=invoices.reduce((a,q)=>a+(q.amount||0),0);
+  const invoiceTable=invoices.length===0?repEmpty('この月に発行した請求書はありません。'):
+  `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f5f5f5">
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">番号</th>
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">顧客名</th>
+      <th style="padding:8px 12px;text-align:left;border-bottom:1px solid #e0e0e0">件名</th>
+      <th style="padding:8px 12px;text-align:right;border-bottom:1px solid #e0e0e0">金額（税込）</th>
+    </tr></thead>
+    <tbody>${invoices.map(q=>`<tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;white-space:nowrap">${q.id}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${q.client||'-'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${q.subject}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${fmt(q.amount)}</td>
+    </tr>`).join('')}
+    <tr style="background:#f5f5f5;font-weight:bold">
+      <td colspan="3" style="padding:9px 12px">発行済み合計（${invoices.length}件）</td>
+      <td style="padding:9px 12px;text-align:right">${fmt(invoiceTotal)}</td>
+    </tr></tbody>
+  </table></div>`;
+
+  document.getElementById('report-body').innerHTML=`
+  <div class="report-head">
+    <div style="font-size:15px;font-weight:bold">${c.name||''}</div>
+    <div style="font-size:20px;font-weight:bold;margin:6px 0">${y}年${mi+1}月 月次決算レポート</div>
+    <div style="font-size:12px;color:#555">生成日：${jpDate(today())}</div>
+  </div>
+  ${repSection('【0】期間累計サマリー（期初〜'+(mi+1)+'月）',fiscalSummary)}
+  ${repSection('【1】サマリー（損益計算書形式）',summary)}
+  ${repSection('【2】案件別売上明細',projectTable)}
+  ${repSection('【3】収支入力明細（売上区分のみ）',salesTable)}
+  ${repSection('【4】経費明細（勘定科目別）',expenseTable)}
+  ${repSection('【5】税金・公課明細（勘定科目別）',taxTable)}
+  ${repSection('【6】請求書発行状況',invoiceTable)}`;
+}
+
+function printReport(){
+  if(!document.getElementById('report-body').innerHTML.trim()){
+    alert('先にレポートを生成してください');return;
+  }
+  window.print();
+}
+
+/* ===== 一括請求書作成 ===============================================
+   選択した月に売上が発生する案件（進行中・完了）から、
+   請求書をまとめて作成する。
+   =================================================================== */
+
+// 月末日を YYYY-MM-DD で返す（offset=0 は当月末、1 は翌月末）
+function endOfMonth(year,monthIndex,offset){
+  const d=new Date(year,monthIndex+(offset||0)+1,0);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+// 請求対象の年を決める。選択月が今より先なら前年扱いにはせず、単純に今年とする。
+function billingYear(){return new Date().getFullYear()}
+
+function openBulkInvoiceModal(){
+  const mi=currentProjectMonth();
+  document.getElementById('bulk-month').value=String(mi===null?new Date().getMonth():mi);
+  document.getElementById('bulk-note').value=S.company.note||'';
+  updateBulkInvoiceForm();
+  openModal('modal-bulk-invoice');
+}
+
+// 対象月が変わったら、発行日・支払期限の初期値と案件一覧を作り直す
+function updateBulkInvoiceForm(){
+  const mi=parseInt(document.getElementById('bulk-month').value)||0;
+  const y=billingYear();
+  document.getElementById('bulk-date').value=endOfMonth(y,mi,0);
+  document.getElementById('bulk-due').value=endOfMonth(y,mi,1);
+  renderBulkInvoiceList();
+}
+
+// その月の請求対象案件（進行中・完了）
+function bulkInvoiceTargets(){
+  const mi=parseInt(document.getElementById('bulk-month').value)||0;
+  return S.projects.filter(p=>(p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,mi));
+}
+
+// value属性に入れる文字列をエスケープする
+function escAttr(v){
+  return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// 品名・件名の初期値
+function defaultItemName(p,mi){
+  return `${p.name}（${billingYear()}年${mi+1}月分）`;
+}
+
+function renderBulkInvoiceList(){
+  const mi=parseInt(document.getElementById('bulk-month').value)||0;
+  const list=bulkInvoiceTargets();
+  const el=document.getElementById('bulk-list');
+  if(list.length===0){
+    el.innerHTML='<div class="empty-state">'+(mi+1)+'月に請求できる案件がありません。<br><span style="font-size:12px">対象は「進行中」「完了」の案件です。</span></div>';
+    document.getElementById('bulk-submit').disabled=true;
+    document.getElementById('bulk-count').textContent='';
+    return;
+  }
+  el.innerHTML='<div class="table-wrap"><table><thead><tr>'
+    +'<th style="width:36px"></th><th>顧客名</th><th>案件名</th><th style="min-width:200px">品名・件名</th><th style="text-align:right">金額</th>'
+    +'</tr></thead><tbody>'
+    +list.map(p=>`<tr>
+      <td><input type="checkbox" class="bulk-check" value="${p.id}" checked onchange="updateBulkCount()" style="width:auto"></td>
+      <td style="font-size:12px">${p.client||'-'}</td>
+      <td style="font-size:12px">${p.name}</td>
+      <td><input type="text" class="bulk-name" data-id="${p.id}" value="${escAttr(defaultItemName(p,mi))}" style="font-size:12px"></td>
+      <td style="text-align:right;white-space:nowrap">${fmt(projectMonthAmount(p,mi))}</td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+  updateBulkCount();
+}
+
+function setBulkCheckAll(checked){
+  document.querySelectorAll('.bulk-check').forEach(c=>{c.checked=checked});
+  updateBulkCount();
+}
+
+function selectedBulkIds(){
+  return Array.from(document.querySelectorAll('.bulk-check'))
+    .filter(c=>c.checked)
+    .map(c=>parseInt(c.value));
+}
+
+// 入力された品名・件名を {案件id: 品名} で取り出す
+function bulkItemNames(){
+  const map={};
+  document.querySelectorAll('.bulk-name').forEach(inp=>{
+    map[parseInt(inp.dataset.id)]=inp.value.trim();
+  });
+  return map;
+}
+
+function bulkMergeEnabled(){
+  const el=document.getElementById('bulk-merge');
+  return !!(el&&el.checked);
+}
+
+// 選択された案件を請求書1枚ぶんずつのまとまりに分ける。
+// まとめ発行がONなら同じ顧客名で1枚にする（顧客名が空の案件はまとめない）。
+function bulkInvoiceGroups(){
+  const mi=parseInt(document.getElementById('bulk-month').value)||0;
+  const ids=selectedBulkIds();
+  const names=bulkItemNames();
+  const merge=bulkMergeEnabled();
+  const groups=[];
+  const byClient={};
+  S.projects.filter(p=>ids.indexOf(p.id)>=0).forEach(p=>{
+    const unit=projectMonthAmount(p,mi);
+    const item={name:names[p.id]||defaultItemName(p,mi),qty:1,unit,total:unit};
+    const client=(p.client||'').trim();
+    if(merge&&client){
+      if(!byClient[client]){byClient[client]={client,items:[]};groups.push(byClient[client]);}
+      byClient[client].items.push(item);
+    }else{
+      groups.push({client,items:[item]});
+    }
+  });
+  return groups;
+}
+
+function updateBulkCount(){
+  const ids=selectedBulkIds();
+  const groups=bulkInvoiceGroups();
+  const total=groups.reduce((a,g)=>a+bulkGroupAmount(g),0);
+  document.getElementById('bulk-count').textContent=
+    ids.length+'件を選択中 → 請求書 '+groups.length+'枚（税込合計 '+fmt(total)+'）';
+  document.getElementById('bulk-submit').disabled=ids.length===0;
+}
+
+// 請求書1枚の税込金額（明細の合計に消費税を乗せて小数点以下切り捨て）
+function bulkGroupAmount(g){
+  const sub=g.items.reduce((a,it)=>a+it.total,0);
+  return Math.floor(sub*1.1);
+}
+
+function createBulkInvoices(){
+  const mi=parseInt(document.getElementById('bulk-month').value)||0;
+  const date=document.getElementById('bulk-date').value||today();
+  const due=document.getElementById('bulk-due').value||'';
+  const note=document.getElementById('bulk-note').value.trim();
+  const groups=bulkInvoiceGroups();
+  if(groups.length===0){alert('請求する案件を選択してください');return;}
+
+  const y=billingYear();
+  groups.forEach(g=>{
+    // まとめた請求書は月まとめの件名、1件だけの請求書は品名をそのまま件名にする
+    const subject=g.items.length===1?g.items[0].name:`${y}年${mi+1}月分 ご請求`;
+    S.quotes.push({
+      id:makeDocNumber('請求書'),
+      subject,
+      client:(g.client||'')+' 御中',
+      amount:bulkGroupAmount(g),
+      type:'請求書',
+      date,
+      due,
+      expire:due,
+      items:g.items.map(it=>({...it})),
+      note
+    });
+  });
+
+  saveState();
+  closeModal('modal-bulk-invoice');
+  alert(groups.length+'件の請求書を作成しました');
+  showPage('quotes',document.querySelectorAll('.nav-btn')[2]);
+}
+
+/* ===== 見積書・請求書のドキュメント ===================================
+   プレビューとHTMLダウンロードで同じ組版を使う。
+   アプリのダークモード設定に影響されないよう、色は固定値をインラインで指定する。
+   ===================================================================== */
+const DOC_NAVY='#1a2e4a';
+const DOC_RED='#e53e3e';
+
+// 書類番号: INV-YYYYMM-001（請求書）/ EST-YYYYMM-001（見積書）
+function makeDocNumber(type){
+  const d=new Date();
+  const ym=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0');
+  return (type==='請求書'?'INV':'EST')+'-'+ym+'-'+String(S.nextQuoteNum++).padStart(3,'0');
+}
+
+function docLabels(type){
+  const inv=type==='請求書';
+  return {
+    title:inv?'請　求　書':'見　積　書',
+    numberLabel:inv?'請求書番号':'見積書番号',
+    lead:inv?'下記の通りご請求申し上げます。':'下記の通りお見積り申し上げます。',
+    amountLabel:inv?'ご請求金額（税込）':'お見積金額（税込）',
+    dueLabel:inv?'お支払期限':'有効期限'
+  };
+}
+
+// YYYY-MM-DD を YYYY年M月D日 に整形する
+function jpDate(iso){
+  if(!iso)return '';
+  const d=new Date(iso);
+  if(isNaN(d.getTime()))return iso;
+  return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日';
+}
+
+function docYen(n){return '¥'+Math.round(n||0).toLocaleString('ja-JP')}
+
+// 【お振込先】の1行（ラベルは幅100px・太字）
+function docBankRow(label,value,color){
+  if(!value)return '';
+  return `<div style="margin-bottom:5px"><span style="display:inline-block;width:100px;font-weight:bold">${label}</span>：<span style="color:${color||'#111'}">${value}</span></div>`;
+}
+
+// 契約月数（両端を含む）。片方でも欠けていれば null。
+function contractMonths(startYm,endYm){
+  const s=ymToAbs(startYm),e=ymToAbs(endYm);
+  if(s===null||e===null||e<s)return null;
+  return e-s+1;
+}
+
+// YYYY-MM を「2026年9月」に
+function ymJp(ym){
+  const a=ymToAbs(ym);
+  return a===null?'':Math.floor(a/12)+'年'+(a%12+1)+'月';
+}
+
+// 契約期間の警告表示（最低契約期間は3ヶ月）
+function updateContractHint(){
+  const hint=document.getElementById('q-contract-hint');
+  if(!hint)return;
+  const monthly=document.getElementById('q-monthly').checked;
+  const n=contractMonths(document.getElementById('q-cstart').value,document.getElementById('q-cend').value);
+  if(!monthly){hint.innerHTML='';return;}
+  if(n===null){
+    hint.innerHTML='<span style="color:var(--text-muted)">契約開始月と終了月を入力すると、契約期間合計を見積書に記載します。</span>';
+  }else if(n<3){
+    hint.innerHTML='<span style="color:var(--red)">※最低契約期間は3ヶ月です</span>';
+  }else{
+    hint.innerHTML='<span style="color:var(--text-secondary)">契約期間 '+n+'ヶ月　支払方法: '+document.getElementById('q-payment').value+'</span>';
+  }
+}
+
+// 見積書・請求書の本体。q=書類データ、c=会社情報。
+function buildDocHtml(q,c){
+  const lb=docLabels(q.type);
+  const items=q.items||[];
+  const sub=items.reduce((a,it)=>a+(it.qty*it.unit),0);
+  const tax=Math.round(sub*0.1);
+  const total=sub+tax;
+  const client=(q.client||'').replace(/\s*御中\s*$/,'');
+  const th='padding:10px 12px;background:'+DOC_NAVY+';color:#fff;font-weight:bold;';
+  const td='padding:10px 12px;border-bottom:1px solid #e0e0e0;';
+  const sumTd='padding:10px 12px;border-bottom:1px solid #e0e0e0;text-align:right;';
+  const totalTd='padding:10px 12px;background:'+DOC_NAVY+';color:#fff;font-weight:bold;text-align:right;';
+
+  // 月額固定の契約かどうか。契約期間があれば月数と期間合計も出す。
+  const monthly=!!q.isMonthly;
+  const months=contractMonths(q.contractStart,q.contractEnd);
+  const periodTotal=monthly&&months?total*months:null;
+
+  const meta=[
+    c.zip?'〒'+c.zip:'',
+    c.addr||'',
+    c.tel?'TEL: '+c.tel:'',
+    c.email||'',
+    c.invoice?'登録番号: '+c.invoice:''
+  ].filter(Boolean).join('<br>');
+
+  return `
+<div style="background:#fff;color:#111;font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',Meiryo,sans-serif;font-size:13px;line-height:1.6;padding:40px">
+  <div style="font-size:28px;font-weight:bold;letter-spacing:12px;text-align:center;color:${DOC_NAVY}">${lb.title}</div>
+  <div style="border-top:2px solid ${DOC_NAVY};margin:14px 0 26px"></div>
+  <div style="display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:26px">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:18px;font-weight:bold;border-bottom:1px solid #333;padding-bottom:6px">${client||'（宛先未設定）'} 御中</div>
+      <div style="font-size:12px;color:#333;margin-top:16px;line-height:2">毎度格別のお引き立てを賜り厚く御礼申し上げます。<br>${lb.lead}</div>
+    </div>
+    <div style="text-align:right;white-space:nowrap">
+      <div style="font-size:12px">${lb.numberLabel}: ${q.id}</div>
+      <div style="font-size:12px">発行日: ${jpDate(q.date)}</div>
+      <div style="font-size:15px;font-weight:bold;color:${DOC_NAVY};margin-top:8px">${c.name||''}</div>
+      ${c.rep?`<div style="font-size:13px;font-weight:bold">代表取締役 ${c.rep}</div>`:''}
+      <div style="font-size:11px;color:#555;line-height:1.9;margin-top:4px">${meta}</div>
+    </div>
+  </div>
+  <div style="background:#f5f5f5;border:1px solid #ddd;border-radius:6px;text-align:center;padding:16px;margin-bottom:${months||q.paymentMethod?'14px':'26px'}">
+    <div style="font-size:12px;color:#555">${lb.amountLabel}${monthly?'（月額）':''}</div>
+    <div style="font-size:32px;font-weight:bold;color:${DOC_NAVY};margin-top:2px">${docYen(total)}-</div>
+    ${periodTotal!==null?`<div style="font-size:12px;color:#555;margin-top:6px">契約期間合計 <strong style="color:${DOC_NAVY};font-size:14px">${docYen(periodTotal)}-</strong>（${months}ヶ月）</div>`:''}
+  </div>
+  ${(months||q.paymentMethod)?`<div style="border:1px solid #ddd;border-radius:6px;padding:12px 16px;margin-bottom:26px;font-size:12px;line-height:1.9">
+    ${months?`<div><span style="display:inline-block;width:82px;font-weight:bold">契約期間</span>：${ymJp(q.contractStart)}〜${ymJp(q.contractEnd)}（${months}ヶ月）</div>`:''}
+    ${q.paymentMethod?`<div><span style="display:inline-block;width:82px;font-weight:bold">支払方法</span>：${q.paymentMethod}</div>`:''}
+  </div>`:''}
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr>
+      <th style="${th}text-align:left">品名・件名</th>
+      <th style="${th}text-align:right;width:70px">数量</th>
+      <th style="${th}text-align:right;width:110px">${monthly?'月額単価（税抜）':'単価（税抜）'}</th>
+      <th style="${th}text-align:right;width:120px">${monthly?'月額（税抜）':'金額（税抜）'}</th>
+    </tr></thead>
+    <tbody>${items.map(it=>`<tr>
+      <td style="${td}">${it.name||''}</td>
+      <td style="${td}text-align:right">${it.qty}</td>
+      <td style="${td}text-align:right">${docYen(it.unit)}</td>
+      <td style="${td}text-align:right">${docYen(it.qty*it.unit)}</td>
+    </tr>`).join('')}</tbody>
+    <tfoot>
+      <tr><td colspan="2" style="border:none"></td><td style="${sumTd}">${monthly?'月額小計（税抜）':'小計（税抜）'}</td><td style="${sumTd}">${docYen(sub)}</td></tr>
+      <tr><td colspan="2" style="border:none"></td><td style="${sumTd}">消費税（10%）</td><td style="${sumTd}">${docYen(tax)}</td></tr>
+      <tr><td colspan="2" style="border:none"></td><td style="${totalTd}">${monthly?'月額合計（税込）':'合計金額（税込）'}</td><td style="${totalTd}">${docYen(total)}-</td></tr>
+      ${periodTotal!==null?`<tr><td colspan="2" style="border:none"></td>
+        <td style="${totalTd}">契約期間合計（税込）</td>
+        <td style="${totalTd}">${docYen(periodTotal)}-</td></tr>
+      <tr><td colspan="4" style="padding:6px 12px;text-align:right;font-size:11px;color:#555;border:none">月額合計 ${docYen(total)} × ${months}ヶ月</td></tr>`:''}
+    </tfoot>
+  </table>
+  ${monthly?`<div style="border:1px solid #ddd;padding:14px 16px;margin-top:22px;font-size:11px;line-height:2;color:#333">
+    <div style="font-weight:bold;margin-bottom:4px;font-size:12px">【特記事項】</div>
+    ・本契約の最低契約期間は3ヶ月とさせていただきます。<br>
+    ・契約期間満了の1ヶ月前までにご連絡がない場合、同条件にて自動更新となります。<br>
+    ・解約をご希望の場合は、解約希望日の1ヶ月前までにご連絡ください。
+  </div>`:''}
+  <div style="border:1px solid #ddd;padding:16px;margin-top:${monthly?'14px':'26px'};font-size:12px">
+    <div style="font-weight:bold;margin-bottom:8px">【お振込先】</div>
+    ${docBankRow('銀行名',c.bankName)}${docBankRow('支店名',c.bankBranch)}${docBankRow('口座種別',c.accountType)}${docBankRow('口座番号',c.accountNumber)}${docBankRow('口座名義',c.accountHolder)}${docBankRow(lb.dueLabel,jpDate(q.due||q.expire),DOC_RED)}
+  </div>
+  ${q.note?`<div style="margin-top:14px;font-size:11px;color:#555;line-height:1.8">備考: ${q.note}</div>`:''}
+</div>`;
+}
+
+function showPreviewModal(){
+  const q=currentQuoteData;
+  document.getElementById('preview-modal-title').textContent=(q.type||'見積書')+'プレビュー';
+  document.getElementById('quote-preview-content').innerHTML=buildDocHtml(q,S.company);
+  openModal('modal-preview-quote');
+}
+
+function downloadQuote(){
+  const q=currentQuoteData;
+  const kind=q.type||'見積書';
+  const html='<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>'+kind+' '+q.id+'</title>'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#fff}'
+    +'.sheet{max-width:794px;margin:0 auto}'  /* A4縦の幅（210mm ≒ 794px） */
+    +'@page{size:A4 portrait;margin:0}'
+    +'</style></head><body><div class="sheet">'+buildDocHtml(q,S.company)+'</div></body></html>';
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`${kind}_${q.id}_${q.date}.html`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
+async function handlePDFUpload(event){
+  const file=event.target.files[0];if(!file)return;
+  const el=document.getElementById('upload-result');
+  el.innerHTML=`<div class="alert alert-info"><span class="spinner"></span> AIがPDFを読み取り中...</div>`;
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    const base64=e.target.result.split(',')[1];
+    try{
+      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:base64}},{type:'text',text:'この見積書または請求書から情報を抽出し、以下のJSON形式のみで返してください。{"type":"見積書","subject":"件名","client":"顧客名","amount":合計金額,"date":"YYYY-MM-DD","expire":"YYYY-MM-DD","items":[{"name":"品名","qty":数量,"unit":単価,"total":金額}],"note":"備考"}'}]}]})});
+      const data=await res.json();
+      if(data.error)throw new Error(data.error.message);
+      const text=data.content.find(c=>c.type==='text')?.text||'{}';
+      const parsed=JSON.parse(text.replace(/```json|```/g,'').trim());
+      const dtype=parsed.type||'見積書';
+      const qid=makeDocNumber(dtype);
+      const qdata={id:qid,subject:parsed.subject||file.name,client:parsed.client||'',amount:parsed.amount||0,type:dtype,date:parsed.date||today(),expire:parsed.expire||'',items:parsed.items||[],note:parsed.note||''};
+      S.quotes.push(qdata);saveState();
+      el.innerHTML=`<div class="alert alert-success">✓ 読み取り完了！「${qdata.subject}」を登録しました。</div>`;
+      renderQuotes();
+    }catch(err){
+      el.innerHTML=`<div class="alert alert-error">❌ 読み取りに失敗しました。<br><small>${err.message}</small></div>`;
+    }
+    event.target.value='';
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderLedger(){
+  const mi=new Date().getMonth();
+  const t=sumLedger(mi);
+  // 売上は「案件ベース + 収支の売上入力」、経費・役員報酬は収支の入力から集計する
+  const sales=salesByMonth(mi),exp=t.expense,lab=t.labor,tax=t.tax;
+  const pl=planOf(mi);
+  document.getElementById('plan-month-label').textContent=(mi+1)+'月';
+  document.getElementById('plan-table').innerHTML=[
+    {k:'売上',actual:sales,plan:pl.sales},
+    {k:'経費合計',actual:exp,plan:pl.expense},
+    {k:'役員報酬',actual:lab,plan:pl.labor},
+    {k:'税金・公課',actual:tax,plan:pl.tax||0}
+  ].map(r=>{
+    const d=r.actual-r.plan;const c=d>=0?'#1D9E75':'#E24B4A';
+    return`<tr><td>${r.k}</td><td style="color:var(--text-secondary)">${fmt(r.plan)}</td><td style="font-weight:500">${fmt(r.actual)}</td><td style="color:${c};font-weight:500">${d>=0?'+':''}${fmt(d)}</td></tr>`;
+  }).join('');
+  const sorted=[...S.ledger].sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('ledger-list').innerHTML=sorted.slice(0,15).map(l=>{
+    return`<tr><td style="font-size:12px;white-space:nowrap">${l.date}</td><td>${ledgerBadge(l.type)}</td><td style="font-size:12px">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}</td><td style="font-weight:500">${fmt(l.amount)}</td><td><div style="display:flex;gap:4px"><button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button><button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button></div></td></tr>`;
+  }).join('');
+}
+
+// id を渡すと編集、省略すると新規入力モードでモーダルを開く
+function openLedgerModal(id){
+  const l=(id!==undefined&&id!==null)?S.ledger.find(x=>x.id===id):null;
+  editLedgerId=l?l.id:null;
+  document.getElementById('l-date').value=l?l.date:today();
+  document.getElementById('l-type').value=l?l.type:'売上';
+  document.getElementById('l-desc').value=l?l.desc:'';
+  document.getElementById('l-amount').value=l?l.amount:'';
+  document.getElementById('modal-ledger-title').textContent=l?'収支を編集':'収支を入力';
+  document.getElementById('modal-ledger-submit').textContent=l?'✓ 保存':'+ 追加';
+  openModal('modal-add-ledger');
+}
+
+function saveLedger(){
+  const date=document.getElementById('l-date').value;
+  const type=document.getElementById('l-type').value;
+  const desc=document.getElementById('l-desc').value.trim();
+  const amount=parseInt(document.getElementById('l-amount').value)||0;
+  if(!date||!desc||!amount){alert('日付・摘要・金額を入力してください');return;}
+  if(editLedgerId!==null){
+    const l=S.ledger.find(x=>x.id===editLedgerId);
+    if(!l){alert('対象の収支が見つかりませんでした');return;}
+    Object.assign(l,{date,type,desc,amount});
+  }else{
+    S.ledger.push({id:S.nextLedgerId++,date,type,desc,amount});
+  }
+  editLedgerId=null;
+  saveState();closeModal('modal-add-ledger');refreshAll();
+}
+
+function deleteLedger(id){
+  if(!confirm('この収支を削除しますか？'))return;
+  S.ledger=S.ledger.filter(l=>l.id!==id);
+  saveState();refreshAll();
+}
+
+function openPlanModal(mi){
+  document.getElementById('plan-month').value=String(typeof mi==='number'?mi:new Date().getMonth());
+  loadPlanForm();
+  openModal('modal-edit-plan');
+}
+
+function planFormMonth(){return parseInt(document.getElementById('plan-month').value)||0}
+
+function loadPlanForm(){
+  const p=planOf(planFormMonth());
+  document.getElementById('plan-sales').value=p.sales;
+  document.getElementById('plan-expense').value=p.expense;
+  document.getElementById('plan-labor').value=p.labor;
+  document.getElementById('plan-tax').value=p.tax||0;
+}
+
+function readPlanForm(){
+  return {
+    sales:parseInt(document.getElementById('plan-sales').value)||0,
+    expense:parseInt(document.getElementById('plan-expense').value)||0,
+    labor:parseInt(document.getElementById('plan-labor').value)||0,
+    tax:parseInt(document.getElementById('plan-tax').value)||0
+  };
+}
+
+function savePlan(){
+  planOf(0); // S.plan を配列に正規化しておく
+  S.plan[planFormMonth()]=readPlanForm();
+  saveState();closeModal('modal-edit-plan');renderLedger();updateDashboard();
+}
+
+function applyPlanToAllMonths(){
+  if(!confirm('入力中の値を1月〜12月すべての計画に反映しますか？'))return;
+  const v=readPlanForm();
+  planOf(0);
+  for(let i=0;i<12;i++)S.plan[i]=Object.assign({},v);
+  saveState();closeModal('modal-edit-plan');renderLedger();updateDashboard();
+}
+
+// 設定ページで編集できる会社情報の項目（入力欄のidは s-<項目名>）
+const COMPANY_FIELDS=['name','rep','zip','addr','tel','email','bankName','bankBranch','accountType','accountNumber','accountHolder','invoice','payment','note'];
+
+function loadSettingsForm(){
+  const c=S.company;
+  COMPANY_FIELDS.forEach(k=>{
+    const el=document.getElementById('s-'+k);if(el)el.value=c[k]||'';
+  });
+  if(!S.finance)S.finance={cash:0,loan:0};
+  document.getElementById('f-cash').value=S.finance.cash||0;
+  document.getElementById('f-loan').value=S.finance.loan||0;
+  renderFiscalList();
+}
+
+function saveFinance(){
+  if(!S.finance)S.finance={cash:0,loan:0};
+  S.finance.cash=parseInt(document.getElementById('f-cash').value)||0;
+  S.finance.loan=parseInt(document.getElementById('f-loan').value)||0;
+  saveState();
+  const msg=document.getElementById('finance-msg');
+  msg.textContent='✓ 保存しました';setTimeout(()=>{msg.textContent=''},3000);
+}
+
+function saveSettings(){
+  COMPANY_FIELDS.forEach(k=>{
+    const el=document.getElementById('s-'+k);if(el)S.company[k]=el.value.trim();
+  });
+  saveState();
+  const msg=document.getElementById('settings-msg');
+  msg.textContent='✓ 保存しました';setTimeout(()=>{msg.textContent=''},3000);
+}
+
+function exportData(){
+  const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`bizapp_backup_${today()}.json`;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
+function importData(event){
+  const file=event.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const parsed=JSON.parse(e.target.result);
+      if(!confirm('現在のデータを上書きしてインポートしますか？（スプレッドシートも上書きされます）'))return;
+      S=mergeState(parsed);
+      saveState();alert('インポートが完了しました。');refreshAll();
+    }catch(err){alert('インポートに失敗しました。');}
+    event.target.value='';
+  };
+  reader.readAsText(file);
+}
+
+function confirmClearData(){
+  if(!confirm('全データをリセットしますか？スプレッドシートの内容も初期状態に上書きされます。この操作は取り消せません。'))return;
+  try{localStorage.removeItem(STORAGE_KEY);}catch(e){}
+  S=JSON.parse(JSON.stringify(defaultState));
+  saveState();
+  alert('データをリセットしました。');refreshAll();
+}
+
+/* ===== 銀行明細CSV取込（GMOあおぞらネット銀行） =======================
+   列: 取引日 / 摘要 / お支払金額 / お預り金額 / 残高 / メモ
+   お支払金額>0 は支出、お預り金額>0 は収入として取り込む。残高は使わない。
+   ===================================================================== */
+
+let bankRows=[];
+
+// 摘要のキーワードから区分を推測する（上から順に判定）
+const BANK_RULES=[
+  {types:['ｵｵｸﾞﾛ','OOGURO','ANTHROPIC','GOOGLE','ｸﾗｳﾄﾞ','クラウド'],type:'システム利用料'},
+  {types:['ﾎｹｯﾄ','通信','ｿﾌﾄﾊﾞﾝｸ','ソフトバンク','ﾄﾞｺﾓ','ドコモ','AU'],type:'通信料'},
+  {types:['ﾀｸｼｰ','タクシー','鉄道','ﾊﾞｽ','バス','ｴｷ','交通'],type:'交通費'},
+  {types:['飲食','ﾚｽﾄﾗﾝ','レストラン','ｲｻﾞｶﾔ','居酒屋','ｶﾌｪ','カフェ'],type:'交際費'},
+  {types:['ﾔﾁﾝ','家賃','ｵﾌｨｽ','オフィス','ONLYONE'],type:'家賃（レンタルオフィス利用料）'},
+  {types:['ｼﾞｭｳﾐﾝｾﾞｲ','住民税'],type:'住民税（特別徴収）'},
+  {types:['ｼｮｳﾋｾﾞｲ','消費税'],type:'消費税（納付）'},
+  {types:['ｺｸｾｲ','ｻﾞｲﾑｼｮ','財務省','ｼｬｶｲ','社会','ｹﾝｺｳ','健康'],type:'社会保険料'}
+];
+const BANK_SALES_WORDS=['振込','ﾌﾘｺﾐ','ｳﾘｱｹﾞ','売上'];
+
+function bankGuessType(desc,isIncome){
+  const d=String(desc||'').toUpperCase();
+  if(isIncome)return'売上';
+  for(const r of BANK_RULES){
+    if(r.types.some(k=>d.indexOf(k.toUpperCase())>=0))return r.type;
+  }
+  if(BANK_SALES_WORDS.some(k=>d.indexOf(k.toUpperCase())>=0))return'売上';
+  return'その他経費';
+}
+
+// 文字コードを判定して読む（UTF-8で読めなければShift-JIS）
+function readCsvFile(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('ファイルを読み込めませんでした'));
+    reader.onload=e=>{
+      const buf=e.target.result;
+      let text;
+      try{
+        text=new TextDecoder('utf-8',{fatal:true}).decode(buf);
+      }catch(err){
+        try{text=new TextDecoder('shift_jis').decode(buf);}
+        catch(err2){reject(new Error('文字コードを判別できませんでした'));return;}
+      }
+      resolve(text.replace(/^﻿/,''));
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function bankNum(v){
+  const n=parseInt(String(v==null?'':v).replace(/[^0-9\-]/g,''),10);
+  return isNaN(n)?0:n;
+}
+
+// 2026/8/12・2026-08-12・20260812 などを YYYY-MM-DD にする
+function bankDate(v){
+  const s=String(v==null?'':v).trim();
+  let m=/^(\d{4})[-\/.年](\d{1,2})[-\/.月](\d{1,2})/.exec(s);
+  if(m)return m[1]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[3]).slice(-2);
+  m=/^(\d{4})(\d{2})(\d{2})$/.exec(s);
+  if(m)return m[1]+'-'+m[2]+'-'+m[3];
+  return'';
+}
+
+// 同じ日付・金額・摘要の収支がすでにあるか
+function bankIsDuplicate(date,amount,desc){
+  return S.ledger.some(l=>l.date===date&&l.amount===amount&&l.desc===desc);
+}
+
+async function bankHandleFile(file){
+  const msg=document.getElementById('bank-msg');
+  msg.innerHTML='<div class="alert alert-info"><span class="spinner"></span> 読み込んでいます...</div>';
+  let text;
+  try{
+    text=await readCsvFile(file);
+  }catch(e){
+    msg.innerHTML=`<div class="alert alert-error">❌ ${e.message}</div>`;return;
+  }
+
+  const rows=csvParseText(text);
+  if(rows.length<2){
+    msg.innerHTML='<div class="alert alert-error">❌ データ行がありません</div>';return;
+  }
+  const head=rows[0].map(h=>String(h).replace(/\s/g,''));
+  const col=names=>head.findIndex(h=>names.some(n=>h.indexOf(n)>=0));
+  const iDate=col(['取引日','日付']);
+  const iDesc=col(['摘要','内容']);
+  const iOut=col(['お支払金額','支払金額','出金']);
+  const iIn=col(['お預り金額','預り金額','入金']);
+  const iMemo=col(['メモ']);
+  if(iDate<0||iDesc<0||(iOut<0&&iIn<0)){
+    msg.innerHTML='<div class="alert alert-error">❌ 列を認識できませんでした<br>'
+      +'<small>「取引日 / 摘要 / お支払金額 / お預り金額」を含むCSVを選んでください</small></div>';
+    return;
+  }
+
+  bankRows=[];
+  rows.slice(1).forEach(r=>{
+    if(!r.some(c=>c))return;
+    const date=bankDate(r[iDate]);
+    const out=iOut>=0?bankNum(r[iOut]):0;
+    const inc=iIn>=0?bankNum(r[iIn]):0;
+    if(!date||(out===0&&inc===0))return;
+    const memo=iMemo>=0?String(r[iMemo]||'').trim():'';
+    const desc=(String(r[iDesc]||'').trim()+(memo?' '+memo:'')).trim();
+    const income=inc>0;
+    const amount=income?inc:out;
+    bankRows.push({
+      date,desc,amount,income,
+      type:bankGuessType(desc,income),
+      dup:bankIsDuplicate(date,amount,desc)
+    });
+  });
+
+  if(bankRows.length===0){
+    msg.innerHTML='<div class="alert alert-warning">取り込める明細がありませんでした</div>';
+    document.getElementById('bank-result').innerHTML='';
+    document.getElementById('bank-actions').style.display='none';
+    return;
+  }
+  renderBankPreview();
+}
+
+function renderBankPreview(){
+  const dates=bankRows.map(r=>r.date).sort();
+  const inSum=bankRows.filter(r=>r.income).reduce((a,r)=>a+r.amount,0);
+  const outSum=bankRows.filter(r=>!r.income).reduce((a,r)=>a+r.amount,0);
+  const dup=bankRows.filter(r=>r.dup).length;
+
+  document.getElementById('bank-msg').innerHTML=
+    `<div class="alert alert-success">✓ ${bankRows.length}件の明細を読み込みました`
+    +(dup>0?`（うち ${dup}件は重複の可能性があるため未選択）`:'')+'</div>'
+    +`<div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">取引件数</div><div class="metric-value" style="font-size:20px">${bankRows.length}件</div></div>
+      <div class="metric-card"><div class="metric-label">期間</div><div class="metric-value" style="font-size:15px">${dates[0]}<br>〜 ${dates[dates.length-1]}</div></div>
+      <div class="metric-card"><div class="metric-label">お預り合計</div><div class="metric-value green" style="font-size:20px">${fmt(inSum)}</div></div>
+      <div class="metric-card"><div class="metric-label">お支払合計</div><div class="metric-value red" style="font-size:20px">${fmt(outSum)}</div></div>
+    </div>`;
+
+  const opts=t=>LEDGER_TYPES.map(x=>`<option ${x===t?'selected':''}>${x}</option>`).join('');
+  document.getElementById('bank-result').innerHTML=
+    '<div class="table-wrap"><table><thead><tr>'
+    +'<th style="width:36px"></th><th>取引日</th><th>摘要（原文）</th><th style="min-width:170px">区分</th>'
+    +'<th style="min-width:110px">金額</th><th>収支</th>'
+    +'</tr></thead><tbody>'
+    +bankRows.map((r,i)=>`<tr>
+      <td><input type="checkbox" class="bank-check" value="${i}" ${r.dup?'':'checked'} style="width:auto"></td>
+      <td><input type="date" value="${r.date}" oninput="bankRows[${i}].date=this.value" style="font-size:12px"></td>
+      <td style="font-size:11px">${r.desc}${r.dup?'<br><span class="badge badge-amber">重複の可能性あり</span>':''}</td>
+      <td><select oninput="bankRows[${i}].type=this.value" onchange="bankRows[${i}].type=this.value" style="font-size:12px">${opts(r.type)}</select></td>
+      <td><input type="number" value="${r.amount}" oninput="bankRows[${i}].amount=parseInt(this.value)||0" style="font-size:12px"></td>
+      <td>${r.income?'<span class="badge badge-green">収入</span>':'<span class="badge badge-red">支出</span>'}</td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+  document.getElementById('bank-actions').style.display='';
+}
+
+function setBankCheckAll(checked){
+  document.querySelectorAll('.bank-check').forEach(c=>{c.checked=checked});
+}
+
+function bankRegister(){
+  const idx=Array.from(document.querySelectorAll('.bank-check'))
+    .filter(c=>c.checked).map(c=>parseInt(c.value));
+  const rows=idx.map(i=>bankRows[i]).filter(r=>r.date&&r.desc&&r.amount);
+  if(rows.length===0){alert('登録する明細を選択してください');return;}
+  rows.forEach(r=>{
+    S.ledger.push({id:S.nextLedgerId++,date:r.date,type:r.type,desc:r.desc,amount:r.amount});
+  });
+  saveState();
+  alert(rows.length+'件を収支に登録しました');
+  bankReset();
+  refreshAll();
+}
+
+function bankReset(){
+  bankRows=[];
+  document.getElementById('bank-msg').innerHTML='';
+  document.getElementById('bank-result').innerHTML='';
+  document.getElementById('bank-actions').style.display='none';
+  document.getElementById('bank-file-input').value='';
+}
+
+function bankDragOver(e){e.preventDefault();document.getElementById('bank-drop-zone').classList.add('dragover')}
+function bankDragLeave(){document.getElementById('bank-drop-zone').classList.remove('dragover')}
+function bankDrop(e){
+  e.preventDefault();
+  document.getElementById('bank-drop-zone').classList.remove('dragover');
+  if(e.dataTransfer.files[0])bankHandleFile(e.dataTransfer.files[0]);
+}
+
+// ===== CSV IMPORT =====
+const CSV_TEMPLATES={
+  project:{
+    headers:['案件名','顧客名','金額','状態','開始日','終了日','契約種別','メモ'],
+    sample:[
+      ['月次コンサル支援','株式会社サンプル','100000','進行中','2026-07-01','2026-12-31','monthly',''],
+      ['AI導入支援（スポット）','合同会社テスト','350000','商談中','2026-07-01','2026-09-30','single','初回割引あり']
+    ],
+    required:['案件名','金額']
+  },
+  ledger:{
+    headers:['日付','区分','摘要','金額'],
+    sample:[
+      ['2026-07-01','売上','コンサル料 7月分','100000'],
+      ['2026-07-05','家賃（レンタルオフィス利用料）','7月分オフィス利用料','30000'],
+      ['2026-07-08','交通費','客先訪問 交通費','8000'],
+      ['2026-07-10','システム利用料','SaaS 月額利用料','5000'],
+      ['2026-07-25','役員報酬','7月分 役員報酬','300000'],
+      ['2026-07-31','社会保険料','7月分 社会保険料（会社負担）','45000'],
+      ['2026-07-10','源泉所得税（納付）','6月分 源泉所得税','12000']
+    ],
+    required:['日付','区分','摘要','金額']
+  }
+};
+
+function initCsvPage(){
+  const pt=CSV_TEMPLATES.project;
+  const lt=CSV_TEMPLATES.ledger;
+  document.getElementById('tmpl-project-code').textContent=[pt.headers,...pt.sample].map(r=>r.join(',')).join('\n');
+  document.getElementById('tmpl-ledger-code').textContent=[lt.headers,...lt.sample].map(r=>r.join(',')).join('\n');
+}
+
+function switchCsvTab(tab,btn){
+  document.querySelectorAll('#page-csv .tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('csv-panel-import').style.display=tab==='import'?'':'none';
+  document.getElementById('csv-panel-template').style.display=tab==='template'?'':'none';
+}
+
+function setCsvType(type){
+  csvType=type;
+  ['project','ledger','bank'].forEach(t=>
+    document.getElementById('csvbtn-'+t).classList.toggle('active',type===t));
+  const isBank=type==='bank';
+  document.getElementById('csv-drop-zone').style.display=isBank?'none':'';
+  document.getElementById('bank-zone').style.display=isBank?'':'none';
+  document.getElementById('bank-area').style.display=isBank?'':'none';
+  csvReset();
+  bankReset();
+}
+
+function csvDragOver(e){e.preventDefault();document.getElementById('csv-drop-zone').classList.add('dragover')}
+function csvDragLeave(e){document.getElementById('csv-drop-zone').classList.remove('dragover')}
+function csvDrop(e){
+  e.preventDefault();
+  document.getElementById('csv-drop-zone').classList.remove('dragover');
+  if(e.dataTransfer.files[0])csvHandleFile(e.dataTransfer.files[0]);
+}
+
+function csvParseText(text){
+  return text.trim().split(/\r?\n/).map(line=>{
+    const res=[];let cur='',inQ=false;
+    for(const c of line){
+      if(c==='"'){inQ=!inQ}
+      else if(c===','&&!inQ){res.push(cur.trim());cur=''}
+      else{cur+=c}
+    }
+    res.push(cur.trim());return res;
+  });
+}
+
+async function csvHandleFile(file){
+  if(!file)return;
+  let text;
+  try{text=await readCsvFile(file);}
+  catch(e){alert('ファイルを読み込めませんでした: '+e.message);return;}
+  const rows=csvParseText(text);
+  if(rows.length<2)return;
+  csvParsedHeaders=rows[0];
+  csvParsedData=rows.slice(1).filter(r=>r.some(c=>c));
+  csvRenderPreview();
+}
+
+function csvRenderPreview(){
+  document.getElementById('csv-preview-area').style.display='';
+  const preview=csvParsedData.slice(0,5);
+  let html='<thead><tr>'+csvParsedHeaders.map(h=>`<th>${h}</th>`).join('')+'</tr></thead><tbody>';
+  preview.forEach(r=>{
+    html+='<tr>'+r.map(c=>`<td>${c||'<span style="color:var(--text-muted)">—</span>'}</td>`).join('')+'</tr>';
+  });
+  html+='</tbody>';
+  document.getElementById('csv-preview-table').innerHTML=html;
+
+  const tmpl=CSV_TEMPLATES[csvType];
+  const missing=tmpl.required.filter(c=>!csvParsedHeaders.includes(c));
+  const total=csvParsedData.length;
+  const valid=csvParsedData.filter(r=>r[0]&&r[0].trim()).length;
+
+  let html2=`
+    <div class="csv-result-row"><span>読み込み行数</span><span><strong>${total}</strong> 件</span></div>
+    <div class="csv-result-row"><span>有効データ</span><span class="badge badge-green">${valid} 件</span></div>
+    ${total-valid>0?`<div class="csv-result-row"><span>空行スキップ</span><span class="badge badge-amber">${total-valid} 件</span></div>`:''}
+    <div class="csv-result-row"><span>必須列チェック</span><span>${missing.length>0?`<span class="badge badge-red">不足: ${missing.join('、')}</span>`:'<span class="badge badge-green">OK</span>'}</span></div>`;
+  document.getElementById('csv-check-result').innerHTML=html2;
+  document.getElementById('csv-execute-btn').disabled=missing.length>0||valid===0;
+  document.getElementById('csv-log').style.display='none';
+  document.getElementById('csv-log').innerHTML='';
+  document.getElementById('csv-status').textContent='';
+  document.getElementById('csv-progress-wrap').style.display='none';
+  document.getElementById('csv-progress-bar').style.width='0%';
+}
+
+function csvReset(){
+  csvParsedData=null;csvParsedHeaders=[];
+  document.getElementById('csv-preview-area').style.display='none';
+  document.getElementById('csv-file-input').value='';
+}
+
+function csvLog(msg,cls=''){
+  const box=document.getElementById('csv-log');
+  box.style.display='';
+  const line=document.createElement('div');
+  line.className='log-line'+(cls?' '+cls:'');
+  line.textContent=msg;
+  box.appendChild(line);
+  box.scrollTop=box.scrollHeight;
+}
+
+function csvProgress(pct,msg){
+  document.getElementById('csv-progress-wrap').style.display='';
+  document.getElementById('csv-progress-bar').style.width=pct+'%';
+  document.getElementById('csv-status').textContent=msg;
+}
+
+function csvExecute(){
+  if(!csvParsedData)return;
+  const btn=document.getElementById('csv-execute-btn');
+  btn.disabled=true;
+  document.getElementById('csv-log').innerHTML='';
+  document.getElementById('csv-log').style.display='none';
+
+  if(csvType==='project'){csvImportProjects();}
+  else{csvImportLedger();}
+}
+
+function csvImportProjects(){
+  const valid=csvParsedData.filter(r=>r[0]&&r[0].trim());
+  csvProgress(20,'案件データを取込中...');
+  csvLog(`${valid.length}件の案件を追加します`,'info');
+
+  let added=0;
+  valid.forEach(r=>{
+    const obj={};
+    csvParsedHeaders.forEach((h,i)=>obj[h]=r[i]||'');
+    const name=(obj['案件名']||'').trim();
+    if(!name)return;
+    const amount=parseInt((obj['金額']||'0').replace(/[^0-9]/g,''))||0;
+    const statusMap={'商談中':'商談中','契約済':'契約済','進行中':'進行中','完了':'完了','失注':'失注'};
+    const contractMap={'single':'single','monthly':'monthly','annual':'annual','単発':'single','月次継続':'monthly','年次継続':'annual'};
+    S.projects.push({
+      id:S.nextProjectId++,
+      name,
+      client:(obj['顧客名']||'').trim(),
+      amount,
+      status:statusMap[obj['状態']]||'商談中',
+      start:obj['開始日']||'',
+      end:obj['終了日']||'',
+      contract:contractMap[obj['契約種別']]||'single',
+      memo:(obj['メモ']||'').trim()
+    });
+    csvLog(`✓ 追加: ${name}（${amount.toLocaleString()}円）`,'ok');
+    added++;
+  });
+
+  saveState();
+  csvProgress(100,'取込完了');
+  csvLog(`完了: ${added}件の案件を追加しました`,'info');
+  document.getElementById('csv-execute-btn').textContent='✓ 取込完了';
+  document.getElementById('csv-execute-btn').className='btn success';
+}
+
+function csvImportLedger(){
+  const valid=csvParsedData.filter(r=>r[0]&&r[0].trim());
+  csvProgress(20,'収支データを取込中...');
+  csvLog(`${valid.length}件の収支を追加します`,'info');
+
+  let added=0;
+  valid.forEach(r=>{
+    const obj={};
+    csvParsedHeaders.forEach((h,i)=>obj[h]=r[i]||'');
+    const date=(obj['日付']||'').trim();
+    const type=(obj['区分']||'').trim();
+    const desc=(obj['摘要']||'').trim();
+    const amount=parseInt((obj['金額']||'0').replace(/[^0-9]/g,''))||0;
+    if(!date||!desc||!amount)return;
+    const validTypes=LEDGER_TYPES.concat(['経費','人件費']); // 旧区分のCSVも取り込めるようにする
+    if(!validTypes.includes(type)){csvLog(`スキップ（区分不明）: ${desc}`,'err');return;}
+    S.ledger.push({id:S.nextLedgerId++,date,type,desc,amount});
+    csvLog(`✓ ${type}: ${desc}（${amount.toLocaleString()}円）`,'ok');
+    added++;
+  });
+
+  saveState();
+  csvProgress(100,'取込完了');
+  csvLog(`完了: ${added}件の収支を追加しました`,'info');
+  document.getElementById('csv-execute-btn').textContent='✓ 取込完了';
+  document.getElementById('csv-execute-btn').className='btn success';
+}
+
+function csvDownloadTemplate(type){
+  const tmpl=CSV_TEMPLATES[type];
+  const data=[tmpl.headers,...tmpl.sample];
+  const bom='\uFEFF';
+  const blob=new Blob([bom+data.map(r=>r.join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=type==='project'?'案件追加テンプレート.csv':'収支追加テンプレート.csv';
+  a.click();
+}
+
+// INIT
+document.getElementById('month-select').value=new Date().getMonth();
+document.getElementById('project-month').value=new Date().getMonth();
+document.getElementById('quote-month').value=new Date().getMonth();
+renderFiscalSelects();
+updatePlanMonthOptions();
+document.getElementById('l-date').value=today();
+document.getElementById('gas-sheet-link').href=SHEET_URL;
+setSyncStatus(gasEnabled()?'sync':'off');
+updateDashboard();
+// 起動時にスプレッドシートから読み込む（失敗時はlocalStorageのデータのまま動く）
+loadFromGAS();
+</script>
+</body>
+</html>
