@@ -172,6 +172,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   #page-report{display:block!important}
   .report-sheet{border:none;border-radius:0;padding:0}
   .report-card{break-inside:avoid;page-break-inside:avoid}
+  .report-card table{font-size:10px}
+  .table-wrap{overflow:visible}
   @page{size:A4 portrait;margin:14mm}
 }
 @media(max-width:768px){
@@ -534,6 +536,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="tab-group no-print">
     <button class="tab active" onclick="switchReportTab('monthly',this)">📊 月次レポート</button>
     <button class="tab" onclick="switchReportTab('loan',this)">💰 融資力診断</button>
+    <button class="tab" onclick="switchReportTab('forecast',this)">📋 案件予実</button>
   </div>
   <div id="report-pane-monthly">
     <div class="report-actions" style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-bottom:16px">
@@ -545,6 +548,13 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
   <div id="report-pane-loan" style="display:none">
     <div id="loan-body"></div>
+  </div>
+  <div id="report-pane-forecast" style="display:none">
+    <div class="report-actions" style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-bottom:16px">
+      <select id="forecast-fiscal" onchange="generateForecast()" style="width:auto;font-size:13px"></select>
+      <button class="btn" onclick="printForecast()">🖨️ 印刷する</button>
+    </div>
+    <div class="report-sheet"><div id="forecast-body"></div></div>
   </div>
 </div>
 
@@ -2553,6 +2563,213 @@ function updatePlanMonthOptions(){
   else sel.value=String(months[0]);
 }
 
+/* ===== 案件予実レポート =============================================
+   期の各月について、案件から見込まれる売上と収支に入力済みの売上を並べ、
+   当月までを実績、翌月以降を予定として表示する。
+   =================================================================== */
+
+// 予実レポートで選択中の期
+function forecastFiscalYear(){
+  const el=document.getElementById('forecast-fiscal');
+  if(el&&el.value)return fiscalById(parseInt(el.value))||activeFiscalYear();
+  return activeFiscalYear();
+}
+
+// 期の各月の状態を作る。実績/当月/予定の判定は暦の月ではなく絶対月で行う。
+function forecastRows(fy){
+  const months=fiscalMonths(fy);
+  const startAbs=ymToAbs(fy.startMonth);
+  const now=new Date();
+  const nowAbs=now.getFullYear()*12+now.getMonth();
+  const rows=[];
+  months.forEach((m,i)=>{
+    const abs=startAbs===null?nowAbs:startAbs+i;
+    const state=abs<nowAbs?'past':abs===nowAbs?'now':'future';
+    const projectSales=calcProjectSalesByMonth(m);
+    const ledgerSales=state==='future'?null:sumLedger(m).sales;
+    rows.push({
+      index:m,label:(m+1)+'月',state,
+      projectSales,ledgerSales,
+      total:projectSales+(ledgerSales||0)
+    });
+  });
+  return rows;
+}
+
+// その案件が期の中で売上を生む月（期の並び順）
+function projectMonthsInFiscal(p,fy){
+  return fiscalMonths(fy).filter(m=>projectHasMonth(p,m));
+}
+
+function forecastPeriodLabel(p,fy){
+  const ms=projectMonthsInFiscal(p,fy);
+  if(ms.length===0)return'-';
+  if(ms.length===1)return(ms[0]+1)+'月';
+  return`${ms[0]+1}月〜${ms[ms.length-1]+1}月（${ms.length}ヶ月）`;
+}
+
+function forecastProjectTotal(p,fy){
+  return projectMonthsInFiscal(p,fy).reduce((a,m)=>a+projectMonthAmount(p,m),0);
+}
+
+// 月額の表示（単発は「-」）
+function forecastMonthlyAmount(p){
+  if(p.contract==='monthly')return fmt(p.amount);
+  if(p.contract==='annual')return fmt(Math.round((p.amount||0)/12));
+  return'-';
+}
+
+function initForecastPage(){
+  const sel=document.getElementById('forecast-fiscal');
+  const list=fiscalList();
+  const keep=sel.value;
+  sel.innerHTML=list.map(f=>`<option value="${f.id}">${f.name}</option>`).join('');
+  const act=activeFiscalYear();
+  sel.value=list.some(f=>String(f.id)===keep)?keep:(act?String(act.id):'');
+  generateForecast();
+}
+
+function generateForecast(){
+  const fy=forecastFiscalYear();
+  const body=document.getElementById('forecast-body');
+  if(!fy){
+    body.innerHTML='<div class="empty-state">期が登録されていません。設定ページの「期の管理」から追加してください。</div>';
+    return;
+  }
+  const rows=forecastRows(fy);
+  const kinds={single:'単発',monthly:'月次',annual:'年次'};
+
+  /* --- サマリー --- */
+  const booked=rows.reduce((a,r)=>a+r.projectSales,0);
+  const done=rows.filter(r=>r.state!=='future').reduce((a,r)=>a+r.total,0);
+  const planned=rows.filter(r=>r.state==='future').reduce((a,r)=>a+r.projectSales,0);
+  const rate=pct(booked,fy.salesTarget);
+
+  /* --- 月別予実 --- */
+  const cellBg=st=>st==='now'?'background:var(--blue-bg);':st==='future'?'background:var(--bg-secondary);':'';
+  const badge=st=>st==='now'?'<span class="badge badge-blue">✅ 実績（当月）</span>'
+    :st==='future'?'<span class="badge badge-gray">📅 予定</span>'
+    :'<span class="badge badge-green">✅ 実績</span>';
+  let prev=null;
+  const monthRows=rows.map(r=>{
+    let mom='-';
+    if(r.state!=='future'&&prev!==null&&prev>0){
+      const d=Math.round((r.total-prev)/prev*1000)/10;
+      mom=`<span style="color:${d>=0?'#1D9E75':'#E24B4A'}">${d>=0?'+':''}${d}%</span>`;
+    }
+    if(r.state!=='future')prev=r.total;
+    return`<tr style="${cellBg(r.state)}">
+      <td style="font-weight:500;white-space:nowrap">${r.label}</td>
+      <td style="text-align:right">${fmt(r.projectSales)}</td>
+      <td style="text-align:right">${r.ledgerSales===null?'-':fmt(r.ledgerSales)}</td>
+      <td style="text-align:right;font-weight:600">${fmt(r.total)}</td>
+      <td style="text-align:right">${mom}</td>
+      <td>${badge(r.state)}</td>
+    </tr>`;
+  }).join('');
+  const sumProject=rows.reduce((a,r)=>a+r.projectSales,0);
+  const sumLedgerCol=rows.reduce((a,r)=>a+(r.ledgerSales||0),0);
+  const sumTotal=rows.reduce((a,r)=>a+r.total,0);
+
+  /* --- 案件別明細 --- */
+  const inFiscal=p=>projectMonthsInFiscal(p,fy).length>0;
+  const booked_=S.projects.filter(p=>
+    (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&inFiscal(p));
+  const pipeline=S.projects.filter(p=>p.status==='商談中'&&inFiscal(p));
+  const pipelineTotal=pipeline.reduce((a,p)=>a+forecastProjectTotal(p,fy),0);
+
+  const projectRow=p=>`<tr>
+    <td style="font-size:12px">${p.client||'-'}</td>
+    <td style="font-weight:500">${p.name}</td>
+    <td><span class="badge badge-gray">${kinds[p.contract]||p.contract}</span></td>
+    <td style="text-align:right">${forecastMonthlyAmount(p)}</td>
+    <td style="font-size:12px;white-space:nowrap">${forecastPeriodLabel(p,fy)}</td>
+    <td style="text-align:right;font-weight:600">${fmt(forecastProjectTotal(p,fy))}</td>
+    <td>${statusBadge(p.status)}</td>
+  </tr>`;
+
+  const projectHead=`<thead><tr>
+    <th>顧客名</th><th>案件名</th><th>種別</th><th style="text-align:right">月額</th>
+    <th>期間</th><th style="text-align:right">期間合計</th><th>状態</th>
+  </tr></thead>`;
+
+  body.innerHTML=`
+  <div class="report-head">
+    <div style="font-size:15px;font-weight:bold">${S.company.name||''}</div>
+    <div style="font-size:20px;font-weight:bold;margin:6px 0">${fy.name} 案件予実レポート</div>
+    <div style="font-size:12px;color:#555">${fiscalLabel(fy)}　生成日：${jpDate(today())}</div>
+  </div>
+
+  <div class="report-card">
+    <div class="report-card-title">サマリー</div>
+    <div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">受注済み合計</div>
+        <div class="metric-value blue" style="font-size:20px">${fmt(booked)}</div>
+        <div class="metric-sub">契約済・進行中・完了の期間合計</div></div>
+      <div class="metric-card"><div class="metric-label">今月までの実績</div>
+        <div class="metric-value" style="font-size:20px">${fmt(done)}</div>
+        <div class="metric-sub">案件＋収支入力</div></div>
+      <div class="metric-card"><div class="metric-label">翌月以降の予定</div>
+        <div class="metric-value" style="font-size:20px">${fmt(planned)}</div>
+        <div class="metric-sub">案件ベース</div></div>
+      <div class="metric-card"><div class="metric-label">達成率</div>
+        <div class="metric-value" style="font-size:20px;color:${rate===null?'':rate>=100?'#1D9E75':rate>=70?'#EF9F27':'#E24B4A'}">${rateText(rate)}</div>
+        <div class="metric-sub">売上目標 ${fmt(fy.salesTarget)}</div></div>
+    </div>
+    ${rate===null?'':progressBar(rate)}
+  </div>
+
+  <div class="report-card">
+    <div class="report-card-title">月別予実</div>
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th>月</th><th style="text-align:right">案件売上（実績/予定）</th><th style="text-align:right">収支売上入力</th>
+        <th style="text-align:right">合計</th><th style="text-align:right">前月比</th><th>状態</th>
+      </tr></thead>
+      <tbody>${monthRows}
+        <tr style="font-weight:bold;background:var(--bg-secondary)">
+          <td>期の合計</td>
+          <td style="text-align:right">${fmt(sumProject)}</td>
+          <td style="text-align:right">${fmt(sumLedgerCol)}</td>
+          <td style="text-align:right">${fmt(sumTotal)}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="report-card">
+    <div class="report-card-title">案件別明細（契約済・進行中・完了）</div>
+    ${booked_.length===0?'<div class="empty-state">この期に売上が発生する案件はありません。</div>':
+    `<div class="table-wrap"><table>${projectHead}<tbody>
+      ${booked_.map(projectRow).join('')}
+      <tr style="font-weight:bold;background:var(--bg-secondary)">
+        <td colspan="5">合計（${booked_.length}件）</td>
+        <td style="text-align:right">${fmt(booked_.reduce((a,p)=>a+forecastProjectTotal(p,fy),0))}</td>
+        <td></td>
+      </tr>
+    </tbody></table></div>`}
+  </div>
+
+  <div class="report-card">
+    <div class="report-card-title">📌 商談中（見込み）</div>
+    ${pipeline.length===0?'<div class="empty-state">商談中の案件はありません。</div>':
+    `<div class="table-wrap"><table>${projectHead}<tbody>
+      ${pipeline.map(projectRow).join('')}
+    </tbody></table></div>
+    <div style="text-align:right;font-size:14px;font-weight:600;margin-top:10px;color:var(--amber-text)">
+      売上見込み: ${fmt(pipelineTotal)}
+    </div>`}
+  </div>`;
+}
+
+function printForecast(){
+  if(!document.getElementById('forecast-body').innerHTML.trim()){
+    alert('先にレポートを生成してください');return;
+  }
+  window.print();
+}
+
 /* ===== 融資力診断 =====================================================
    アプリ内のデータから、融資審査でよく見られる5項目を採点して表示する。
    AIによるアドバイスはGAS経由で取得する（APIキーをブラウザに置かないため）。
@@ -2845,7 +3062,9 @@ function switchReportTab(name,btn){
   btn.classList.add('active');
   document.getElementById('report-pane-monthly').style.display=name==='monthly'?'':'none';
   document.getElementById('report-pane-loan').style.display=name==='loan'?'':'none';
+  document.getElementById('report-pane-forecast').style.display=name==='forecast'?'':'none';
   if(name==='loan')generateLoanReport();
+  if(name==='forecast')initForecastPage();
 }
 
 /* ===== 月次決算レポート =============================================
