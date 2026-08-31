@@ -34,7 +34,8 @@ var SPREADSHEET_ID = '1gdtg7q3NwG3FQmWGc7lMpNEKROyvyRwuoIRKNSPsi4k';
 // 各シートの列定義（この順番でシートに書き込まれます）
 var SHEET_DEFS = {
   projects: ['id', 'name', 'client', 'amount', 'status', 'start', 'end', 'contract', 'memo'],
-  quotes:   ['id', 'subject', 'client', 'amount', 'type', 'date', 'expire', 'due', 'items', 'note'],
+  quotes:   ['id', 'subject', 'client', 'amount', 'type', 'date', 'expire', 'due',
+    'contractStart', 'contractEnd', 'paymentMethod', 'isMonthly', 'items', 'note'],
   ledger:   ['id', 'date', 'type', 'desc', 'amount', 'fixedCostId'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
   fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
@@ -43,7 +44,7 @@ var SHEET_DEFS = {
 
 // 日付として自動変換されると困る列（テキスト書式を強制する）
 var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'value',
-  'startMonth', 'endMonth'];
+  'startMonth', 'endMonth', 'contractStart', 'contractEnd'];
 
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
@@ -186,6 +187,10 @@ function readQuotes_(sh) {
       date: str_(o.date),
       expire: str_(o.expire),
       due: str_(o.due),
+      contractStart: ym_(o.contractStart),
+      contractEnd: ym_(o.contractEnd),
+      paymentMethod: str_(o.paymentMethod),
+      isMonthly: bool_(o.isMonthly),
       items: items,
       note: str_(o.note)
     };
@@ -319,7 +324,9 @@ function writeAll_(data) {
   var quotes = (data.quotes || []).map(function (q) {
     return [
       str_(q.id), str_(q.subject), str_(q.client), num_(q.amount), str_(q.type) || '見積書',
-      str_(q.date), str_(q.expire), str_(q.due), JSON.stringify(q.items || []), str_(q.note)
+      str_(q.date), str_(q.expire), str_(q.due),
+      ym_(q.contractStart), ym_(q.contractEnd), str_(q.paymentMethod), !!q.isMonthly,
+      JSON.stringify(q.items || []), str_(q.note)
     ];
   });
 

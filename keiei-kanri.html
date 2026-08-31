@@ -694,6 +694,21 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="form-group"><label class="form-label" id="q-date-label">見積日</label><input id="q-date" type="date"></div>
     <div class="form-group"><label class="form-label" id="q-expire-label">有効期限</label><input id="q-expire" type="date"></div>
   </div>
+  <div class="form-row three">
+    <div class="form-group"><label class="form-label">契約開始月</label><input id="q-cstart" type="month" onchange="updateContractHint()"></div>
+    <div class="form-group"><label class="form-label">契約終了月</label><input id="q-cend" type="month" onchange="updateContractHint()"></div>
+    <div class="form-group"><label class="form-label">支払い方法</label>
+      <select id="q-payment">
+        <option>毎月末日払い</option><option>一括払い</option><option>分割払い（要相談）</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-row single" style="margin-bottom:6px">
+    <label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input id="q-monthly" type="checkbox" checked onchange="updateContractHint()" style="width:auto"> 月額固定（明細の金額を月額として扱う）
+    </label>
+  </div>
+  <div id="q-contract-hint" style="font-size:12px;margin-bottom:10px;min-height:18px"></div>
   <div style="margin-bottom:8px">
     <div style="display:grid;grid-template-columns:2.5fr 0.8fr 1fr 1fr auto;gap:6px;font-size:12px;color:var(--text-secondary);padding:0 4px 6px;border-bottom:0.5px solid var(--border)">
       <span>品名・作業内容</span><span>数量</span><span>単価</span><span>金額</span><span></span>
@@ -1832,7 +1847,19 @@ function openCreateQuoteModal(type){
   ['q-subject','q-client','q-expire'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('q-date').value=today();
   document.getElementById('q-note').value=S.company.note||'';
+  resetContractFields();
   renderQuoteItems();openModal('modal-create-quote');
+}
+
+// 契約期間の初期値。当月から3ヶ月（最低契約期間）を入れる。
+function resetContractFields(){
+  const now=new Date();
+  const start=now.getFullYear()*12+now.getMonth();
+  document.getElementById('q-cstart').value=absToYm(start);
+  document.getElementById('q-cend').value=absToYm(start+2);
+  document.getElementById('q-payment').value='毎月末日払い';
+  document.getElementById('q-monthly').checked=true;
+  updateContractHint();
 }
 
 function openCreateInvoiceModal(){
@@ -1875,15 +1902,26 @@ function createQuote(){
   const sub=currentQuoteItems.reduce((a,it)=>a+it.qty*it.unit,0);
   const type=currentDocType||'見積書';
   const expire=document.getElementById('q-expire').value;
+  const isMonthly=document.getElementById('q-monthly').checked;
+  const contractStart=document.getElementById('q-cstart').value;
+  const contractEnd=document.getElementById('q-cend').value;
+  const nMonths=contractMonths(contractStart,contractEnd);
+  if(isMonthly&&nMonths!==null&&nMonths<3&&
+     !confirm('契約期間が'+nMonths+'ヶ月です。最低契約期間は3ヶ月ですが、このまま作成しますか？'))return;
   const qdata={
     id:makeDocNumber(type),
     subject,
     client:document.getElementById('q-client').value.trim()||'御中',
-    amount:sub+Math.round(sub*0.1),
+    // 一覧では契約全体の金額が分かるようにする（月額固定なら月額×契約月数）
+    amount:(sub+Math.round(sub*0.1))*((isMonthly&&nMonths)?nMonths:1),
     type,
     date:document.getElementById('q-date').value||today(),
     expire,
     due:type==='請求書'?expire:'',
+    contractStart,
+    contractEnd,
+    paymentMethod:document.getElementById('q-payment').value,
+    isMonthly,
     items:currentQuoteItems.map(it=>({...it})),
     note:document.getElementById('q-note').value.trim()
   };
@@ -1894,6 +1932,7 @@ function createQuote(){
 function quickQuote(pid){
   const p=S.projects.find(x=>x.id===pid);if(!p)return;
   applyDocTypeLabels('見積書');
+  resetContractFields();
   currentQuoteItems=[{name:p.name,qty:1,unit:p.amount,total:p.amount}];
   document.getElementById('q-subject').value=p.name;
   document.getElementById('q-client').value=(p.client||'')+' 御中';
@@ -3252,6 +3291,35 @@ function docBankRow(label,value,color){
   return `<div style="margin-bottom:5px"><span style="display:inline-block;width:100px;font-weight:bold">${label}</span>：<span style="color:${color||'#111'}">${value}</span></div>`;
 }
 
+// 契約月数（両端を含む）。片方でも欠けていれば null。
+function contractMonths(startYm,endYm){
+  const s=ymToAbs(startYm),e=ymToAbs(endYm);
+  if(s===null||e===null||e<s)return null;
+  return e-s+1;
+}
+
+// YYYY-MM を「2026年9月」に
+function ymJp(ym){
+  const a=ymToAbs(ym);
+  return a===null?'':Math.floor(a/12)+'年'+(a%12+1)+'月';
+}
+
+// 契約期間の警告表示（最低契約期間は3ヶ月）
+function updateContractHint(){
+  const hint=document.getElementById('q-contract-hint');
+  if(!hint)return;
+  const monthly=document.getElementById('q-monthly').checked;
+  const n=contractMonths(document.getElementById('q-cstart').value,document.getElementById('q-cend').value);
+  if(!monthly){hint.innerHTML='';return;}
+  if(n===null){
+    hint.innerHTML='<span style="color:var(--text-muted)">契約開始月と終了月を入力すると、契約期間合計を見積書に記載します。</span>';
+  }else if(n<3){
+    hint.innerHTML='<span style="color:var(--red)">※最低契約期間は3ヶ月です</span>';
+  }else{
+    hint.innerHTML='<span style="color:var(--text-secondary)">契約期間 '+n+'ヶ月　支払方法: '+document.getElementById('q-payment').value+'</span>';
+  }
+}
+
 // 見積書・請求書の本体。q=書類データ、c=会社情報。
 function buildDocHtml(q,c){
   const lb=docLabels(q.type);
@@ -3264,6 +3332,12 @@ function buildDocHtml(q,c){
   const td='padding:10px 12px;border-bottom:1px solid #e0e0e0;';
   const sumTd='padding:10px 12px;border-bottom:1px solid #e0e0e0;text-align:right;';
   const totalTd='padding:10px 12px;background:'+DOC_NAVY+';color:#fff;font-weight:bold;text-align:right;';
+
+  // 月額固定の契約かどうか。契約期間があれば月数と期間合計も出す。
+  const monthly=!!q.isMonthly;
+  const months=contractMonths(q.contractStart,q.contractEnd);
+  const periodTotal=monthly&&months?total*months:null;
+
   const meta=[
     c.zip?'〒'+c.zip:'',
     c.addr||'',
@@ -3271,6 +3345,7 @@ function buildDocHtml(q,c){
     c.email||'',
     c.invoice?'登録番号: '+c.invoice:''
   ].filter(Boolean).join('<br>');
+
   return `
 <div style="background:#fff;color:#111;font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',Meiryo,sans-serif;font-size:13px;line-height:1.6;padding:40px">
   <div style="font-size:28px;font-weight:bold;letter-spacing:12px;text-align:center;color:${DOC_NAVY}">${lb.title}</div>
@@ -3288,16 +3363,21 @@ function buildDocHtml(q,c){
       <div style="font-size:11px;color:#555;line-height:1.9;margin-top:4px">${meta}</div>
     </div>
   </div>
-  <div style="background:#f5f5f5;border:1px solid #ddd;border-radius:6px;text-align:center;padding:16px;margin-bottom:26px">
-    <div style="font-size:12px;color:#555">${lb.amountLabel}</div>
+  <div style="background:#f5f5f5;border:1px solid #ddd;border-radius:6px;text-align:center;padding:16px;margin-bottom:${months||q.paymentMethod?'14px':'26px'}">
+    <div style="font-size:12px;color:#555">${lb.amountLabel}${monthly?'（月額）':''}</div>
     <div style="font-size:32px;font-weight:bold;color:${DOC_NAVY};margin-top:2px">${docYen(total)}-</div>
+    ${periodTotal!==null?`<div style="font-size:12px;color:#555;margin-top:6px">契約期間合計 <strong style="color:${DOC_NAVY};font-size:14px">${docYen(periodTotal)}-</strong>（${months}ヶ月）</div>`:''}
   </div>
+  ${(months||q.paymentMethod)?`<div style="border:1px solid #ddd;border-radius:6px;padding:12px 16px;margin-bottom:26px;font-size:12px;line-height:1.9">
+    ${months?`<div><span style="display:inline-block;width:82px;font-weight:bold">契約期間</span>：${ymJp(q.contractStart)}〜${ymJp(q.contractEnd)}（${months}ヶ月）</div>`:''}
+    ${q.paymentMethod?`<div><span style="display:inline-block;width:82px;font-weight:bold">支払方法</span>：${q.paymentMethod}</div>`:''}
+  </div>`:''}
   <table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr>
       <th style="${th}text-align:left">品名・件名</th>
       <th style="${th}text-align:right;width:70px">数量</th>
-      <th style="${th}text-align:right;width:110px">単価（税抜）</th>
-      <th style="${th}text-align:right;width:120px">金額（税抜）</th>
+      <th style="${th}text-align:right;width:110px">${monthly?'月額単価（税抜）':'単価（税抜）'}</th>
+      <th style="${th}text-align:right;width:120px">${monthly?'月額（税抜）':'金額（税抜）'}</th>
     </tr></thead>
     <tbody>${items.map(it=>`<tr>
       <td style="${td}">${it.name||''}</td>
@@ -3306,12 +3386,22 @@ function buildDocHtml(q,c){
       <td style="${td}text-align:right">${docYen(it.qty*it.unit)}</td>
     </tr>`).join('')}</tbody>
     <tfoot>
-      <tr><td colspan="2" style="border:none"></td><td style="${sumTd}">小計（税抜）</td><td style="${sumTd}">${docYen(sub)}</td></tr>
+      <tr><td colspan="2" style="border:none"></td><td style="${sumTd}">${monthly?'月額小計（税抜）':'小計（税抜）'}</td><td style="${sumTd}">${docYen(sub)}</td></tr>
       <tr><td colspan="2" style="border:none"></td><td style="${sumTd}">消費税（10%）</td><td style="${sumTd}">${docYen(tax)}</td></tr>
-      <tr><td colspan="2" style="border:none"></td><td style="${totalTd}">合計金額（税込）</td><td style="${totalTd}">${docYen(total)}-</td></tr>
+      <tr><td colspan="2" style="border:none"></td><td style="${totalTd}">${monthly?'月額合計（税込）':'合計金額（税込）'}</td><td style="${totalTd}">${docYen(total)}-</td></tr>
+      ${periodTotal!==null?`<tr><td colspan="2" style="border:none"></td>
+        <td style="${totalTd}">契約期間合計（税込）</td>
+        <td style="${totalTd}">${docYen(periodTotal)}-</td></tr>
+      <tr><td colspan="4" style="padding:6px 12px;text-align:right;font-size:11px;color:#555;border:none">月額合計 ${docYen(total)} × ${months}ヶ月</td></tr>`:''}
     </tfoot>
   </table>
-  <div style="border:1px solid #ddd;padding:16px;margin-top:26px;font-size:12px">
+  ${monthly?`<div style="border:1px solid #ddd;padding:14px 16px;margin-top:22px;font-size:11px;line-height:2;color:#333">
+    <div style="font-weight:bold;margin-bottom:4px;font-size:12px">【特記事項】</div>
+    ・本契約の最低契約期間は3ヶ月とさせていただきます。<br>
+    ・契約期間満了の1ヶ月前までにご連絡がない場合、同条件にて自動更新となります。<br>
+    ・解約をご希望の場合は、解約希望日の1ヶ月前までにご連絡ください。
+  </div>`:''}
+  <div style="border:1px solid #ddd;padding:16px;margin-top:${monthly?'14px':'26px'};font-size:12px">
     <div style="font-weight:bold;margin-bottom:8px">【お振込先】</div>
     ${docBankRow('銀行名',c.bankName)}${docBankRow('支店名',c.bankBranch)}${docBankRow('口座種別',c.accountType)}${docBankRow('口座番号',c.accountNumber)}${docBankRow('口座名義',c.accountHolder)}${docBankRow(lb.dueLabel,jpDate(q.due||q.expire),DOC_RED)}
   </div>
