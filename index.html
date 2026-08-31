@@ -368,8 +368,14 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 
 <!-- LEDGER -->
 <div id="page-ledger" class="page">
-  <div class="section-header">
-    <h1 class="section-title">収支管理</h1>
+  <div class="section-header" style="flex-wrap:wrap;gap:10px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <h1 class="section-title">収支管理</h1>
+      <select id="ledger-month" onchange="renderLedger()" style="width:auto;font-size:13px">
+        <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
+      </select>
+      <span id="ledger-summary" style="font-size:12px;color:var(--text-secondary);white-space:nowrap"></span>
+    </div>
     <div style="display:flex;gap:8px;align-items:center">
       <button class="btn" onclick="openDriveImportModal()">☁️ ドライブから取込</button>
       <button class="btn" onclick="openFixedCostsModal()">🔁 固定費管理</button>
@@ -388,7 +394,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       </table></div>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title">直近の収支</span></div>
+      <div class="card-header"><span class="card-title" id="ledger-list-title">直近の収支</span></div>
       <div class="table-wrap"><table>
         <thead><tr><th>日付</th><th>区分</th><th>摘要</th><th>金額</th><th>操作</th></tr></thead>
         <tbody id="ledger-list"></tbody>
@@ -3678,13 +3684,26 @@ async function handlePDFUpload(event){
   reader.readAsDataURL(file);
 }
 
+// 収支管理ページで選択中の月。「全期間」なら null。
+function currentLedgerMonth(){
+  const el=document.getElementById('ledger-month');
+  if(!el||el.value==='')return null;
+  return parseInt(el.value);
+}
+
 function renderLedger(){
-  const mi=new Date().getMonth();
-  const t=sumLedger(mi);
+  const mi=currentLedgerMonth();
+  const all=mi===null;
+  const t=all?sumLedgerYear():sumLedger(mi);
   // 売上は「案件ベース + 収支の売上入力」、経費・役員報酬は収支の入力から集計する
-  const sales=salesByMonth(mi),exp=t.expense,lab=t.labor,tax=t.tax;
-  const pl=planOf(mi);
-  document.getElementById('plan-month-label').textContent=(mi+1)+'月';
+  const sales=all?salesYearTotal():salesByMonth(mi),exp=t.expense,lab=t.labor,tax=t.tax;
+  const pl=all?planYearTotal():planOf(mi);
+  document.getElementById('plan-month-label').textContent=all?'全期間':(mi+1)+'月';
+
+  // 収支入力ベースのサマリー（案件ベースの売上は含めない）
+  const income=t.sales,outgo=t.expense+t.labor+t.tax;
+  document.getElementById('ledger-summary').innerHTML=
+    `収入: ${fmt(income)}　支出: ${fmt(outgo)}　収支: <strong style="color:${income-outgo>=0?'#1D9E75':'#E24B4A'}">${fmt(income-outgo)}</strong>`;
   document.getElementById('plan-table').innerHTML=[
     {k:'売上',actual:sales,plan:pl.sales},
     {k:'経費合計',actual:exp,plan:pl.expense},
@@ -3694,8 +3713,12 @@ function renderLedger(){
     const d=r.actual-r.plan;const c=d>=0?'#1D9E75':'#E24B4A';
     return`<tr><td>${r.k}</td><td style="color:var(--text-secondary)">${fmt(r.plan)}</td><td style="font-weight:500">${fmt(r.actual)}</td><td style="color:${c};font-weight:500">${d>=0?'+':''}${fmt(d)}</td></tr>`;
   }).join('');
-  const sorted=[...S.ledger].sort((a,b)=>b.date.localeCompare(a.date));
-  document.getElementById('ledger-list').innerHTML=sorted.slice(0,15).map(l=>{
+  const sorted=S.ledger
+    .filter(l=>all||(l.date&&new Date(l.date).getMonth()===mi))
+    .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  document.getElementById('ledger-list-title').textContent=
+    (all?'全期間':(mi+1)+'月')+'の収支（'+sorted.length+'件）';
+  document.getElementById('ledger-list').innerHTML=sorted.map(l=>{
     return`<tr><td style="font-size:12px;white-space:nowrap">${l.date}</td><td>${ledgerBadge(l.type)}</td><td style="font-size:12px">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}</td><td style="font-weight:500">${fmt(l.amount)}</td><td><div style="display:flex;gap:4px"><button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button><button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button></div></td></tr>`;
   }).join('');
 }
@@ -4252,6 +4275,7 @@ function csvDownloadTemplate(type){
 document.getElementById('month-select').value=new Date().getMonth();
 document.getElementById('project-month').value=new Date().getMonth();
 document.getElementById('quote-month').value=new Date().getMonth();
+document.getElementById('ledger-month').value=new Date().getMonth();
 renderFiscalSelects();
 updatePlanMonthOptions();
 document.getElementById('l-date').value=today();
