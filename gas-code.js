@@ -49,7 +49,7 @@ var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'val
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
   'bankName', 'bankBranch', 'accountType', 'accountNumber', 'accountHolder',
-  'invoice', 'payment', 'note'];
+  'invoice', 'payment', 'shareWith', 'note'];
 // settings シートに保存する計画の項目
 // 月次計画は plan.<月>.<項目> というキーで保存する（例: plan.4.sales）
 var PLAN_FIELDS = ['sales', 'expense', 'labor', 'tax'];

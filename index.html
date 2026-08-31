@@ -549,6 +549,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <select id="report-month" style="width:auto;font-size:13px"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option></select>
       <button class="btn primary" onclick="generateReport()">レポートを生成</button>
       <button class="btn" onclick="printReport()">🖨️ 印刷する</button>
+      <button class="btn" id="pl-download-btn" onclick="downloadMonthlyPL()">📥 月次PL（Excel）をダウンロード</button>
     </div>
     <div class="report-sheet"><div id="report-body"></div></div>
   </div>
@@ -592,6 +593,9 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="form-row">
       <div class="form-group"><label class="form-label">インボイス登録番号</label><input id="s-invoice" type="text" placeholder="T1234567890123"></div>
       <div class="form-group"><label class="form-label">支払条件</label><input id="s-payment" type="text" placeholder="発行日から30日以内"></div>
+    </div>
+    <div class="form-row single">
+      <div class="form-group"><label class="form-label">共有先（月次PLの「共有先」欄に入ります）</label><input id="s-shareWith" type="text" placeholder="例: 顧問税理士 〇〇先生 / 〇〇銀行 △△支店"></div>
     </div>
     <div class="form-row single">
       <div class="form-group"><label class="form-label">備考・特記事項</label><textarea id="s-note" placeholder="例: 本見積有効期限は発行日より30日間です。"></textarea></div>
@@ -948,6 +952,7 @@ const defaultState={
     accountHolder:'アスリンク株式会社',
     invoice:'',
     payment:'発行日から30日以内',
+    shareWith:'',
     note:''
   },
   projects:[],
@@ -2569,6 +2574,180 @@ function updatePlanMonthOptions(){
   else sel.value=String(months[0]);
 }
 
+/* ===== 月次PL（Excel）出力 ==========================================
+   SheetJS でExcelを生成する。書式（色・太字）に対応した xlsx-js-style を
+   使い、読めなければ書式なしの公式ビルドにフォールバックする。
+   =================================================================== */
+
+const PL_NAVY='1A2E4A';
+const PL_GRAY='F0F0F0';
+const PL_GREEN='1D9E75';
+const PL_RED='E24B4A';
+const PL_YEN='¥#,##0';
+
+let xlsxLoading=null;
+
+function loadScriptOnce(src){
+  return new Promise((resolve,reject)=>{
+    const el=document.createElement('script');
+    el.src=src;
+    el.onload=()=>resolve();
+    el.onerror=()=>{el.remove();reject(new Error('読み込み失敗: '+src));};
+    document.head.appendChild(el);
+  });
+}
+
+// 必要になったときだけライブラリを読み込む
+function loadXlsx(){
+  if(window.XLSX)return Promise.resolve(window.XLSX);
+  if(xlsxLoading)return xlsxLoading;
+  const urls=[
+    'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js', // 書式に対応
+    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'   // 予備（書式なし）
+  ];
+  xlsxLoading=urls
+    .reduce((p,u)=>p.catch(()=>loadScriptOnce(u)),Promise.reject(new Error('start')))
+    .then(()=>{
+      if(!window.XLSX)throw new Error('XLSXが読み込めませんでした');
+      return window.XLSX;
+    });
+  return xlsxLoading;
+}
+
+// 月インデックスから実際の年を求める（期の並びを使う。期が無ければ今年）
+function monthYear(mi){
+  const fy=activeFiscalYear();
+  const start=fy?ymToAbs(fy.startMonth):null;
+  if(start!==null){
+    const months=fiscalMonths(fy);
+    const at=months.indexOf(mi);
+    if(at>=0)return Math.floor((start+at)/12);
+  }
+  return new Date().getFullYear();
+}
+
+/* ---- 1行分のセルを作る ---- */
+function plCell(v,opt){
+  const o=opt||{};
+  const cell=typeof v==='number'?{v,t:'n'}:{v:v==null?'':String(v),t:'s'};
+  const st={};
+  if(o.money){cell.z=PL_YEN;st.numFmt=PL_YEN;}
+  if(o.bold||o.head||o.total)st.font=Object.assign({bold:true},st.font);
+  if(o.head)st.font={bold:true,color:{rgb:'FFFFFF'}};
+  if(o.head)st.fill={fgColor:{rgb:PL_NAVY}};
+  if(o.total)st.fill={fgColor:{rgb:PL_GRAY}};
+  if(o.color)st.font=Object.assign({},st.font,{color:{rgb:o.color}});
+  if(o.right)st.alignment={horizontal:'right'};
+  if(Object.keys(st).length)cell.s=st;
+  return cell;
+}
+
+function plRow(label,amount,note,opt){
+  const o=opt||{};
+  return[
+    plCell(label,o),
+    amount===null||amount===undefined?plCell('',o):plCell(amount,Object.assign({money:true},o)),
+    plCell(note||'',o)
+  ];
+}
+
+// 月次PLのシートデータを組み立てる
+function buildMonthlyPL(mi){
+  const XLSXlib=window.XLSX;
+  const y=monthYear(mi);
+  const c=S.company;
+  const kinds={single:'単発',monthly:'月次継続',annual:'年次継続'};
+
+  const projects=S.projects.filter(p=>
+    (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,mi));
+  const projectSales=projects.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
+  const t=sumLedger(mi);
+  const otherSales=t.sales;
+  const salesTotal=projectSales+otherSales;
+
+  // 販売管理費（役員報酬・税金公課も含めた支出すべて）
+  const accounts=LEDGER_TYPES.filter(x=>x!=='売上');
+  const byAccount={};
+  accounts.forEach(k=>{byAccount[k]=0});
+  S.ledger.forEach(l=>{
+    if(!l.date||new Date(l.date).getMonth()!==mi)return;
+    if(l.type==='売上')return;
+    if(byAccount[l.type]===undefined)byAccount[l.type]=0; // 旧区分もそのまま出す
+    byAccount[l.type]+=l.amount;
+  });
+  const sgaTotal=Object.keys(byAccount).reduce((a,k)=>a+byAccount[k],0);
+  const profit=salesTotal-sgaTotal;
+  const margin=salesTotal>0?profit/salesTotal*100:null;
+
+  const fy=activeFiscalYear();
+  const cum=fy?fiscalTotals(fy,mi):null;
+  const cumSales=cum?cum.sales:null;
+  const cumProfit=cum?cum.sales-cum.expense-cum.labor-cum.tax:null;
+
+  const rows=[];
+  rows.push([plCell((c.name||'')+'　月次P/L（損益計算書）',{head:true}),plCell('',{head:true}),plCell('',{head:true})]);
+  rows.push(plRow('対象月',null,y+'年'+(mi+1)+'月'));
+  rows.push(plRow('作成日',null,jpDate(today())));
+  rows.push(plRow('共有先',null,c.shareWith||''));
+  rows.push(['','','']);
+
+  rows.push([plCell('【売上高】',{head:true}),plCell('',{head:true}),plCell('',{head:true})]);
+  rows.push([plCell('科目',{bold:true}),plCell('金額',{bold:true,right:true}),plCell('備考',{bold:true})]);
+  projects.forEach(p=>rows.push(plRow(
+    ((p.client||'')+' '+p.name).trim(),
+    projectMonthAmount(p,mi),
+    (kinds[p.contract]||p.contract)+'／'+p.status)));
+  rows.push(plRow('その他・新規受注分',otherSales,'収支入力の「売上」区分'));
+  rows.push(plRow('売上高合計',salesTotal,'',{total:true}));
+  rows.push(['','','']);
+
+  rows.push([plCell('【販売管理費】',{head:true}),plCell('',{head:true}),plCell('',{head:true})]);
+  rows.push([plCell('勘定科目',{bold:true}),plCell('金額',{bold:true,right:true}),plCell('備考',{bold:true})]);
+  Object.keys(byAccount).forEach(k=>rows.push(plRow(k,byAccount[k],'')));
+  rows.push(plRow('販売管理費合計',sgaTotal,'',{total:true}));
+  rows.push(['','','']);
+
+  rows.push([plCell('【損益】',{head:true}),plCell('',{head:true}),plCell('',{head:true})]);
+  rows.push(plRow('当月損益',profit,'売上高合計 − 販売管理費合計',
+    {total:true,color:profit>=0?PL_GREEN:PL_RED}));
+  rows.push([plCell('営業利益率',{total:true}),
+    plCell(margin===null?'-':margin.toFixed(1)+'%',{total:true,right:true,color:profit>=0?PL_GREEN:PL_RED}),
+    plCell('',{total:true})]);
+  rows.push(['','','']);
+
+  rows.push([plCell('【参考】期初からの累計',{head:true}),plCell('',{head:true}),plCell('',{head:true})]);
+  if(cum){
+    rows.push(plRow('累計売上',cumSales,fy.name+'（'+cum.months.length+'ヶ月経過）'));
+    rows.push(plRow('累計損益',cumProfit,'',{color:cumProfit>=0?PL_GREEN:PL_RED}));
+  }else{
+    rows.push(plRow('累計','','期が未登録のため計算できません'));
+  }
+
+  const ws=XLSXlib.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:25},{wch:15},{wch:30}];
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:2}}];
+  return{ws,y};
+}
+
+async function downloadMonthlyPL(){
+  const btn=document.getElementById('pl-download-btn');
+  const mi=parseInt(document.getElementById('report-month').value)||0;
+  btn.disabled=true;
+  const label=btn.textContent;
+  btn.textContent='生成中...';
+  try{
+    const XLSXlib=await loadXlsx();
+    const{ws,y}=buildMonthlyPL(mi);
+    const wb=XLSXlib.utils.book_new();
+    XLSXlib.utils.book_append_sheet(wb,ws,y+'年'+(mi+1)+'月');
+    XLSXlib.writeFile(wb,`月次PL_${y}-${String(mi+1).padStart(2,'0')}.xlsx`);
+  }catch(e){
+    alert('Excelの生成に失敗しました\n'+e.message);
+  }
+  btn.textContent=label;
+  btn.disabled=false;
+}
+
 /* ===== 案件予実レポート =============================================
    期の各月について、案件から見込まれる売上と収支に入力済みの売上を並べ、
    当月までを実績、翌月以降を予定として表示する。
@@ -3799,7 +3978,7 @@ function applyPlanToAllMonths(){
 }
 
 // 設定ページで編集できる会社情報の項目（入力欄のidは s-<項目名>）
-const COMPANY_FIELDS=['name','rep','zip','addr','tel','email','bankName','bankBranch','accountType','accountNumber','accountHolder','invoice','payment','note'];
+const COMPANY_FIELDS=['name','rep','zip','addr','tel','email','bankName','bankBranch','accountType','accountNumber','accountHolder','invoice','payment','shareWith','note'];
 
 function loadSettingsForm(){
   const c=S.company;
