@@ -74,8 +74,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 ## 融資力診断
 - レポートページの「💰 融資力診断」タブ。5項目×20点＝100点で採点
   （売上の継続性／現預金水準／収益性／借入状況／事業計画の精度）
-- 現預金残高・既存借入残高は設定ページの「財務情報」から入力し、
-  state の finance:{cash,loan} に保持。settingsシートには finance.cash / finance.loan で保存
+- 現預金残高は bankBalance（CF管理の口座残高と共通の1つの値）。既存借入残高は
+  設定ページの「財務情報」から入力し、finance.loan に保持（settingsシートは finance.loan）
 - AIアドバイスはGASの advise アクション経由（claude-sonnet-4-6）。
   ブラウザから直接Anthropic APIは呼ばない
 

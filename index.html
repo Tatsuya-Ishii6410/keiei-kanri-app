@@ -825,7 +825,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="card">
     <div class="card-header"><span class="card-title">財務情報（融資力診断に使用）</span></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">現預金残高（円）</label><input id="f-cash" type="number" placeholder="1500000"></div>
+      <div class="form-group"><label class="form-label">現預金残高（円）※CF管理の口座残高と共通</label><input id="f-cash" type="number" placeholder="1500000"></div>
       <div class="form-group"><label class="form-label">既存借入残高（円）</label><input id="f-loan" type="number" placeholder="0"></div>
     </div>
     <div class="actions-row">
@@ -1332,7 +1332,7 @@ const defaultState={
   // 交通費の計算設定
   travel:{googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15},
   // 財務情報（融資力診断で使う）
-  finance:{cash:0,loan:0},
+  finance:{loan:0},
   // 固定費: {id,type,desc,amount,startMonth,endMonth,enabled}
   fixedCosts:[],
   nextProjectId:1,nextQuoteNum:1,nextLedgerId:1,nextFixedCostId:1
@@ -1414,9 +1414,13 @@ function mergeState(parsed){
   s.travel=Object.assign({googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15},(parsed&&parsed.travel)||{});
   s.travel.gasolinePrice=parseInt(s.travel.gasolinePrice)||175;
   s.travel.fuelEfficiency=parseFloat(s.travel.fuelEfficiency)||15;
-  s.finance=Object.assign({cash:0,loan:0},(parsed&&parsed.finance)||{});
-  s.finance.cash=parseInt(s.finance.cash)||0;
+  s.finance=Object.assign({loan:0},(parsed&&parsed.finance)||{});
   s.finance.loan=parseInt(s.finance.loan)||0;
+  // 旧データの現預金残高（finance.cash）は口座残高に引き継ぐ
+  if(!s.bankBalance&&parsed&&parsed.finance&&parsed.finance.cash){
+    s.bankBalance=parseInt(parsed.finance.cash)||0;
+  }
+  delete s.finance.cash;
   if(!s.nextFixedCostId)s.nextFixedCostId=1;
   return s;
 }
@@ -4334,7 +4338,8 @@ function loanMetrics(){
   });
   const gapRate=gaps.length?gaps.reduce((a,b)=>a+b,0)/gaps.length:null;
 
-  const fin=S.finance||{cash:0,loan:0};
+  const fin=S.finance||{loan:0};
+  const cash=bankBalance();   // 口座残高（CF管理と共通）
   return {
     monthIndex:mi,
     months,
@@ -4345,9 +4350,9 @@ function loanMetrics(){
     recurring,
     recurringRate:monthSales>0?Math.round(recurring/monthSales*100):0,
     yearSales:salesYearTotal(),
-    cash:fin.cash||0,
+    cash,
     loan:fin.loan||0,
-    cashMonths:avgSales>0?Math.round((fin.cash||0)/avgSales*10)/10:0,
+    cashMonths:avgSales>0?Math.round(cash/avgSales*10)/10:0,
     plannedMonths,
     gapRate
   };
@@ -5265,16 +5270,16 @@ function loadSettingsForm(){
   COMPANY_FIELDS.forEach(k=>{
     const el=document.getElementById('s-'+k);if(el)el.value=c[k]||'';
   });
-  if(!S.finance)S.finance={cash:0,loan:0};
-  document.getElementById('f-cash').value=S.finance.cash||0;
+  if(!S.finance)S.finance={loan:0};
+  document.getElementById('f-cash').value=bankBalance();
   document.getElementById('f-loan').value=S.finance.loan||0;
   loadTravelForm();
   renderFiscalList();
 }
 
 function saveFinance(){
-  if(!S.finance)S.finance={cash:0,loan:0};
-  S.finance.cash=parseInt(document.getElementById('f-cash').value)||0;
+  if(!S.finance)S.finance={loan:0};
+  S.bankBalance=parseInt(document.getElementById('f-cash').value)||0;
   S.finance.loan=parseInt(document.getElementById('f-loan').value)||0;
   saveState();
   const msg=document.getElementById('finance-msg');

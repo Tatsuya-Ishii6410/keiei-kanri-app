@@ -256,7 +256,7 @@ function readSettings_(sh) {
   for (var i = 0; i < 12; i++) plan.push({ sales: 0, expense: 0, labor: 0, tax: 0 });
   var legacyPlan = null; // 月の区別が無かった頃の形式
   var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1, nextFixedCostId = 1;
-  var finance = { cash: 0, loan: 0 };
+  var finance = { loan: 0 };
   var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15 };
   var bankBalance = 0;
   var currentFiscalYearId = 0, nextFiscalYearId = 1;
@@ -286,8 +286,6 @@ function readSettings_(sh) {
       nextLedgerId = num_(value) || 1;
     } else if (key === 'nextFixedCostId') {
       nextFixedCostId = num_(value) || 1;
-    } else if (key === 'finance.cash') {
-      finance.cash = num_(value);
     } else if (key === 'finance.loan') {
       finance.loan = num_(value);
     } else if (key === 'travel.googleMapsApiKey') {
@@ -386,7 +384,6 @@ function writeAll_(data) {
   settings.push(['nextLedgerId', num_(data.nextLedgerId) || 1]);
   settings.push(['nextFixedCostId', num_(data.nextFixedCostId) || 1]);
   var fin = data.finance || {};
-  settings.push(['finance.cash', num_(fin.cash)]);
   settings.push(['finance.loan', num_(fin.loan)]);
   var tv = data.travel || {};
   settings.push(['travel.googleMapsApiKey', str_(tv.googleMapsApiKey)]);
