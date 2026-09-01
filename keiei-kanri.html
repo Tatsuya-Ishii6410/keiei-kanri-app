@@ -323,6 +323,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
         <option value="uninvoiced">未請求</option>
         <option value="invoiced">請求済</option>
         <option value="paid">入金済</option>
+        <option value="paid_manual">入金済（手動）</option>
       </select>
       <select id="project-month" onchange="renderProjects()" style="width:auto;font-size:13px">
         <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
@@ -734,7 +735,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">契約種別</label><select id="p-contract"><option value="single">単発</option><option value="monthly">月次継続</option><option value="annual">年次継続</option></select></div>
-    <div class="form-group"><label class="form-label">入金ステータス</label><select id="p-invoice"><option value="uninvoiced">未請求</option><option value="invoiced">請求済</option><option value="paid">入金済</option></select></div>
+    <div class="form-group"><label class="form-label">入金ステータス</label><select id="p-invoice"><option value="uninvoiced">未請求</option><option value="invoiced">請求済</option><option value="paid">入金済</option><option value="paid_manual">入金済（手動）</option></select></div>
     <div class="form-group"><label class="form-label">メモ</label><input id="p-memo" type="text" placeholder="備考など"></div>
   </div>
   <div class="actions-row">
@@ -841,6 +842,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <select id="bs-mode" onchange="updateBulkStatusForm()">
         <option value="to-invoiced">未請求 → 請求済</option>
         <option value="to-paid">請求済 → 入金済</option>
+        <option value="to-paid-manual">入金済（突合不要）に変更</option>
+        <option value="to-uninvoiced">請求済 → 未請求（取消）</option>
       </select>
     </div>
   </div>
@@ -1154,7 +1157,7 @@ function mergeState(parsed){
   s.plan=normalizePlan(parsed&&parsed.plan);
   if(!Array.isArray(s.projects))s.projects=[];
   s.projects.forEach(p=>{
-    if(['uninvoiced','invoiced','paid'].indexOf(p.invoiceStatus)<0)p.invoiceStatus='uninvoiced';
+    if(['uninvoiced','invoiced','paid','paid_manual'].indexOf(p.invoiceStatus)<0)p.invoiceStatus='uninvoiced';
     p.paidMonth=p.paidMonth||'';
     p.paidAmount=parseInt(p.paidAmount)||0;
   });
@@ -2726,6 +2729,14 @@ function bulkStatusMonth(){
   return parseInt(document.getElementById('bs-month').value)||0;
 }
 
+// 変更内容ごとの設定
+const BULK_STATUS_MODES={
+  'to-invoiced':   {to:'invoiced',    label:'未請求 → 請求済',        amount:false,payment:false},
+  'to-paid':       {to:'paid',        label:'請求済 → 入金済',        amount:true, payment:true},
+  'to-paid-manual':{to:'paid_manual', label:'入金済（突合不要）に変更', amount:false,payment:true},
+  'to-uninvoiced': {to:'uninvoiced',  label:'請求済 → 未請求（取消）', amount:false,payment:false}
+};
+
 function openBulkStatusModal(){
   const now=new Date();
   const prev=(now.getMonth()+11)%12;   // 既定は前月
@@ -2739,50 +2750,80 @@ function openBulkStatusModal(){
 }
 
 function updateBulkStatusForm(){
-  const paid=bulkStatusMode()==='to-paid';
-  document.getElementById('bs-paid-options').style.display=paid?'':'none';
+  const cfg=BULK_STATUS_MODES[bulkStatusMode()];
+  document.getElementById('bs-paid-options').style.display=cfg.payment?'':'none';
   renderBulkStatusList();
+}
+
+// その案件に紐づく請求書があるか
+function hasLinkedInvoice(p){
+  return S.quotes.some(q=>q.type==='請求書'&&(q.items||[]).some(it=>it.projectId===p.id));
 }
 
 // 変更対象の案件
 function bulkStatusTargets(){
   const mi=bulkStatusMonth();
-  if(bulkStatusMode()==='to-paid'){
-    return S.projects.filter(p=>p.status!=='失注'&&invoiceStatusOf(p)==='invoiced');
+  const mode=bulkStatusMode();
+  const alive=p=>p.status!=='失注';
+  if(mode==='to-paid'||mode==='to-uninvoiced'){
+    return S.projects.filter(p=>alive(p)&&invoiceStatusOf(p)==='invoiced');
   }
-  return S.projects.filter(p=>p.status!=='失注'&&invoiceStatusOf(p)==='uninvoiced'&&projectHasMonth(p,mi));
+  if(mode==='to-paid-manual'){
+    // 突合しないので未請求・請求済のどちらも対象にする
+    return S.projects.filter(p=>alive(p)&&['uninvoiced','invoiced'].indexOf(invoiceStatusOf(p))>=0);
+  }
+  return S.projects.filter(p=>alive(p)&&invoiceStatusOf(p)==='uninvoiced'&&projectHasMonth(p,mi));
 }
 
 function renderBulkStatusList(){
   const mi=bulkStatusMonth();
-  const paid=bulkStatusMode()==='to-paid';
+  const mode=bulkStatusMode();
+  const cfg=BULK_STATUS_MODES[mode];
   const list=bulkStatusTargets();
   const el=document.getElementById('bs-list');
   const btn=document.getElementById('bs-submit');
 
+  const emptyMsg={
+    'to-invoiced':(mi+1)+'月に売上が発生する未請求の案件がありません。',
+    'to-paid':'請求済の案件がありません。',
+    'to-uninvoiced':'請求済の案件がありません。',
+    'to-paid-manual':'未請求・請求済の案件がありません。'
+  }[mode];
+
   if(list.length===0){
-    el.innerHTML='<div class="empty-state">'+(paid
-      ?'請求済の案件がありません。'
-      :(mi+1)+'月に売上が発生する未請求の案件がありません。')+'</div>';
+    el.innerHTML='<div class="empty-state">'+emptyMsg+'</div>';
     btn.disabled=true;
     document.getElementById('bs-count').textContent='';
     return;
   }
   btn.disabled=false;
-  el.innerHTML='<div class="table-wrap"><table><thead><tr>'
-    +'<th style="width:36px"></th><th>顧客名</th><th>案件名</th><th>現在</th>'
-    +(paid?'<th style="min-width:120px">入金金額（税込）</th>':'<th style="text-align:right">対象月の金額</th>')
+
+  const linked=mode==='to-uninvoiced'?list.filter(hasLinkedInvoice).length:0;
+  const notice=linked>0
+    ?`<div class="alert alert-warning">※この案件に紐づいた請求書があります。請求書は削除されません。（${linked}件）</div>`
+    :'';
+
+  const lastCol=cfg.amount?'<th style="min-width:120px">入金金額（税込）</th>'
+    :mode==='to-paid-manual'?'<th style="text-align:right">対象月の税込額</th>'
+    :'<th>請求書</th>';
+
+  el.innerHTML=notice
+    +'<div class="table-wrap"><table><thead><tr>'
+    +'<th style="width:36px"></th><th>顧客名</th><th>案件名</th><th>現在</th>'+lastCol
     +'</tr></thead><tbody>'
     +list.map(p=>{
       const gross=grossAmount(projectMonthAmount(p,mi));
+      const last=cfg.amount
+        ?`<td><input type="number" class="bs-amount" data-id="${p.id}" value="${gross}" style="font-size:12px"></td>`
+        :mode==='to-paid-manual'
+        ?`<td style="text-align:right">${fmt(gross)}</td>`
+        :`<td>${hasLinkedInvoice(p)?'<span class="badge badge-amber">紐づく請求書あり</span>':'<span style="color:var(--text-muted);font-size:12px">-</span>'}</td>`;
       return`<tr>
       <td><input type="checkbox" class="bs-check" value="${p.id}" checked onchange="updateBulkStatusCount()" style="width:auto"></td>
       <td style="font-size:12px">${p.client||'-'}</td>
       <td style="font-weight:500">${p.name}</td>
       <td>${invoiceBadge(p)}</td>
-      ${paid
-        ?`<td><input type="number" class="bs-amount" data-id="${p.id}" value="${gross}" style="font-size:12px"></td>`
-        :`<td style="text-align:right">${fmt(projectMonthAmount(p,mi))}</td>`}
+      ${last}
     </tr>`;}).join('')
     +'</tbody></table></div>';
   updateBulkStatusCount();
@@ -2816,30 +2857,36 @@ function applyBulkStatus(){
   const ids=selectedBulkStatusIds();
   if(ids.length===0){alert('対象の案件を選択してください');return;}
   const mi=bulkStatusMonth();
-  const paid=bulkStatusMode()==='to-paid';
+  const mode=bulkStatusMode();
+  const cfg=BULK_STATUS_MODES[mode];
   const targets=S.projects.filter(p=>ids.indexOf(p.id)>=0);
 
-  if(!paid){
-    targets.forEach(p=>{p.invoiceStatus='invoiced';});
+  // 請求済に戻す・取り消すだけのパターン
+  if(!cfg.payment){
+    targets.forEach(p=>{
+      p.invoiceStatus=cfg.to;
+      if(cfg.to==='uninvoiced'){p.paidMonth='';p.paidAmount=0;}
+    });
     saveState();closeModal('modal-bulk-status');refreshAll();
-    alert(targets.length+'件のステータスを変更しました（未請求 → 請求済）');
+    alert(targets.length+'件のステータスを変更しました（'+cfg.label+'）');
     return;
   }
 
   const date=document.getElementById('bs-date').value||today();
   const toLedger=document.getElementById('bs-toledger').checked;
   const amounts=bulkStatusAmounts();
+  const manual=cfg.to==='paid_manual';
   const y=monthYear(mi);
   let added=0;
   targets.forEach(p=>{
-    const amount=amounts[p.id]||grossAmount(projectMonthAmount(p,mi));
-    markProjectPaid(p,date,amount);
+    const amount=(cfg.amount?amounts[p.id]:0)||grossAmount(projectMonthAmount(p,mi));
+    markProjectPaid(p,date,amount,cfg.to);
     if(toLedger&&amount>0){
       S.ledger.push({
         id:S.nextLedgerId++,
         date,
         type:'売上',
-        desc:`${p.client||p.name} ${y}年${mi+1}月分 入金`,
+        desc:`${p.client||p.name} ${y}年${mi+1}月分 入金`+(manual?'（手動）':''),
         amount,
         projectId:p.id
       });
@@ -2847,7 +2894,7 @@ function applyBulkStatus(){
     }
   });
   saveState();closeModal('modal-bulk-status');refreshAll();
-  alert(targets.length+'件のステータスを変更しました（請求済 → 入金済）'
+  alert(targets.length+'件のステータスを変更しました（'+cfg.label+'）'
     +(added>0?`\n（${added}件を収支に登録しました）`:''));
 }
 
@@ -2859,7 +2906,9 @@ function applyBulkStatus(){
 const INVOICE_STATES={
   uninvoiced:{label:'未請求',cls:'badge-gray'},
   invoiced:{label:'請求済',cls:'badge-amber'},
-  paid:{label:'入金済',cls:'badge-green'}
+  paid:{label:'入金済',cls:'badge-green'},
+  // 複数月まとめての入金など、明細と1対1で突合しないケース
+  paid_manual:{label:'入金済（手動）',cls:'badge-blue'}
 };
 
 let payTargetId=null;
@@ -2918,8 +2967,9 @@ function confirmPayment(){
 }
 
 // 案件を入金済みにする（収支への登録は呼び出し側で行う）
-function markProjectPaid(p,date,amount){
-  p.invoiceStatus='paid';
+// status に 'paid_manual' を渡すと突合不要の入金として記録する
+function markProjectPaid(p,date,amount,status){
+  p.invoiceStatus=status||'paid';
   p.paidMonth=String(date||'').slice(0,7);
   p.paidAmount=amount;
 }

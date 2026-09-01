@@ -132,7 +132,10 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   本当に保護するならGAS側の認証が必要
 
 ## 売上入金の突合
-- projects に invoiceStatus（uninvoiced/invoiced/paid）/ paidMonth / paidAmount を持つ
+- projects に invoiceStatus / paidMonth / paidAmount を持つ
+  invoiceStatus: uninvoiced=未請求(グレー) / invoiced=請求済(アンバー) /
+  paid=入金済(緑) / paid_manual=入金済・手動(青、複数月まとめ入金など突合しないケース)
+  paid_manual は 入金確認ボタン・入金待ち・銀行明細の突合の対象外
 - 税込金額は 案件金額×1.1 の小数点以下切り捨て（grossAmount）
 - 一括請求書を作ると対象案件が uninvoiced → invoiced になる
 - 案件ページの「💴 入金確認」（請求済の行のみ表示）で paid にし、
@@ -148,3 +151,6 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 案件ページの「📋 一括ステータス変更」で
   「未請求→請求済」「請求済→入金済」をまとめて処理できる
   入金済にするときは入金日と入金額を指定し、収支への一括登録も選べる
+- 一括ステータス変更は4パターン：未請求→請求済／請求済→入金済／
+  入金済（突合不要）に変更／請求済→未請求（取消）
+  取消では paidMonth・paidAmount もクリアする（請求書自体は削除しない）
