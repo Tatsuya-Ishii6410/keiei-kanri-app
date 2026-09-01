@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" style="color-scheme: light only;">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light only">
 <title>経営管理アプリ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -27,22 +28,8 @@
   --orange:#E8832A;--orange-dark:#cf7220;--orange-bg:#FDF0E3;
   --radius-md:8px;--radius-lg:12px;
 }
-@media(prefers-color-scheme:dark){
-  :root{
-    --bg-primary:#1e1e1e;--bg-secondary:#2a2a2a;--bg-tertiary:#242424;
-    --text-primary:#f0f0f0;--text-secondary:#a0a0a0;--text-muted:#686868;
-    --border:#3a3a3a;--border-hover:#555;
-    --blue-bg:#0c2d4a;--blue-text:#7bb8f0;
-    --green-bg:#0a2e1e;--green-text:#5ec99a;
-    --amber-bg:#2e1e05;--amber-text:#f0b865;
-    --red-bg:#2e0a0a;--red-text:#f09090;
-    --gray-bg:#2a2a2a;--gray-text:#a0a0a0;
-    --purple-bg:#251a3a;--purple-text:#bda3ea;
-    --navy:#16243a;--navy-text:#93a7bb;--orange-bg:#3a2410;
-  }
-}
 /* ===== レイアウト（サイドバー型） ===== */
-body{font-family:var(--font-body);font-weight:400;color:var(--text-primary);background:var(--bg-tertiary);font-size:14px;line-height:var(--lh-base)}
+body{font-family:var(--font-body);font-weight:400;color:#1a1a1a;background-color:#f0f2f5;color-scheme:light;font-size:14px;line-height:var(--lh-base)}
 .app{display:flex;min-height:100vh;background:var(--bg-tertiary)}
 
 .sidebar{position:fixed;top:0;left:0;bottom:0;width:220px;z-index:120;background:var(--navy);display:flex;flex-direction:column;overflow-y:auto}
