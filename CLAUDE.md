@@ -168,3 +168,12 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 同期表示はトップバーとサイドバー下部の2箇所（save-indicator / save-indicator-side）
 - グラフ：売上=オレンジ／営業利益=ネイビー／利益率=グリーン
 - 入金待ちカードは .metric-card.accent（オレンジ背景・白文字）
+
+## レスポンシブ
+- ブレークポイントは 768px（タブレット）と 480px（スマホ）
+- 768px以下：サイドバーをスライドイン式に、表とタブを横スクロール、
+  ボタン min-height:44px、入力欄 font-size:16px（iOSの自動ズーム防止）
+- 480px以下：メトリクスカードとフォームを1列、セレクトとボタンを縦積み、
+  表内の操作ボタンを縦積み、見積・請求の一覧は番号と顧客の列を隠す
+- 表を潰さず横スクロールさせるため .table-wrap table{min-width:560px}
+- 見積・請求のタブは .tab-full / .tab-short で表記を切り替える

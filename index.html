@@ -138,6 +138,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .tab{padding:8px 14px;font-size:13px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;border-radius:var(--radius-md) var(--radius-md) 0 0;font-family:inherit;border-bottom:2px solid transparent;margin-bottom:-0.5px}
 .tab:hover{color:var(--text-primary)}
 .tab.active{color:var(--blue-text);border-bottom-color:var(--blue);font-weight:500}
+.tab-short{display:none}
+@media(max-width:480px){.tab-full{display:none}.tab-short{display:inline}}
 .upload-zone{border:1.5px dashed var(--border-hover);border-radius:var(--radius-lg);padding:36px;text-align:center;cursor:pointer;transition:all 0.2s}
 .upload-zone:hover{background:var(--bg-secondary);border-color:var(--blue)}
 .alert{padding:11px 14px;border-radius:var(--radius-md);font-size:13px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
@@ -150,6 +152,9 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .modal{background:var(--bg-primary);border-radius:16px;padding:26px 28px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;border:1px solid var(--border);box-shadow:0 18px 50px rgba(16,24,40,0.28)}
 .modal.wide{max-width:680px}
 .modal.doc{max-width:720px}
+@media(max-width:480px){
+  #modal-preview-quote .actions-row .btn{width:100%;justify-content:center}
+}
 .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--navy)}
 .modal-title{font-size:16px;font-weight:600;color:var(--navy)}
 .actions-row{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
@@ -214,17 +219,81 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   .table-wrap{overflow:visible}
   @page{size:A4 portrait;margin:14mm}
 }
+/* ===== レスポンシブ（タブレット 768px / スマホ 480px） ===== */
 @media(max-width:768px){
   .two-col,.three-col{grid-template-columns:1fr}
   .form-row{grid-template-columns:1fr}
   .form-row.three{grid-template-columns:1fr 1fr}
   .si-text{display:none}
-  .sidebar{transform:translateX(-100%);transition:transform 0.2s}
+  .sidebar{transform:translateX(-100%);transition:transform 0.2s;box-shadow:4px 0 20px rgba(0,0,0,0.2)}
   .sidebar.open{transform:translateX(0)}
+  .sidebar-nav{padding:8px 10px}
+  .nav-btn{padding:14px 12px;font-size:14px}
+  .sidebar-logout{min-height:44px}
   .main{margin-left:0}
-  .menu-btn{display:inline-flex}
+  .menu-btn{display:inline-flex;align-items:center;min-height:40px}
   .topbar{padding:0 12px}
   .content{padding:16px 12px}
+  .card{padding:16px 14px;margin-bottom:14px}
+  .metric-grid{gap:12px}
+
+  /* 横に長い表はスクロールさせる（潰さない） */
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .table-wrap table{min-width:560px}
+  .tab-group{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+  .tab{white-space:nowrap;min-height:44px}
+
+  /* タップしやすさ。iOSの自動ズームを防ぐため入力欄は16px以上にする */
+  .btn{min-height:44px}
+  .btn.sm{min-height:36px}
+  input,select,textarea{font-size:16px}
+
+  .section-header{flex-wrap:wrap;gap:10px}
+  .actions-row{flex-wrap:wrap}
+  .csv-drop-zone,.upload-zone{padding:22px 14px}
+  .modal{max-width:95%;padding:18px 16px}
+  .modal.wide,.modal.doc{max-width:95%}
+}
+
+@media(max-width:480px){
+  .metric-grid,.metric-grid.two-by{grid-template-columns:1fr}
+  .form-row.three{grid-template-columns:1fr}
+  .content{padding:12px 10px}
+  .card{padding:14px 12px}
+  .modal{padding:16px 14px;border-radius:12px}
+
+  /* セレクトやボタンの並びを縦に */
+  .section-header>div{flex-direction:column;align-items:stretch!important;width:100%}
+  .section-header>div>*{width:100%}
+  .section-header select,.section-header .btn{width:100%}
+  .actions-row{flex-direction:column-reverse;align-items:stretch}
+  .actions-row .btn{width:100%;justify-content:center}
+
+  /* 表の中の操作ボタンは縦積みに */
+  #project-list td>div,#ledger-list td>div,#quote-list td>div,
+  #estimate-list td>div,#invoice-list td>div{flex-direction:column;align-items:stretch}
+  #project-list td>div .btn,#ledger-list td>div .btn,
+  #estimate-list td>div .btn,#invoice-list td>div .btn{width:100%;justify-content:center}
+
+  /* 見積・請求は金額と日付を優先し、番号と顧客は隠す */
+  #q-estimate table th:nth-child(1),#q-estimate table td:nth-child(1),
+  #q-estimate table th:nth-child(3),#q-estimate table td:nth-child(3),
+  #q-invoice table th:nth-child(1),#q-invoice table td:nth-child(1),
+  #q-invoice table th:nth-child(3),#q-invoice table td:nth-child(3){display:none}
+
+  .csv-drop-zone,.upload-zone{padding:18px 12px}
+  .csv-drop-zone div:first-child,.upload-zone div:first-child{font-size:28px;margin-bottom:6px}
+  .login-card{width:90%;padding:26px 20px}
+  .login-title{font-size:17px;margin-bottom:18px}
+  .metric-value{font-size:21px}
+}
+
+/* 帳票プレビューは縮めずに横スクロールさせる */
+#quote-preview-content{overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media(max-width:768px){
+  #quote-preview-content>div{min-width:640px}
+}
+@media(max-width:768px){
   .col-grid{grid-template-columns:1fr}
 }
 </style>
@@ -404,9 +473,9 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     </select>
   </div>
   <div class="tab-group">
-    <button class="tab active" onclick="switchQuoteTab('estimate',this)">📄 見積書</button>
-    <button class="tab" onclick="switchQuoteTab('invoice',this)">💴 請求書</button>
-    <button class="tab" onclick="switchQuoteTab('upload',this)">📤 PDF取込</button>
+    <button class="tab active" onclick="switchQuoteTab('estimate',this)">📄 <span class="tab-full">見積書</span><span class="tab-short">見積</span></button>
+    <button class="tab" onclick="switchQuoteTab('invoice',this)">💴 <span class="tab-full">請求書</span><span class="tab-short">請求</span></button>
+    <button class="tab" onclick="switchQuoteTab('upload',this)">📤 <span class="tab-full">PDF取込</span><span class="tab-short">PDF</span></button>
   </div>
   <div id="q-estimate">
     <div class="card">
@@ -1491,7 +1560,9 @@ function drawMonthlyChart(){
   const rows=chartSeries=monthlySeries();
   const mi=rows.findIndex(r=>r.index===getMonth());
 
-  const cssW=cv.clientWidth||600, cssH=180;
+  const cssW=cv.clientWidth||600;
+  const small=cssW<=480;
+  const cssH=small?150:180;
   const dpr=window.devicePixelRatio||1;
   cv.width=Math.round(cssW*dpr);
   cv.height=Math.round(cssH*dpr);
@@ -1502,7 +1573,7 @@ function drawMonthlyChart(){
 
   const line=cssVar('--border','#e5e5e5');
   const muted=cssVar('--text-muted','#9b9b9b');
-  const L=48,R=44,T=14,B=22;
+  const L=small?34:48,R=small?30:44,T=14,B=22;
   const w=cssW-L-R, h=cssH-T-B;
 
   // 左軸（金額）と右軸（利益率）のスケール
@@ -1520,7 +1591,7 @@ function drawMonthlyChart(){
   chartPoints=rows.map((_,i)=>x(i));
 
   // 目盛りとグリッド
-  ctx.font='10px -apple-system,BlinkMacSystemFont,sans-serif';
+  ctx.font=(small?'9px ':'10px ')+'-apple-system,BlinkMacSystemFont,sans-serif';
   ctx.strokeStyle=line;ctx.lineWidth=1;
   for(let g=0;g<=4;g++){
     const yy=Math.round(T+h/4*g)+0.5;
