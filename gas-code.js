@@ -37,7 +37,7 @@ var SHEET_DEFS = {
     'invoiceStatus', 'paidMonth', 'paidAmount'],
   quotes:   ['id', 'subject', 'client', 'amount', 'type', 'date', 'expire', 'due',
     'contractStart', 'contractEnd', 'paymentMethod', 'isMonthly', 'items', 'note'],
-  ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'fixedCostId'],
+  ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'fixedCostId'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
   fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
   settings: ['key', 'value']
@@ -45,7 +45,7 @@ var SHEET_DEFS = {
 
 // 日付として自動変換されると困る列（テキスト書式を強制する）
 var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'value',
-  'startMonth', 'endMonth', 'contractStart', 'contractEnd', 'paidMonth'];
+  'startMonth', 'endMonth', 'contractStart', 'contractEnd', 'paidMonth', 'expectedDate'];
 
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
@@ -154,6 +154,7 @@ function readAll_() {
     nextFixedCostId: settings.nextFixedCostId,
     finance: settings.finance,
     travel: settings.travel,
+    bankBalance: settings.bankBalance,
     currentFiscalYearId: settings.currentFiscalYearId,
     nextFiscalYearId: settings.nextFiscalYearId
   };
@@ -213,6 +214,9 @@ function readLedger_(sh) {
       desc: str_(o.desc),
       amount: num_(o.amount),
       memo: str_(o.memo),
+      status: str_(o.status) || 'actual',
+      expectedDate: str_(o.expectedDate),
+      projectId: str_(o.projectId) === '' ? null : num_(o.projectId),
       fixedCostId: str_(o.fixedCostId) === '' ? null : num_(o.fixedCostId)
     };
   }).filter(function (l) { return l.date !== '' && l.desc !== ''; });
@@ -254,6 +258,7 @@ function readSettings_(sh) {
   var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1, nextFixedCostId = 1;
   var finance = { cash: 0, loan: 0 };
   var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15 };
+  var bankBalance = 0;
   var currentFiscalYearId = 0, nextFiscalYearId = 1;
 
   rowObjects_(sh, SHEET_DEFS.settings).forEach(function (o) {
@@ -291,6 +296,8 @@ function readSettings_(sh) {
       travel.gasolinePrice = num_(value) || 175;
     } else if (key === 'travel.fuelEfficiency') {
       travel.fuelEfficiency = parseFloat(str_(value)) || 15;
+    } else if (key === 'bankBalance') {
+      bankBalance = num_(value);
     } else if (key === 'currentFiscalYearId') {
       currentFiscalYearId = num_(value);
     } else if (key === 'nextFiscalYearId') {
@@ -317,6 +324,7 @@ function readSettings_(sh) {
     nextFixedCostId: nextFixedCostId,
     finance: finance,
     travel: travel,
+    bankBalance: bankBalance,
     currentFiscalYearId: currentFiscalYearId,
     nextFiscalYearId: nextFiscalYearId
   };
@@ -349,6 +357,8 @@ function writeAll_(data) {
 
   var ledger = (data.ledger || []).map(function (l) {
     return [num_(l.id), str_(l.date), str_(l.type), str_(l.desc), num_(l.amount), str_(l.memo),
+      str_(l.status) || 'actual', str_(l.expectedDate),
+      (l.projectId === null || l.projectId === undefined || l.projectId === '') ? '' : num_(l.projectId),
       (l.fixedCostId === null || l.fixedCostId === undefined || l.fixedCostId === '') ? '' : num_(l.fixedCostId)];
   });
 
@@ -382,6 +392,7 @@ function writeAll_(data) {
   settings.push(['travel.googleMapsApiKey', str_(tv.googleMapsApiKey)]);
   settings.push(['travel.gasolinePrice', num_(tv.gasolinePrice) || 175]);
   settings.push(['travel.fuelEfficiency', parseFloat(tv.fuelEfficiency) || 15]);
+  settings.push(['bankBalance', num_(data.bankBalance)]);
   settings.push(['currentFiscalYearId', num_(data.currentFiscalYearId)]);
   settings.push(['nextFiscalYearId', num_(data.nextFiscalYearId) || 1]);
   settings.push(['updatedAt', Utilities.formatDate(new Date(), timezone_(ss), 'yyyy-MM-dd HH:mm:ss')]);

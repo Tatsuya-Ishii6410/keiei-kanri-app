@@ -332,7 +332,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <button class="nav-btn active" onclick="showPage('dashboard',this)">📈 ダッシュボード</button>
     <button class="nav-btn" onclick="showPage('projects',this)">💼 案件管理</button>
     <button class="nav-btn" onclick="showPage('quotes',this)">📄 見積・請求</button>
-    <button class="nav-btn" onclick="showPage('ledger',this)">💰 収支管理</button>
+    <button class="nav-btn" onclick="showPage('ledger',this)">💰 CF管理</button>
     <button class="nav-btn" onclick="showPage('csv',this)">🏦 CSV取込</button>
     <button class="nav-btn" onclick="showPage('report',this)">📊 月次レポート</button>
     <button class="nav-btn" onclick="showPage('settings',this)">⚙️ 設定</button>
@@ -527,7 +527,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <div id="page-ledger" class="page">
   <div class="section-header" style="flex-wrap:wrap;gap:10px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <h1 class="section-title">収支管理</h1>
+      <h1 class="section-title">キャッシュフロー管理</h1>
       <select id="ledger-month" onchange="renderLedger()" style="width:auto;font-size:13px">
         <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
       </select>
@@ -536,13 +536,31 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div style="display:flex;gap:8px;align-items:center">
       <button class="btn" onclick="openDriveImportModal()">☁️ ドライブから取込</button>
       <button class="btn" onclick="openFixedCostsModal()">🔁 固定費管理</button>
-      <button class="btn primary" onclick="openLedgerModal()">+ 入力</button>
+      <button class="btn primary" onclick="openLedgerModal(null,'actual')">+ 実績入力</button>
+      <button class="btn" onclick="openLedgerModal(null,'planned_in')">+ 入金予定</button>
+      <button class="btn" onclick="openLedgerModal(null,'planned_out')">+ 出金予定</button>
     </div>
   </div>
-  <div class="two-col">
+  <div class="card">
+    <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
+      <div class="form-group" style="max-width:220px">
+        <label class="form-label">現在の口座残高</label>
+        <input id="cf-balance" type="number" onchange="saveBankBalance()">
+      </div>
+      <div style="flex:1;min-width:240px;font-size:14px" id="cf-forecast"></div>
+      <button class="btn" onclick="createPlannedFromInvoiced()">📥 前月の請求済み案件を入金予定にする</button>
+    </div>
+  </div>
+  <div class="metric-grid">
+    <div class="metric-card"><div class="metric-label">実績入金</div><div class="metric-value green" id="cf-actual-in">¥0</div></div>
+    <div class="metric-card"><div class="metric-label">実績出金</div><div class="metric-value red" id="cf-actual-out">¥0</div></div>
+    <div class="metric-card"><div class="metric-label">入金予定</div><div class="metric-value blue" id="cf-plan-in">¥0</div></div>
+    <div class="metric-card"><div class="metric-label">出金予定</div><div class="metric-value" style="color:var(--amber)" id="cf-plan-out">¥0</div></div>
+  </div>
+  <div>
     <div class="card">
       <div class="card-header">
-        <span class="card-title">計画 vs 実績（<span id="plan-month-label">今月</span>）</span>
+        <span class="card-title">計画 vs 実績（<span id="plan-month-label">今月</span>）／ 実績のみ集計</span>
         <button class="btn sm" onclick="openPlanModal()">✏️ 計画編集</button>
       </div>
       <div class="table-wrap"><table>
@@ -551,9 +569,9 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       </table></div>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title" id="ledger-list-title">直近の収支</span></div>
+      <div class="card-header"><span class="card-title" id="ledger-list-title">キャッシュフロー</span></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>日付</th><th>区分</th><th>摘要</th><th>金額</th><th>操作</th></tr></thead>
+        <thead><tr><th>日付</th><th>区分</th><th>摘要</th><th style="text-align:right">入金</th><th style="text-align:right">出金</th><th>状態</th><th>操作</th></tr></thead>
         <tbody id="ledger-list"></tbody>
       </table></div>
     </div>
@@ -865,6 +883,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">契約種別</label><select id="p-contract"><option value="single">単発</option><option value="monthly">月次継続</option><option value="annual">年次継続</option></select></div>
+    <div class="form-group"><label class="form-label">入金予定日（請求済のとき。空欄なら作りません）</label><input id="p-plandate" type="date"></div>
     <div class="form-group"><label class="form-label">入金ステータス</label><select id="p-invoice"><option value="uninvoiced">未請求</option><option value="invoiced">請求済</option><option value="paid">入金済</option><option value="paid_manual">入金済（手動）</option></select></div>
     <div class="form-group"><label class="form-label">メモ</label><input id="p-memo" type="text" placeholder="備考など"></div>
   </div>
@@ -977,6 +996,11 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       </select>
     </div>
   </div>
+  <div id="bs-invoiced-options">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">入金予定日（空欄なら入金予定を作りません）</label><input id="bs-plandate" type="date"></div>
+    </div>
+  </div>
   <div id="bs-paid-options" style="display:none">
     <div class="form-row">
       <div class="form-group"><label class="form-label">入金日</label><input id="bs-date" type="date"></div>
@@ -996,6 +1020,22 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-bulk-status')">キャンセル</button>
     <button class="btn primary" id="bs-submit" onclick="applyBulkStatus()">✓ 変更する</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-plan-confirm">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title">入金を実績にする</span><button class="btn sm" onclick="closeModal('modal-plan-confirm')">✕</button></div>
+  <div id="pc-info" style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:14px"></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">入金日</label><input id="pc-date" type="date"></div>
+    <div class="form-group"><label class="form-label">入金金額</label><input id="pc-amount" type="number"></div>
+  </div>
+  <div style="font-size:12px;color:var(--text-muted)">案件に紐づいている場合は、その案件も「入金済」になります。</div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-plan-confirm')">キャンセル</button>
+    <button class="btn success" onclick="confirmPlanned()">✓ 実績に変換</button>
   </div>
 </div>
 </div>
@@ -1138,8 +1178,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <div class="modal">
   <div class="modal-header"><span class="modal-title" id="modal-ledger-title">収支を入力</span><button class="btn sm" onclick="closeModal('modal-add-ledger')">✕</button></div>
   <div class="form-row">
-    <div class="form-group"><label class="form-label">日付</label><input id="l-date" type="date"></div>
-    <div class="form-group"><label class="form-label">区分</label><select id="l-type" onchange="updateMemoPlaceholder();toggleTravelPanel()"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option><option>社会保険料</option><option>住民税（特別徴収）</option><option>消費税（納付）</option><option>源泉所得税（納付）</option><option>法人税・住民税・事業税（納付）</option><option>その他税金・公課</option></select></div>
+    <div class="form-group"><label class="form-label" id="l-date-label">日付</label><input id="l-date" type="date"></div>
+    <div class="form-group" id="l-type-group"><label class="form-label">区分</label><select id="l-type" onchange="updateMemoPlaceholder();toggleTravelPanel()"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option><option>社会保険料</option><option>住民税（特別徴収）</option><option>消費税（納付）</option><option>源泉所得税（納付）</option><option>法人税・住民税・事業税（納付）</option><option>その他税金・公課</option></select></div>
   </div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">摘要</label><input id="l-desc" type="text" placeholder="例: 〇〇案件 6月分"></div>
@@ -1287,6 +1327,8 @@ const defaultState={
   ],
   currentFiscalYearId:1,
   nextFiscalYearId:2,
+  // 現在の口座残高（キャッシュフローの起点）
+  bankBalance:0,
   // 交通費の計算設定
   travel:{googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15},
   // 財務情報（融資力診断で使う）
@@ -1347,7 +1389,12 @@ function mergeState(parsed){
   });
   if(!Array.isArray(s.quotes))s.quotes=[];
   if(!Array.isArray(s.ledger))s.ledger=[];
-  s.ledger.forEach(l=>{l.memo=l.memo||'';});
+  s.ledger.forEach(l=>{
+    l.memo=l.memo||'';
+    if(['actual','planned_in','planned_out'].indexOf(l.status)<0)l.status='actual';
+    l.expectedDate=l.expectedDate||'';
+  });
+  s.bankBalance=parseInt(s.bankBalance)||0;
   if(!Array.isArray(s.fixedCosts))s.fixedCosts=[];
   if(!Array.isArray(s.fiscalYears))s.fiscalYears=[];
   s.fiscalYears=s.fiscalYears.map(f=>({
@@ -1537,7 +1584,7 @@ function refreshAll(){
 
 // ページ名（トップバーに表示する）
 const PAGE_TITLES={dashboard:'ダッシュボード',projects:'案件管理',quotes:'見積・請求',
-  ledger:'収支管理',csv:'CSV取込',report:'月次レポート',settings:'設定'};
+  ledger:'キャッシュフロー管理',csv:'CSV取込',report:'月次レポート',settings:'設定'};
 
 // スマホではサイドバーを開閉する
 function toggleSidebar(open){
@@ -1589,9 +1636,11 @@ function ledgerGroup(type){
 }
 
 // 指定した月（0=1月）の実績をグループごとに集計する
+// 集計はすべて実績（status=actual）のみを対象にする
 function sumLedger(mi){
   const t={sales:0,expense:0,labor:0,tax:0};
   S.ledger.forEach(l=>{
+    if(!isActual(l))return;
     if(!l.date||new Date(l.date).getMonth()!==mi)return;
     t[ledgerGroup(l.type)]+=l.amount;
   });
@@ -1854,7 +1903,7 @@ function salesSeries(){
 function sumLedgerYear(){
   const t={sales:0,expense:0,labor:0,tax:0};
   S.ledger.forEach(l=>{
-    if(!l.date)return;
+    if(!isActual(l)||!l.date)return;
     t[ledgerGroup(l.type)]+=l.amount;
   });
   return t;
@@ -2067,6 +2116,7 @@ function openProjectModal(id){
   document.getElementById('p-end').value=p?(p.end||''):'';
   document.getElementById('p-contract').value=p?p.contract:'single';
   document.getElementById('p-invoice').value=p?invoiceStatusOf(p):'uninvoiced';
+  document.getElementById('p-plandate').value=nextMonth25();
   document.getElementById('p-memo').value=p?(p.memo||''):'';
   document.getElementById('modal-project-title').textContent=p?'案件を編集':'案件を追加';
   document.getElementById('modal-project-submit').textContent=p?'✓ 保存':'+ 追加';
@@ -2093,6 +2143,13 @@ function saveProject(){
     Object.assign(p,values);
   }else{
     S.projects.push(Object.assign({id:S.nextProjectId++},values));
+  }
+  // 請求済にしたときは、入金予定日が入っていれば入金予定も作る
+  if(values.invoiceStatus==='invoiced'){
+    const planDate=document.getElementById('p-plandate').value;
+    const target=editProjectId!==null?S.projects.find(x=>x.id===editProjectId):S.projects[S.projects.length-1];
+    const mi=currentProjectMonth();
+    if(planDate&&target)addPlannedInForProject(target,planDate,mi===null?new Date().getMonth():mi);
   }
   editProjectId=null;
   saveState();closeModal('modal-add-project');refreshAll();
@@ -2486,6 +2543,304 @@ async function driveRegister(){
   refreshAll();
 }
 
+/* ===== キャッシュフロー管理 ==========================================
+   ledger は status で3種類を持つ。
+     actual      … 確定した入出金（既存データはすべてこれ）
+     planned_in  … 入金予定
+     planned_out … 出金予定
+   ダッシュボードやレポートの集計は actual だけを対象にする。
+   =================================================================== */
+
+const LEDGER_STATES={
+  actual:{label:'実績',cls:'badge-gray'},
+  planned_in:{label:'📅 予定',cls:'badge-blue'},
+  planned_out:{label:'📅 予定',cls:'badge-amber'}
+};
+
+let ledgerMode='actual';   // 入力モーダルの種類
+
+function ledgerStatusOf(l){
+  return LEDGER_STATES[l&&l.status]?l.status:'actual';
+}
+function isActual(l){return ledgerStatusOf(l)==='actual'}
+function isPlanned(l){return !isActual(l)}
+
+// 予定は expectedDate、実績は date を並び順に使う
+function ledgerDateOf(l){
+  return (isPlanned(l)&&l.expectedDate)?l.expectedDate:(l.date||'');
+}
+
+function currentLedgerMonth(){
+  const el=document.getElementById('ledger-month');
+  if(!el||el.value==='')return null;
+  return parseInt(el.value);
+}
+
+function inMonth(dateStr,mi){
+  if(mi===null)return true;
+  if(!dateStr)return false;
+  const d=new Date(dateStr);
+  return !isNaN(d.getTime())&&d.getMonth()===mi;
+}
+
+// その月のキャッシュフロー（実績・予定をまとめて日付順）
+function cashflowRows(mi){
+  return S.ledger
+    .filter(l=>inMonth(ledgerDateOf(l),mi))
+    .sort((a,b)=>String(ledgerDateOf(a)).localeCompare(String(ledgerDateOf(b))));
+}
+
+// 入金か出金かを判定する
+function isInflow(l){
+  const st=ledgerStatusOf(l);
+  if(st==='planned_in')return true;
+  if(st==='planned_out')return false;
+  return ledgerGroup(l.type)==='sales';
+}
+
+function cashflowTotals(rows){
+  const t={actualIn:0,actualOut:0,planIn:0,planOut:0};
+  rows.forEach(l=>{
+    const st=ledgerStatusOf(l);
+    if(st==='actual'){
+      if(isInflow(l))t.actualIn+=l.amount;else t.actualOut+=l.amount;
+    }else if(st==='planned_in'){t.planIn+=l.amount;}
+    else{t.planOut+=l.amount;}
+  });
+  return t;
+}
+
+function bankBalance(){return parseInt(S.bankBalance)||0}
+
+function saveBankBalance(){
+  S.bankBalance=parseInt(document.getElementById('cf-balance').value)||0;
+  saveState();
+  renderLedger();
+}
+
+/* ---- 描画 ---- */
+
+function initLedgerPage(){
+  applyFixedCosts();
+  renderLedger();
+}
+
+function renderLedger(){
+  const mi=currentLedgerMonth();
+  const all=mi===null;
+  const rows=cashflowRows(mi);
+  const t=cashflowTotals(rows);
+
+  document.getElementById('cf-balance').value=bankBalance();
+  const forecast=bankBalance()+t.actualIn-t.actualOut+t.planIn-t.planOut;
+  document.getElementById('cf-forecast').innerHTML=
+    `${all?'全期間':(mi+1)+'月'}末の残高予測：<strong style="color:${forecast>=0?'var(--green)':'var(--red)'}">${fmt(forecast)}</strong>`
+    +`<span style="font-size:11px;color:var(--text-muted)">（口座残高 ${fmt(bankBalance())} ＋実績 ${fmt(t.actualIn-t.actualOut)} ＋予定 ${fmt(t.planIn-t.planOut)}）</span>`;
+
+  document.getElementById('cf-actual-in').textContent=fmt(t.actualIn);
+  document.getElementById('cf-actual-out').textContent=fmt(t.actualOut);
+  document.getElementById('cf-plan-in').textContent=fmt(t.planIn);
+  document.getElementById('cf-plan-out').textContent=fmt(t.planOut);
+
+  // 計画 vs 実績（実績は status=actual のみ）
+  const lt=all?sumLedgerYear():sumLedger(mi);
+  const sales=all?salesYearTotal():salesByMonth(mi);
+  const pl=all?planYearTotal():planOf(mi);
+  document.getElementById('plan-month-label').textContent=all?'全期間':(mi+1)+'月';
+  document.getElementById('plan-table').innerHTML=[
+    {k:'売上',actual:sales,plan:pl.sales},
+    {k:'経費合計',actual:lt.expense,plan:pl.expense},
+    {k:'役員報酬',actual:lt.labor,plan:pl.labor},
+    {k:'税金・公課',actual:lt.tax,plan:pl.tax||0}
+  ].map(r=>{
+    const d=r.actual-r.plan;const c=d>=0?'#1D9E75':'#E24B4A';
+    return`<tr><td>${r.k}</td><td style="color:var(--text-secondary)">${fmt(r.plan)}</td><td style="font-weight:500">${fmt(r.actual)}</td><td style="color:${c};font-weight:500">${d>=0?'+':''}${fmt(d)}</td></tr>`;
+  }).join('');
+
+  // キャッシュフロー一覧
+  document.getElementById('ledger-list-title').textContent=
+    (all?'全期間':(mi+1)+'月')+'のキャッシュフロー（'+rows.length+'件）';
+  document.getElementById('ledger-list').innerHTML=rows.map(l=>{
+    const st=ledgerStatusOf(l);
+    const inflow=isInflow(l);
+    const bg=st==='planned_in'?'background:var(--blue-bg)'
+      :st==='planned_out'?'background:var(--amber-bg)':'';
+    return`<tr style="${bg}">
+      <td style="font-size:12px;white-space:nowrap">${ledgerDateOf(l)}</td>
+      <td>${ledgerBadge(l.type)}</td>
+      <td style="font-size:12px">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}${l.memo?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${l.memo}</div>`:''}</td>
+      <td style="text-align:right;font-weight:500;color:${inflow?'var(--green)':'var(--text-muted)'}">${inflow?fmt(l.amount):'-'}</td>
+      <td style="text-align:right;font-weight:500;color:${inflow?'var(--text-muted)':'var(--red)'}">${inflow?'-':fmt(l.amount)}</td>
+      <td><span class="badge ${LEDGER_STATES[st].cls}">${LEDGER_STATES[st].label}</span></td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+        ${st==='planned_in'?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">✓ 実績に変換</button>`:''}
+        <button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button>
+        <button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ---- 入力モーダル ---- */
+
+// mode: 'actual' | 'planned_in' | 'planned_out'
+function openLedgerModal(id,mode){
+  const l=(id!==undefined&&id!==null)?S.ledger.find(x=>x.id===id):null;
+  editLedgerId=l?l.id:null;
+  ledgerMode=l?ledgerStatusOf(l):(mode||'actual');
+  const planned=ledgerMode!=='actual';
+
+  document.getElementById('l-date').value=l?(ledgerDateOf(l)||today()):today();
+  document.getElementById('l-type').value=l?l.type:(ledgerMode==='planned_in'?'売上':'その他経費');
+  document.getElementById('l-desc').value=l?l.desc:'';
+  document.getElementById('l-amount').value=l?l.amount:'';
+  document.getElementById('l-memo').value=l?(l.memo||''):'';
+
+  // 入金予定は区分を「売上」に固定する
+  document.getElementById('l-type-group').style.display=ledgerMode==='planned_in'?'none':'';
+  document.getElementById('l-date-label').textContent=planned?'予定日':'日付';
+  document.getElementById('modal-ledger-title').textContent=
+    l?(planned?'予定を編集':'収支を編集')
+     :(ledgerMode==='planned_in'?'入金予定を追加':ledgerMode==='planned_out'?'出金予定を追加':'実績を入力');
+  document.getElementById('modal-ledger-submit').textContent=l?'✓ 保存':'+ 追加';
+
+  updateMemoPlaceholder();
+  ['tv-from','tv-to','tv-origin','tv-dest'].forEach(id2=>document.getElementById(id2).value='');
+  document.getElementById('tv-round').checked=false;
+  document.getElementById('tv-car-round').checked=false;
+  refreshTravelMode();
+  toggleTravelPanel();
+  openModal('modal-add-ledger');
+}
+
+function saveLedger(){
+  const date=document.getElementById('l-date').value;
+  const type=ledgerMode==='planned_in'?'売上':document.getElementById('l-type').value;
+  const desc=document.getElementById('l-desc').value.trim();
+  const amount=parseInt(document.getElementById('l-amount').value)||0;
+  const memo=document.getElementById('l-memo').value.trim();
+  if(!date||!desc||!amount){alert('日付・摘要・金額を入力してください');return;}
+
+  const planned=ledgerMode!=='actual';
+  const values=planned
+    ?{date,expectedDate:date,type,desc,amount,memo,status:ledgerMode}
+    :{date,expectedDate:'',type,desc,amount,memo,status:'actual'};
+
+  if(editLedgerId!==null){
+    const l=S.ledger.find(x=>x.id===editLedgerId);
+    if(!l){alert('対象の収支が見つかりませんでした');return;}
+    Object.assign(l,values);
+  }else{
+    S.ledger.push(Object.assign({id:S.nextLedgerId++},values));
+  }
+  editLedgerId=null;
+  saveState();closeModal('modal-add-ledger');refreshAll();
+}
+
+/* ---- 入金予定を実績に変える ---- */
+
+let planConfirmId=null;
+
+function openPlanConfirm(id){
+  const l=S.ledger.find(x=>x.id===id);
+  if(!l)return;
+  planConfirmId=id;
+  document.getElementById('pc-info').innerHTML=
+    `<div style="font-weight:600">${l.desc}</div>`
+    +`<div style="font-size:12px;color:var(--text-secondary);margin-top:2px">予定日 ${ledgerDateOf(l)}　${fmt(l.amount)}</div>`;
+  document.getElementById('pc-date').value=ledgerDateOf(l)||today();
+  document.getElementById('pc-amount').value=l.amount;
+  openModal('modal-plan-confirm');
+}
+
+function confirmPlanned(){
+  const l=S.ledger.find(x=>x.id===planConfirmId);
+  if(!l){alert('対象が見つかりませんでした');return;}
+  const date=document.getElementById('pc-date').value;
+  const amount=parseInt(document.getElementById('pc-amount').value)||0;
+  if(!date||!amount){alert('入金日と金額を入力してください');return;}
+
+  l.status='actual';
+  l.date=date;
+  l.expectedDate='';
+  l.amount=amount;
+  // 案件に紐づいていれば入金済みにする
+  if(l.projectId){
+    const p=S.projects.find(x=>x.id===l.projectId);
+    if(p)markProjectPaid(p,date,amount);
+  }
+  planConfirmId=null;
+  saveState();closeModal('modal-plan-confirm');refreshAll();
+  alert(`✓ 実績に変換しました（${date}）`);
+}
+
+/* ---- 前月の請求済み案件から入金予定を作る ---- */
+
+// 同じ案件の入金予定がすでにあるか
+function hasPlannedIn(projectId){
+  return S.ledger.some(l=>l.projectId===projectId&&ledgerStatusOf(l)==='planned_in');
+}
+
+// 選択月の25日を返す
+function defaultPlanDate(mi){
+  const y=monthYear(mi);
+  return y+'-'+String(mi+1).padStart(2,'0')+'-25';
+}
+
+function createPlannedFromInvoiced(){
+  const mi=currentLedgerMonth();
+  if(mi===null){alert('対象の月を選んでください（全期間では作成できません）');return;}
+  const prev=(mi+11)%12;
+  const targets=S.projects.filter(p=>
+    invoiceStatusOf(p)==='invoiced'&&p.status!=='失注'&&!hasPlannedIn(p.id));
+  if(targets.length===0){
+    alert('入金予定に追加できる請求済みの案件はありません。\n（すでに予定が作られている案件は除いています）');
+    return;
+  }
+  const date=defaultPlanDate(mi);
+  if(!confirm(`請求済みの案件 ${targets.length}件を ${date} の入金予定として追加します。よろしいですか？`))return;
+
+  targets.forEach(p=>{
+    S.ledger.push({
+      id:S.nextLedgerId++,
+      date,
+      expectedDate:date,
+      type:'売上',
+      desc:`${p.client||p.name} ${prev+1}月分 入金予定`,
+      amount:grossAmount(projectMonthAmount(p,prev)),
+      memo:'',
+      status:'planned_in',
+      projectId:p.id
+    });
+  });
+  saveState();refreshAll();
+  alert(`${targets.length}件を入金予定として追加しました`);
+}
+
+// 案件を請求済みにしたときに入金予定を作る（重複はスキップ）
+function addPlannedInForProject(p,date,mi){
+  if(!date||hasPlannedIn(p.id))return false;
+  S.ledger.push({
+    id:S.nextLedgerId++,
+    date,
+    expectedDate:date,
+    type:'売上',
+    desc:`${p.client||p.name} ${mi+1}月分 入金予定`,
+    amount:grossAmount(projectMonthAmount(p,mi)),
+    memo:'',
+    status:'planned_in',
+    projectId:p.id
+  });
+  return true;
+}
+
+// 翌月25日（案件ページの入金予定日の既定値）
+function nextMonth25(){
+  const now=new Date();
+  const d=new Date(now.getFullYear(),now.getMonth()+1,25);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-25';
+}
+
 /* ===== 交通費の計算 ==================================================
    運賃の検索も距離の取得もGAS経由で行う。
    （ブラウザからはAPIキーを持てず、Google Maps側もCORSで拒否されるため）
@@ -2691,10 +3046,6 @@ function applyFixedCosts(){
 }
 
 // 収支管理ページを開いたときの処理（固定費を反映してから描画する）
-function initLedgerPage(){
-  applyFixedCosts();
-  renderLedger();
-}
 
 function applyFixedCostsManually(){
   const n=applyFixedCosts();
@@ -3082,6 +3433,7 @@ function openBulkStatusModal(){
   document.getElementById('bs-date').value=
     now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-01';
   document.getElementById('bs-toledger').checked=true;
+  document.getElementById('bs-plandate').value=nextMonth25();
   updateBulkStatusForm();
   openModal('modal-bulk-status');
 }
@@ -3089,6 +3441,7 @@ function openBulkStatusModal(){
 function updateBulkStatusForm(){
   const cfg=BULK_STATUS_MODES[bulkStatusMode()];
   document.getElementById('bs-paid-options').style.display=cfg.payment?'':'none';
+  document.getElementById('bs-invoiced-options').style.display=cfg.to==='invoiced'?'':'none';
   renderBulkStatusList();
 }
 
@@ -3201,12 +3554,17 @@ function applyBulkStatus(){
 
   // 請求済に戻す・取り消すだけのパターン
   if(!cfg.payment){
+    const planDate=cfg.to==='invoiced'?document.getElementById('bs-plandate').value:'';
+    let planned=0;
     targets.forEach(p=>{
       p.invoiceStatus=cfg.to;
       if(cfg.to==='uninvoiced'){p.paidMonth='';p.paidAmount=0;}
+      if(cfg.to==='invoiced'&&planDate&&addPlannedInForProject(p,planDate,mi))planned++;
     });
     saveState();closeModal('modal-bulk-status');refreshAll();
-    alert(targets.length+'件のステータスを変更しました（'+cfg.label+'）');
+    alert(targets.length+'件のステータスを変更しました（'+cfg.label+'）'
+      +(planned>0?`
+（${planned}件を${planDate}の入金予定として登録しました）`:''));
     return;
   }
 
@@ -3631,7 +3989,7 @@ function buildMonthlyPL(mi){
   const memoByAccount={};
   accounts.forEach(k=>{byAccount[k]=0});
   S.ledger.forEach(l=>{
-    if(!l.date||new Date(l.date).getMonth()!==mi)return;
+    if(!isActual(l)||!l.date||new Date(l.date).getMonth()!==mi)return;
     if(l.type==='売上')return;
     if(byAccount[l.type]===undefined)byAccount[l.type]=0; // 旧区分もそのまま出す
     byAccount[l.type]+=l.amount;
@@ -4356,7 +4714,7 @@ function generateReport(){
 
   /* --- 3. 収支入力明細（売上区分のみ） --- */
   const salesRows=S.ledger
-    .filter(l=>l.type==='売上'&&l.date&&new Date(l.date).getMonth()===mi)
+    .filter(l=>isActual(l)&&l.type==='売上'&&l.date&&new Date(l.date).getMonth()===mi)
     .sort((a,b)=>a.date.localeCompare(b.date));
   const salesTable=salesRows.length===0?repEmpty('この月の「売上」区分の入力はありません。'):
   `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -4380,7 +4738,7 @@ function generateReport(){
   const byAccount={};
   EXPENSE_ACCOUNTS.forEach(k=>{byAccount[k]=0});
   S.ledger.forEach(l=>{
-    if(!l.date||new Date(l.date).getMonth()!==mi)return;
+    if(!isActual(l)||!l.date||new Date(l.date).getMonth()!==mi)return;
     if(ledgerGroup(l.type)!=='expense')return;
     if(byAccount[l.type]===undefined)byAccount[l.type]=0; // 旧区分「経費」など
     byAccount[l.type]+=l.amount;
@@ -4396,7 +4754,7 @@ function generateReport(){
   const byTax={};
   TAX_TYPES.forEach(k=>{byTax[k]=0});
   S.ledger.forEach(l=>{
-    if(!l.date||new Date(l.date).getMonth()!==mi)return;
+    if(!isActual(l)||!l.date||new Date(l.date).getMonth()!==mi)return;
     if(ledgerGroup(l.type)!=='tax')return;
     if(byTax[l.type]===undefined)byTax[l.type]=0;
     byTax[l.type]+=l.amount;
@@ -4840,63 +5198,9 @@ async function handlePDFUpload(event){
 }
 
 // 収支管理ページで選択中の月。「全期間」なら null。
-function currentLedgerMonth(){
-  const el=document.getElementById('ledger-month');
-  if(!el||el.value==='')return null;
-  return parseInt(el.value);
-}
 
-function renderLedger(){
-  const mi=currentLedgerMonth();
-  const all=mi===null;
-  const t=all?sumLedgerYear():sumLedger(mi);
-  // 売上は「案件ベース + 収支の売上入力」、経費・役員報酬は収支の入力から集計する
-  const sales=all?salesYearTotal():salesByMonth(mi),exp=t.expense,lab=t.labor,tax=t.tax;
-  const pl=all?planYearTotal():planOf(mi);
-  document.getElementById('plan-month-label').textContent=all?'全期間':(mi+1)+'月';
-
-  // 収支入力ベースのサマリー（案件ベースの売上は含めない）
-  const income=t.sales,outgo=t.expense+t.labor+t.tax;
-  document.getElementById('ledger-summary').innerHTML=
-    `収入: ${fmt(income)}　支出: ${fmt(outgo)}　収支: <strong style="color:${income-outgo>=0?'#1D9E75':'#E24B4A'}">${fmt(income-outgo)}</strong>`;
-  document.getElementById('plan-table').innerHTML=[
-    {k:'売上',actual:sales,plan:pl.sales},
-    {k:'経費合計',actual:exp,plan:pl.expense},
-    {k:'役員報酬',actual:lab,plan:pl.labor},
-    {k:'税金・公課',actual:tax,plan:pl.tax||0}
-  ].map(r=>{
-    const d=r.actual-r.plan;const c=d>=0?'#1D9E75':'#E24B4A';
-    return`<tr><td>${r.k}</td><td style="color:var(--text-secondary)">${fmt(r.plan)}</td><td style="font-weight:500">${fmt(r.actual)}</td><td style="color:${c};font-weight:500">${d>=0?'+':''}${fmt(d)}</td></tr>`;
-  }).join('');
-  const sorted=S.ledger
-    .filter(l=>all||(l.date&&new Date(l.date).getMonth()===mi))
-    .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-  document.getElementById('ledger-list-title').textContent=
-    (all?'全期間':(mi+1)+'月')+'の収支（'+sorted.length+'件）';
-  document.getElementById('ledger-list').innerHTML=sorted.map(l=>{
-    return`<tr><td style="font-size:12px;white-space:nowrap">${l.date}</td><td>${ledgerBadge(l.type)}</td><td style="font-size:12px">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}${l.memo?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${l.memo}</div>`:''}</td><td style="font-weight:500">${fmt(l.amount)}</td><td><div style="display:flex;gap:4px"><button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button><button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button></div></td></tr>`;
-  }).join('');
-}
 
 // id を渡すと編集、省略すると新規入力モードでモーダルを開く
-function openLedgerModal(id){
-  const l=(id!==undefined&&id!==null)?S.ledger.find(x=>x.id===id):null;
-  editLedgerId=l?l.id:null;
-  document.getElementById('l-date').value=l?l.date:today();
-  document.getElementById('l-type').value=l?l.type:'売上';
-  document.getElementById('l-desc').value=l?l.desc:'';
-  document.getElementById('l-amount').value=l?l.amount:'';
-  document.getElementById('l-memo').value=l?(l.memo||''):'';
-  updateMemoPlaceholder();
-  ['tv-from','tv-to','tv-origin','tv-dest'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('tv-round').checked=false;
-  document.getElementById('tv-car-round').checked=false;
-  refreshTravelMode();
-  toggleTravelPanel();
-  document.getElementById('modal-ledger-title').textContent=l?'収支を編集':'収支を入力';
-  document.getElementById('modal-ledger-submit').textContent=l?'✓ 保存':'+ 追加';
-  openModal('modal-add-ledger');
-}
 
 // 交際費は誰と何のためかを残したいので、例文を変える
 function updateMemoPlaceholder(){
@@ -4907,23 +5211,6 @@ function updateMemoPlaceholder(){
     :'同席者・目的・場所など（任意）';
 }
 
-function saveLedger(){
-  const date=document.getElementById('l-date').value;
-  const type=document.getElementById('l-type').value;
-  const desc=document.getElementById('l-desc').value.trim();
-  const amount=parseInt(document.getElementById('l-amount').value)||0;
-  const memo=document.getElementById('l-memo').value.trim();
-  if(!date||!desc||!amount){alert('日付・摘要・金額を入力してください');return;}
-  if(editLedgerId!==null){
-    const l=S.ledger.find(x=>x.id===editLedgerId);
-    if(!l){alert('対象の収支が見つかりませんでした');return;}
-    Object.assign(l,{date,type,desc,amount,memo});
-  }else{
-    S.ledger.push({id:S.nextLedgerId++,date,type,desc,amount,memo});
-  }
-  editLedgerId=null;
-  saveState();closeModal('modal-add-ledger');refreshAll();
-}
 
 function deleteLedger(id){
   if(!confirm('この収支を削除しますか？'))return;

@@ -204,3 +204,12 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   ※ どちらもブラウザから直接は呼べない（APIキーの露出とCORS）ためGAS経由
 - 設定は state の travel:{googleMapsApiKey,gasolinePrice,fuelEfficiency}
   settingsシートには travel.* で保存。APIキー未設定なら車モードは選べない
+
+## キャッシュフロー管理（旧・収支管理）
+- ledger の status で3種類を持つ：actual（実績）／planned_in（入金予定）／planned_out（出金予定）
+  status が無い既存データは actual として扱う。予定日は expectedDate
+- ★ ダッシュボード・レポート・PLの集計は必ず isActual() で実績のみに絞ること
+  （sumLedger / sumLedgerYear / レポート各明細 / buildMonthlyPL に組み込み済み）
+- 月末残高予測 = bankBalance ＋実績(入−出) ＋予定(入−出)
+- 「前月の請求済み案件を入金予定にする」は hasPlannedIn() で案件ごとの重複を防ぐ
+- 案件を請求済にするとき（一括・個別とも）入金予定日を入れると planned_in を自動作成する
