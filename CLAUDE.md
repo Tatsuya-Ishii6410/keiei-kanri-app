@@ -130,3 +130,13 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - ※ これは画面を隠すだけの簡易ゲート。静的サイトなのでソースを直接見れば回避でき、
   GASウェブアプリ（アクセス「全員」）にはURLだけで到達できる。
   本当に保護するならGAS側の認証が必要
+
+## 売上入金の突合
+- projects に invoiceStatus（uninvoiced/invoiced/paid）/ paidMonth / paidAmount を持つ
+- 税込金額は 案件金額×1.1 の小数点以下切り捨て（grossAmount）
+- 一括請求書を作ると対象案件が uninvoiced → invoiced になる
+- 案件ページの「💴 入金確認」（請求済の行のみ表示）で paid にし、
+  同時に収支へ「売上」として登録する（ledgerに projectId を持たせる）
+- 銀行明細CSVの入金行は、税込金額の±1%以内の未入金案件を突合候補として提示する。
+  チェックを入れて登録すると案件も入金済みになる
+- ダッシュボードの「💰 入金待ち」は invoiced の税込合計。クリックで案件ページへ

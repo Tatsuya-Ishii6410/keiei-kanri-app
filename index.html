@@ -267,6 +267,10 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="metric-card"><div class="metric-label">役員報酬</div><div class="metric-value" id="d-labor">¥0</div><div class="metric-sub" id="d-labor-year">年間累計: ¥0</div><div class="metric-sub" id="d-labor-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">税金・公課</div><div class="metric-value" id="d-tax">¥0</div><div class="metric-sub" id="d-tax-year">年間累計: ¥0</div><div class="metric-sub" id="d-tax-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">営業利益</div><div class="metric-value green" id="d-profit">¥0</div><div class="metric-sub" id="d-profit-year">年間累計: ¥0</div><div class="metric-sub" id="d-margin">利益率: -%</div></div>
+    <div class="metric-card" id="d-awaiting-card" onclick="goToInvoiced()" style="cursor:pointer" title="クリックすると案件ページの「請求済」を表示します">
+      <div class="metric-label">💰 入金待ち</div>
+      <div class="metric-value" style="color:var(--amber)" id="d-awaiting">¥0</div>
+      <div class="metric-sub" id="d-awaiting-sub">0件（税込）</div></div>
     <div class="metric-card"><div class="metric-label">営業利益率</div><div class="metric-value" id="d-margin-rate">-%</div><div class="metric-sub" id="d-margin-year">年間累計: -%</div></div>
   </div>
   <div class="two-col">
@@ -314,6 +318,12 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="section-header">
     <h1 class="section-title">案件管理</h1>
     <div style="display:flex;gap:8px;align-items:center">
+      <select id="project-invoice-filter" onchange="renderProjects()" style="width:auto;font-size:13px">
+        <option value="">入金: 全て</option>
+        <option value="uninvoiced">未請求</option>
+        <option value="invoiced">請求済</option>
+        <option value="paid">入金済</option>
+      </select>
       <select id="project-month" onchange="renderProjects()" style="width:auto;font-size:13px">
         <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
       </select>
@@ -334,7 +344,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
   <div class="card">
     <div class="table-wrap"><table>
-      <thead><tr><th>案件名</th><th>顧客</th><th>金額</th><th>状態</th><th>期間・種別</th><th>操作</th></tr></thead>
+      <thead><tr><th>案件名</th><th>顧客</th><th>金額</th><th>状態</th><th>入金</th><th>期間・種別</th><th>操作</th></tr></thead>
       <tbody id="project-list"></tbody>
     </table></div>
     <div id="project-empty" class="empty-state" style="display:none">案件がありません。「案件追加」から登録してください。</div>
@@ -723,6 +733,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">契約種別</label><select id="p-contract"><option value="single">単発</option><option value="monthly">月次継続</option><option value="annual">年次継続</option></select></div>
+    <div class="form-group"><label class="form-label">入金ステータス</label><select id="p-invoice"><option value="uninvoiced">未請求</option><option value="invoiced">請求済</option><option value="paid">入金済</option></select></div>
     <div class="form-group"><label class="form-label">メモ</label><input id="p-memo" type="text" placeholder="備考など"></div>
   </div>
   <div class="actions-row">
@@ -814,6 +825,25 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-drive-import')">閉じる</button>
     <button class="btn success" id="drive-register-btn" onclick="driveRegister()" style="display:none">✓ 収支に登録する</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-payment">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title">入金確認</span><button class="btn sm" onclick="closeModal('modal-payment')">✕</button></div>
+  <div id="pay-info" style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:14px"></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">入金金額（税込）</label><input id="pay-amount" type="number"></div>
+    <div class="form-group"><label class="form-label">入金日</label><input id="pay-date" type="date"></div>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">摘要</label><input id="pay-desc" type="text"></div>
+  </div>
+  <div style="font-size:12px;color:var(--text-muted)">確認すると案件が「入金済」になり、収支に「売上」として登録されます。</div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-payment')">キャンセル</button>
+    <button class="btn success" onclick="confirmPayment()">✓ 入金確認・収支に登録</button>
   </div>
 </div>
 </div>
@@ -1085,6 +1115,11 @@ function mergeState(parsed){
   });
   s.plan=normalizePlan(parsed&&parsed.plan);
   if(!Array.isArray(s.projects))s.projects=[];
+  s.projects.forEach(p=>{
+    if(['uninvoiced','invoiced','paid'].indexOf(p.invoiceStatus)<0)p.invoiceStatus='uninvoiced';
+    p.paidMonth=p.paidMonth||'';
+    p.paidAmount=parseInt(p.paidAmount)||0;
+  });
   if(!Array.isArray(s.quotes))s.quotes=[];
   if(!Array.isArray(s.ledger))s.ledger=[];
   if(!Array.isArray(s.fixedCosts))s.fixedCosts=[];
@@ -1639,6 +1674,10 @@ function updateDashboard(){
   document.getElementById('d-expense-year').textContent='年間累計: '+fmt(y.expense);
   document.getElementById('d-labor-year').textContent='年間累計: '+fmt(y.labor);
   document.getElementById('d-tax-year').textContent='年間累計: '+fmt(y.tax);
+  const aw=awaitingPayment();
+  document.getElementById('d-awaiting').textContent=fmt(aw.total);
+  document.getElementById('d-awaiting-sub').textContent=aw.count+'件（税込）の入金待ち';
+
   const yRate=ySales>0?yProfit/ySales*100:null;
   const yRateEl=document.getElementById('d-margin-year');
   yRateEl.textContent='年間累計: '+(yRate===null?'-%':yRate.toFixed(1)+'%');
@@ -1726,7 +1765,9 @@ function renderProjects(){
   const tb=document.getElementById('project-list');
   const mi=currentProjectMonth();
   // 失注の案件は一覧にも合計にも含めない
-  const list=S.projects.filter(p=>p.status!=='失注'&&projectHasMonth(p,mi));
+  const inv=currentInvoiceFilter();
+  const list=S.projects.filter(p=>p.status!=='失注'&&projectHasMonth(p,mi)
+    &&(!inv||invoiceStatusOf(p)===inv));
 
   // 合計カード。確定売上（契約済・進行中・完了）と見込み（商談中）に分ける。
   // 失注はどちらにも含めない（listの時点で除外済み）。
@@ -1746,7 +1787,7 @@ function renderProjects(){
     empty.style.display='';
     empty.textContent=S.projects.length===0
       ?'案件がありません。「案件追加」から登録してください。'
-      :(mi===null?'表示できる案件がありません。':(mi+1)+'月に売上が発生する案件はありません。（失注は除いています）');
+      :(inv?'この条件に当てはまる案件はありません。':(mi===null?'表示できる案件がありません。':(mi+1)+'月に売上が発生する案件はありません。（失注は除いています）'));
     return;
   }
   document.getElementById('project-empty').style.display='none';
@@ -1755,8 +1796,10 @@ function renderProjects(){
     <td style="font-size:12px;color:var(--text-secondary)">${p.client||'-'}</td>
     <td>${fmt(p.amount)}</td>
     <td>${statusBadge(p.status)}</td>
+    <td>${invoiceBadge(p)}${p.paidMonth?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${p.paidMonth}</div>`:''}</td>
     <td style="font-size:12px"><div>${p.start} 〜 ${p.end}</div><span class="badge badge-gray" style="margin-top:3px">${{single:'単発',monthly:'月次継続',annual:'年次継続'}[p.contract]||p.contract}</span></td>
     <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+      ${invoiceStatusOf(p)==='invoiced'?`<button class="btn sm success" onclick="openPaymentModal(${p.id})">💴 入金確認</button>`:''}
       <button class="btn sm" onclick="openProjectModal(${p.id})">✏️ 編集</button>
       <button class="btn sm" onclick="openRenewModal(${p.id})" ${p.contract==='single'?'disabled':''}>🔄 更新</button>
       <button class="btn sm" onclick="quickQuote(${p.id})">📄 見積</button>
@@ -1776,6 +1819,7 @@ function openProjectModal(id){
   document.getElementById('p-start').value=p?(p.start||''):'';
   document.getElementById('p-end').value=p?(p.end||''):'';
   document.getElementById('p-contract').value=p?p.contract:'single';
+  document.getElementById('p-invoice').value=p?invoiceStatusOf(p):'uninvoiced';
   document.getElementById('p-memo').value=p?(p.memo||''):'';
   document.getElementById('modal-project-title').textContent=p?'案件を編集':'案件を追加';
   document.getElementById('modal-project-submit').textContent=p?'✓ 保存':'+ 追加';
@@ -1793,6 +1837,7 @@ function saveProject(){
     start:document.getElementById('p-start').value,
     end:document.getElementById('p-end').value,
     contract:document.getElementById('p-contract').value,
+    invoiceStatus:document.getElementById('p-invoice').value,
     memo:document.getElementById('p-memo').value.trim()
   };
   if(editProjectId!==null){
@@ -2621,6 +2666,114 @@ function updatePlanMonthOptions(){
   else sel.value=String(months[0]);
 }
 
+/* ===== 売上入金の突合 ================================================
+   案件に請求・入金の状態を持たせ、前月分の売上が翌月に税込で入金される
+   運用に合わせて、入金確認と収支への登録をまとめて行う。
+   =================================================================== */
+
+const INVOICE_STATES={
+  uninvoiced:{label:'未請求',cls:'badge-gray'},
+  invoiced:{label:'請求済',cls:'badge-amber'},
+  paid:{label:'入金済',cls:'badge-green'}
+};
+
+let payTargetId=null;
+
+function invoiceStatusOf(p){
+  return INVOICE_STATES[p&&p.invoiceStatus]?p.invoiceStatus:'uninvoiced';
+}
+
+function invoiceBadge(p){
+  const st=INVOICE_STATES[invoiceStatusOf(p)];
+  return`<span class="badge ${st.cls}">${st.label}</span>`;
+}
+
+// 案件の税込金額（案件金額×1.1の小数点以下切り捨て）
+function grossAmount(amount){
+  return Math.floor((amount||0)*1.1);
+}
+
+function currentInvoiceFilter(){
+  const el=document.getElementById('project-invoice-filter');
+  return el?el.value:'';
+}
+
+/* ---- 入金確認モーダル ---- */
+
+function openPaymentModal(id){
+  const p=S.projects.find(x=>x.id===id);
+  if(!p)return;
+  payTargetId=id;
+  const now=new Date();
+  const ym=now.getFullYear()+'年'+(now.getMonth()+1)+'月';
+  document.getElementById('pay-info').innerHTML=
+    `<div style="font-size:14px;font-weight:600">${p.name}</div>`
+    +`<div style="font-size:12px;color:var(--text-secondary);margin-top:2px">${p.client||'（顧客名未設定）'}　／　請求状態: ${INVOICE_STATES[invoiceStatusOf(p)].label}</div>`;
+  document.getElementById('pay-amount').value=grossAmount(p.amount);
+  document.getElementById('pay-date').value=today();
+  document.getElementById('pay-desc').value=`${p.client||p.name} ${ym}分 入金`;
+  openModal('modal-payment');
+}
+
+function confirmPayment(){
+  const p=S.projects.find(x=>x.id===payTargetId);
+  if(!p){alert('対象の案件が見つかりませんでした');return;}
+  const amount=parseInt(document.getElementById('pay-amount').value)||0;
+  const date=document.getElementById('pay-date').value;
+  const desc=document.getElementById('pay-desc').value.trim();
+  if(!amount||!date||!desc){alert('入金金額・入金日・摘要を入力してください');return;}
+
+  markProjectPaid(p,date,amount);
+  S.ledger.push({id:S.nextLedgerId++,date,type:'売上',desc,amount,projectId:p.id});
+  payTargetId=null;
+  saveState();
+  closeModal('modal-payment');
+  refreshAll();
+  alert('入金を確認し、収支に登録しました');
+}
+
+// 案件を入金済みにする（収支への登録は呼び出し側で行う）
+function markProjectPaid(p,date,amount){
+  p.invoiceStatus='paid';
+  p.paidMonth=String(date||'').slice(0,7);
+  p.paidAmount=amount;
+}
+
+/* ---- 入金待ちの集計 ---- */
+
+function awaitingPayment(){
+  const list=S.projects.filter(p=>invoiceStatusOf(p)==='invoiced'&&p.status!=='失注');
+  return{count:list.length,total:list.reduce((a,p)=>a+grossAmount(p.amount),0),list};
+}
+
+// ダッシュボードのカードから案件ページの「請求済」へ移動する
+function goToInvoiced(){
+  showPage('projects',document.querySelectorAll('.nav-btn')[1]);
+  const el=document.getElementById('project-invoice-filter');
+  if(el){el.value='invoiced';}
+  const m=document.getElementById('project-month');
+  if(m){m.value='';}  // 月で絞ると見落とすため全期間にする
+  renderProjects();
+}
+
+/* ---- 銀行明細との突合 ---- */
+
+// 入金額に近い未入金案件を探す（案件金額×1.1 の ±1% 以内）
+function matchProjectByPayment(amount){
+  if(!amount)return null;
+  let best=null,bestDiff=Infinity;
+  S.projects.forEach(p=>{
+    if(p.status==='失注')return;
+    const st=invoiceStatusOf(p);
+    if(st!=='uninvoiced'&&st!=='invoiced')return;
+    const gross=grossAmount(p.amount);
+    if(!gross)return;
+    const diff=Math.abs(amount-gross);
+    if(diff<=gross*0.01&&diff<bestDiff){best=p;bestDiff=diff;}
+  });
+  return best;
+}
+
 /* ===== ログイン認証 ==================================================
    メールアドレスとパスワードのSHA-256ハッシュをlocalStorageに保存し、
    30日間セッションを維持する。ハッシュはソースには持たない。
@@ -3083,11 +3236,12 @@ function generateForecast(){
     <td style="font-size:12px;white-space:nowrap">${forecastPeriodLabel(p,fy)}</td>
     <td style="text-align:right;font-weight:600">${fmt(forecastProjectTotal(p,fy))}</td>
     <td>${statusBadge(p.status)}</td>
+    <td>${invoiceBadge(p)}</td>
   </tr>`;
 
   const projectHead=`<thead><tr>
     <th>顧客名</th><th>案件名</th><th>種別</th><th style="text-align:right">月額</th>
-    <th>期間</th><th style="text-align:right">期間合計</th><th>状態</th>
+    <th>期間</th><th style="text-align:right">期間合計</th><th>状態</th><th>入金</th>
   </tr></thead>`;
 
   body.innerHTML=`
@@ -3143,7 +3297,7 @@ function generateForecast(){
       <tr style="font-weight:bold;background:var(--bg-secondary)">
         <td colspan="5">合計（${booked_.length}件）</td>
         <td style="text-align:right">${fmt(booked_.reduce((a,p)=>a+forecastProjectTotal(p,fy),0))}</td>
-        <td></td>
+        <td colspan="2"></td>
       </tr>
     </tbody></table></div>`}
   </div>
@@ -3839,6 +3993,7 @@ function createBulkInvoices(){
   const date=document.getElementById('bulk-date').value||today();
   const due=document.getElementById('bulk-due').value||'';
   const note=document.getElementById('bulk-note').value.trim();
+  const ids=selectedBulkIds();
   const groups=bulkInvoiceGroups();
   if(groups.length===0){alert('請求する案件を選択してください');return;}
 
@@ -3858,6 +4013,11 @@ function createBulkInvoices(){
       items:g.items.map(it=>({...it})),
       note
     });
+  });
+
+  // 請求書を出した案件は「請求済」にする
+  S.projects.filter(p=>ids.indexOf(p.id)>=0).forEach(p=>{
+    if(invoiceStatusOf(p)==='uninvoiced')p.invoiceStatus='invoiced';
   });
 
   saveState();
@@ -4358,10 +4518,14 @@ async function bankHandleFile(file){
     const desc=(String(r[iDesc]||'').trim()+(memo?' '+memo:'')).trim();
     const income=inc>0;
     const amount=income?inc:out;
+    // 入金は、税込金額が近い未入金案件を突合候補として探す
+    const match=income?matchProjectByPayment(amount):null;
     bankRows.push({
       date,desc,amount,income,
       type:bankGuessType(desc,income),
-      dup:bankIsDuplicate(date,amount,desc)
+      dup:bankIsDuplicate(date,amount,desc),
+      matchId:match?match.id:null,
+      applyMatch:!!match
     });
   });
 
@@ -4394,7 +4558,7 @@ function renderBankPreview(){
   document.getElementById('bank-result').innerHTML=
     '<div class="table-wrap"><table><thead><tr>'
     +'<th style="width:36px"></th><th>取引日</th><th>摘要（原文）</th><th style="min-width:170px">区分</th>'
-    +'<th style="min-width:110px">金額</th><th>収支</th>'
+    +'<th style="min-width:110px">金額</th><th>収支</th><th style="min-width:210px">突合</th>'
     +'</tr></thead><tbody>'
     +bankRows.map((r,i)=>`<tr>
       <td><input type="checkbox" class="bank-check" value="${i}" ${r.dup?'':'checked'} style="width:auto"></td>
@@ -4403,9 +4567,24 @@ function renderBankPreview(){
       <td><select oninput="bankRows[${i}].type=this.value" onchange="bankRows[${i}].type=this.value" style="font-size:12px">${opts(r.type)}</select></td>
       <td><input type="number" value="${r.amount}" oninput="bankRows[${i}].amount=parseInt(this.value)||0" style="font-size:12px"></td>
       <td>${r.income?'<span class="badge badge-green">収入</span>':'<span class="badge badge-red">支出</span>'}</td>
+      <td style="font-size:11px">${bankMatchCell(r,i)}</td>
     </tr>`).join('')
     +'</tbody></table></div>';
   document.getElementById('bank-actions').style.display='';
+}
+
+// 突合候補の表示セル
+function bankMatchCell(r,i){
+  if(!r.income)return'<span style="color:var(--text-muted)">-</span>';
+  const p=r.matchId?S.projects.find(x=>x.id===r.matchId):null;
+  if(!p)return'<span style="color:var(--text-muted)">候補なし</span>';
+  return`<div><span class="badge badge-blue">💡 突合候補あり</span></div>
+    <div style="margin-top:3px">${p.client||'-'}／${p.name}</div>
+    <div style="color:var(--text-secondary)">税込 ${fmt(grossAmount(p.amount))}</div>
+    <label style="display:flex;align-items:center;gap:4px;margin-top:3px;cursor:pointer">
+      <input type="checkbox" ${r.applyMatch?'checked':''} onchange="bankRows[${i}].applyMatch=this.checked" style="width:auto">
+      この案件の入金として登録する
+    </label>`;
 }
 
 function setBankCheckAll(checked){
@@ -4417,11 +4596,18 @@ function bankRegister(){
     .filter(c=>c.checked).map(c=>parseInt(c.value));
   const rows=idx.map(i=>bankRows[i]).filter(r=>r.date&&r.desc&&r.amount);
   if(rows.length===0){alert('登録する明細を選択してください');return;}
+  let matched=0;
   rows.forEach(r=>{
-    S.ledger.push({id:S.nextLedgerId++,date:r.date,type:r.type,desc:r.desc,amount:r.amount});
+    const entry={id:S.nextLedgerId++,date:r.date,type:r.type,desc:r.desc,amount:r.amount};
+    // 突合を選んだ入金は、案件を入金済みにして紐づける
+    if(r.income&&r.applyMatch&&r.matchId){
+      const p=S.projects.find(x=>x.id===r.matchId);
+      if(p){markProjectPaid(p,r.date,r.amount);entry.projectId=p.id;matched++;}
+    }
+    S.ledger.push(entry);
   });
   saveState();
-  alert(rows.length+'件を収支に登録しました');
+  alert(rows.length+'件を収支に登録しました'+(matched>0?`\n（${matched}件を案件の入金として突合しました）`:''));
   bankReset();
   refreshAll();
 }

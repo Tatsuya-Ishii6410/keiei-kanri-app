@@ -33,7 +33,8 @@ var SPREADSHEET_ID = '1gdtg7q3NwG3FQmWGc7lMpNEKROyvyRwuoIRKNSPsi4k';
 
 // 各シートの列定義（この順番でシートに書き込まれます）
 var SHEET_DEFS = {
-  projects: ['id', 'name', 'client', 'amount', 'status', 'start', 'end', 'contract', 'memo'],
+  projects: ['id', 'name', 'client', 'amount', 'status', 'start', 'end', 'contract', 'memo',
+    'invoiceStatus', 'paidMonth', 'paidAmount'],
   quotes:   ['id', 'subject', 'client', 'amount', 'type', 'date', 'expire', 'due',
     'contractStart', 'contractEnd', 'paymentMethod', 'isMonthly', 'items', 'note'],
   ledger:   ['id', 'date', 'type', 'desc', 'amount', 'fixedCostId'],
@@ -44,7 +45,7 @@ var SHEET_DEFS = {
 
 // 日付として自動変換されると困る列（テキスト書式を強制する）
 var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'value',
-  'startMonth', 'endMonth', 'contractStart', 'contractEnd'];
+  'startMonth', 'endMonth', 'contractStart', 'contractEnd', 'paidMonth'];
 
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
@@ -166,7 +167,10 @@ function readProjects_(sh) {
       start: str_(o.start),
       end: str_(o.end),
       contract: str_(o.contract) || 'single',
-      memo: str_(o.memo)
+      memo: str_(o.memo),
+      invoiceStatus: str_(o.invoiceStatus) || 'uninvoiced',
+      paidMonth: ym_(o.paidMonth),
+      paidAmount: num_(o.paidAmount)
     };
   }).filter(function (p) { return p.name !== ''; });
 }
@@ -317,7 +321,8 @@ function writeAll_(data) {
   var projects = (data.projects || []).map(function (p) {
     return [
       num_(p.id), str_(p.name), str_(p.client), num_(p.amount), str_(p.status),
-      str_(p.start), str_(p.end), str_(p.contract), str_(p.memo)
+      str_(p.start), str_(p.end), str_(p.contract), str_(p.memo),
+      str_(p.invoiceStatus) || 'uninvoiced', ym_(p.paidMonth), num_(p.paidAmount)
     ];
   });
 
