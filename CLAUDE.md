@@ -156,3 +156,15 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   取消では paidMonth・paidAmount もクリアする（請求書自体は削除しない）
   対象一覧に出るのは案件ステータスが「進行中」「完了」のものだけ
   （商談中・契約済・失注は全モードで除外）
+
+## UI（サイドバー型レイアウト）
+- メインカラー：ネイビー --navy #1a2e4a ／ アクセント：オレンジ --orange #E8832A
+- 構造：.app > (.sidebar[fixed] + .main) 、.main > .topbar + .content
+  サイドバー幅220px。.main は margin-left:220px で逃がす
+- ナビは .nav-btn。DOM順は ダッシュボード/案件/見積請求/収支/CSV/レポート/設定。
+  goToInvoiced() が querySelectorAll('.nav-btn')[1] を使うので順番を変えないこと
+- ページ名は PAGE_TITLES を見て topbar-title に出す
+- 768px以下はサイドバーを隠し、トップバーの「☰ メニュー」で toggleSidebar()
+- 同期表示はトップバーとサイドバー下部の2箇所（save-indicator / save-indicator-side）
+- グラフ：売上=オレンジ／営業利益=ネイビー／利益率=グリーン
+- 入金待ちカードは .metric-card.accent（オレンジ背景・白文字）

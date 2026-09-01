@@ -7,15 +7,17 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg-primary:#ffffff;--bg-secondary:#f5f5f4;--bg-tertiary:#f0efeb;
-  --text-primary:#1a1a1a;--text-secondary:#6b6b6b;--text-muted:#9b9b9b;
-  --border:#e5e5e5;--border-hover:#cccccc;
+  --bg-primary:#ffffff;--bg-secondary:#f8fafc;--bg-tertiary:#f0f2f5;
+  --text-primary:#1a1a1a;--text-secondary:#6b7280;--text-muted:#9ca3af;
+  --border:#e5e7eb;--border-hover:#cbd5e1;
   --blue:#378ADD;--blue-bg:#E6F1FB;--blue-text:#185FA5;
   --green:#1D9E75;--green-bg:#EAF3DE;--green-text:#3B6D11;
   --amber:#EF9F27;--amber-bg:#FAEEDA;--amber-text:#854F0B;
   --red:#E24B4A;--red-bg:#FCEBEB;--red-text:#A32D2D;
   --gray-bg:#F1EFE8;--gray-text:#5F5E5A;
   --purple-bg:#EFE9FA;--purple-text:#6B3FA0;
+  --navy:#1a2e4a;--navy-text:#a0b4c8;
+  --orange:#E8832A;--orange-dark:#cf7220;--orange-bg:#FDF0E3;
   --radius-md:8px;--radius-lg:12px;
 }
 @media(prefers-color-scheme:dark){
@@ -29,18 +31,34 @@
     --red-bg:#2e0a0a;--red-text:#f09090;
     --gray-bg:#2a2a2a;--gray-text:#a0a0a0;
     --purple-bg:#251a3a;--purple-text:#bda3ea;
+    --navy:#16243a;--navy-text:#93a7bb;--orange-bg:#3a2410;
   }
 }
+/* ===== レイアウト（サイドバー型） ===== */
 body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',Meiryo,sans-serif;color:var(--text-primary);background:var(--bg-tertiary);font-size:14px;line-height:1.6}
-.app{display:flex;flex-direction:column;min-height:100vh;max-width:1200px;margin:0 auto;background:var(--bg-tertiary)}
-.topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:52px;background:var(--bg-primary);border-bottom:0.5px solid var(--border);box-shadow:0 1px 4px rgba(0,0,0,0.05)}
-.logo{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--text-primary)}
-.logo-icon{width:28px;height:28px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px}
-.nav{display:flex;gap:2px}
-.nav-btn{padding:6px 14px;font-size:13px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;border-radius:var(--radius-md);transition:all 0.15s;display:flex;align-items:center;gap:5px;font-family:inherit}
-.nav-btn:hover{background:var(--bg-secondary);color:var(--text-primary)}
-.nav-btn.active{background:var(--bg-secondary);color:var(--text-primary);font-weight:500}
-.topbar-right{display:flex;align-items:center;gap:10px}
+.app{display:flex;min-height:100vh;background:var(--bg-tertiary)}
+
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:220px;z-index:120;background:var(--navy);display:flex;flex-direction:column;overflow-y:auto}
+.sidebar-head{padding:20px 18px 16px}
+.sidebar-logo{font-size:16px;font-weight:600;color:#fff;display:flex;align-items:center;gap:8px}
+.sidebar-company{font-size:11px;color:var(--navy-text);margin-top:4px}
+.sidebar-nav{display:flex;flex-direction:column;gap:2px;padding:6px 10px;flex:1}
+.nav-btn{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;font-size:13px;border:none;background:transparent;color:var(--navy-text);cursor:pointer;border-radius:var(--radius-md);transition:all 0.15s;font-family:inherit;text-align:left}
+.nav-btn:hover{background:rgba(255,255,255,0.08);color:#fff}
+.nav-btn.active{background:var(--orange);color:#fff;font-weight:600}
+.sidebar-foot{padding:12px 14px 16px;border-top:1px solid rgba(255,255,255,0.12);display:flex;flex-direction:column;gap:8px}
+.sidebar-foot .save-indicator{color:var(--navy-text)}
+.sidebar-logout{width:100%;padding:8px 10px;font-size:12px;border:1px solid rgba(255,255,255,0.25);border-radius:var(--radius-md);background:transparent;color:var(--navy-text);cursor:pointer;font-family:inherit}
+.sidebar-logout:hover{background:rgba(255,255,255,0.08);color:#fff}
+.sidebar-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:110;display:none}
+.sidebar-backdrop.open{display:block}
+
+.main{flex:1;min-width:0;margin-left:220px;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 24px;height:56px;background:var(--bg-primary);border-bottom:1px solid var(--border);box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.topbar-title{font-size:16px;font-weight:700;color:var(--navy)}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.menu-btn{display:none;padding:6px 10px;border:1px solid var(--border-hover);border-radius:var(--radius-md);background:transparent;color:var(--text-primary);cursor:pointer;font-family:inherit;font-size:13px}
+.content{flex:1;padding:24px;max-width:1200px;width:100%}
 .save-indicator{font-size:12px;color:var(--text-muted);display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:color 0.2s}
 .save-indicator.ok{color:var(--green)}
 .save-indicator.sync{color:var(--text-secondary)}
@@ -50,39 +68,46 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .sync-dot.ok{background:var(--green)}
 .sync-dot.sync{background:var(--amber)}
 .sync-dot.err{background:var(--red)}
-.content{flex:1;padding:24px 20px}
+
 .page{display:none}
 .page.active{display:block}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-.section-title{font-size:17px;font-weight:600;display:flex;align-items:center;gap:8px}
-.card{background:var(--bg-primary);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:16px}
+.section-title{font-size:17px;font-weight:600;color:var(--navy);display:flex;align-items:center;gap:8px}
+.card{background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;padding:22px 24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(16,24,40,0.05)}
 .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .card-title{font-size:14px;font-weight:500}
-.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
-.metric-card{background:var(--bg-secondary);border-radius:var(--radius-md);padding:14px 16px}
-.metric-label{font-size:12px;color:var(--text-secondary);margin-bottom:6px}
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.metric-grid.two-by{grid-template-columns:repeat(2,1fr)}
+@media(max-width:640px){.metric-grid.two-by{grid-template-columns:1fr}}
+.metric-card{position:relative;background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;padding:16px 18px 16px 22px;box-shadow:0 1px 3px rgba(16,24,40,0.05);overflow:hidden}
+.metric-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--orange)}
+.metric-card.accent{background:var(--orange);border-color:var(--orange);color:#fff}
+.metric-card.accent::before{background:rgba(255,255,255,0.5)}
+.metric-card.accent .metric-label,.metric-card.accent .metric-sub{color:rgba(255,255,255,0.85)}
+.metric-card.accent .metric-value{color:#fff!important}
+.metric-label{font-size:12px;color:#6b7280;margin-bottom:6px}
 .metric-value{font-size:24px;font-weight:600;letter-spacing:-0.5px}
 .metric-value.blue{color:var(--blue)}
 .metric-value.green{color:var(--green)}
 .metric-value.red{color:var(--red)}
 .metric-value.amber{color:var(--amber)}
 .metric-sub{font-size:11px;color:var(--text-muted);margin-top:4px}
-.btn{padding:7px 14px;font-size:13px;border:0.5px solid var(--border-hover);border-radius:var(--radius-md);background:transparent;color:var(--text-primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;font-family:inherit;white-space:nowrap}
-.btn:hover{background:var(--bg-secondary)}
+.btn{padding:8px 15px;font-size:13px;border:1px solid var(--navy);border-radius:8px;background:var(--bg-primary);color:var(--navy);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;font-family:inherit;white-space:nowrap;font-weight:500}
+.btn:hover{background:var(--bg-secondary);border-color:var(--navy)}
 .btn:active{transform:scale(0.98)}
-.btn.primary{background:var(--blue-bg);color:var(--blue-text);border-color:rgba(55,138,221,0.3)}
-.btn.primary:hover{opacity:0.85}
-.btn.success{background:var(--green-bg);color:var(--green-text);border-color:rgba(29,158,117,0.3)}
-.btn.danger{background:var(--red-bg);color:var(--red-text);border-color:rgba(226,75,74,0.3)}
+.btn.primary{background:var(--orange);color:#fff;border-color:var(--orange)}
+.btn.primary:hover{background:var(--orange-dark);border-color:var(--orange-dark)}
+.btn.success{background:var(--green);color:#fff;border-color:var(--green)}
+.btn.danger{background:var(--red);color:#fff;border-color:var(--red)}
 .btn.sm{padding:4px 10px;font-size:12px}
 .btn:disabled{opacity:0.4;cursor:not-allowed}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;padding:9px 12px;font-size:12px;font-weight:500;color:var(--text-secondary);border-bottom:0.5px solid var(--border);white-space:nowrap}
-td{padding:11px 12px;border-bottom:0.5px solid var(--border);vertical-align:middle}
+th{text-align:left;padding:11px 14px;font-size:12px;font-weight:600;color:#6b7280;background:var(--bg-secondary);border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
 tbody tr:last-child td{border-bottom:none}
-tbody tr:hover{background:var(--bg-secondary)}
-.badge{display:inline-block;padding:2px 8px;border-radius:var(--radius-md);font-size:11px;font-weight:500;white-space:nowrap}
+tbody tr:hover{background:#f0f7ff}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
 .badge-blue{background:var(--blue-bg);color:var(--blue-text)}
 .badge-green{background:var(--green-bg);color:var(--green-text)}
 .badge-amber{background:var(--amber-bg);color:var(--amber-text)}
@@ -120,13 +145,13 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .alert-success{background:var(--green-bg);color:var(--green-text);border:0.5px solid rgba(29,158,117,0.4)}
 .alert-error{background:var(--red-bg);color:var(--red-text);border:0.5px solid rgba(226,75,74,0.4)}
 .alert-info{background:var(--blue-bg);color:var(--blue-text);border:0.5px solid rgba(55,138,221,0.4)}
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
 .modal-overlay.open{display:flex}
-.modal{background:var(--bg-primary);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;border:0.5px solid var(--border);box-shadow:0 8px 32px rgba(0,0,0,0.15)}
+.modal{background:var(--bg-primary);border-radius:16px;padding:26px 28px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;border:1px solid var(--border);box-shadow:0 18px 50px rgba(16,24,40,0.28)}
 .modal.wide{max-width:680px}
 .modal.doc{max-width:720px}
-.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-.modal-title{font-size:16px;font-weight:600}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--navy)}
+.modal-title{font-size:16px;font-weight:600;color:var(--navy)}
 .actions-row{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
@@ -178,7 +203,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .report-card-title{font-size:13px;font-weight:bold;color:#1a2e4a;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #e0e0e0}
 @media print{
   body{background:#fff}
-  .topbar,.report-actions,.section-header,.tab-group,.no-print{display:none!important}
+  .topbar,.sidebar,.sidebar-backdrop,.report-actions,.section-header,.tab-group,.no-print{display:none!important}
+  .main{margin-left:0}
   .app,.content{max-width:none;margin:0;padding:0;background:#fff}
   .page{display:none!important}
   #page-report{display:block!important}
@@ -192,8 +218,11 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   .two-col,.three-col{grid-template-columns:1fr}
   .form-row{grid-template-columns:1fr}
   .form-row.three{grid-template-columns:1fr 1fr}
-  .nav-btn span{display:none}
   .si-text{display:none}
+  .sidebar{transform:translateX(-100%);transition:transform 0.2s}
+  .sidebar.open{transform:translateX(0)}
+  .main{margin-left:0}
+  .menu-btn{display:inline-flex}
   .topbar{padding:0 12px}
   .content{padding:16px 12px}
   .col-grid{grid-template-columns:1fr}
@@ -221,20 +250,33 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 
 <div class="app" id="app-root" style="display:none">
 
-<header class="topbar">
-  <div class="logo">
-    <div class="logo-icon">📊</div>
-    経営管理
+<div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar(false)"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-head">
+    <div class="sidebar-logo">📊 経営管理</div>
+    <div class="sidebar-company">アスリンク株式会社</div>
   </div>
-  <nav class="nav">
-    <button class="nav-btn active" onclick="showPage('dashboard',this)">📈 <span>ダッシュボード</span></button>
-    <button class="nav-btn" onclick="showPage('projects',this)">💼 <span>案件</span></button>
-    <button class="nav-btn" onclick="showPage('quotes',this)">📄 <span>見積・請求</span></button>
-    <button class="nav-btn" onclick="showPage('ledger',this)">💰 <span>収支</span></button>
-    <button class="nav-btn" onclick="showPage('csv',this)">📥 <span>CSV取込</span></button>
-    <button class="nav-btn" onclick="showPage('report',this)">📊 <span>月次レポート</span></button>
-    <button class="nav-btn" onclick="showPage('settings',this)">⚙️ <span>設定</span></button>
+  <nav class="sidebar-nav">
+    <button class="nav-btn active" onclick="showPage('dashboard',this)">📈 ダッシュボード</button>
+    <button class="nav-btn" onclick="showPage('projects',this)">💼 案件管理</button>
+    <button class="nav-btn" onclick="showPage('quotes',this)">📄 見積・請求</button>
+    <button class="nav-btn" onclick="showPage('ledger',this)">💰 収支管理</button>
+    <button class="nav-btn" onclick="showPage('csv',this)">🏦 CSV取込</button>
+    <button class="nav-btn" onclick="showPage('report',this)">📊 月次レポート</button>
+    <button class="nav-btn" onclick="showPage('settings',this)">⚙️ 設定</button>
   </nav>
+  <div class="sidebar-foot">
+    <span class="save-indicator" id="save-indicator-side" title="データの保存状態"></span>
+    <button class="sidebar-logout" onclick="logout()">🔓 ログアウト</button>
+  </div>
+</aside>
+
+<div class="main">
+<header class="topbar">
+  <div style="display:flex;align-items:center;gap:10px">
+    <button class="menu-btn" onclick="toggleSidebar()">☰ メニュー</button>
+    <span class="topbar-title" id="topbar-title">ダッシュボード</span>
+  </div>
   <div class="topbar-right">
     <span class="save-indicator" id="save-indicator" title="データの保存状態"></span>
     <button class="btn sm" onclick="logout()" title="ログアウト">🔓 <span class="si-text">ログアウト</span></button>
@@ -261,15 +303,15 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="card-header"><span class="card-title">📊 期間サマリー</span></div>
     <div id="fiscal-summary"></div>
   </div>
-  <div class="metric-grid">
+  <div class="metric-grid two-by">
     <div class="metric-card"><div class="metric-label">売上</div><div class="metric-value blue" id="d-sales">¥0</div><div class="metric-sub" id="d-sales-year">年間累計: ¥0</div><div class="metric-sub" id="d-sales-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">経費合計</div><div class="metric-value" id="d-expense">¥0</div><div class="metric-sub" id="d-expense-year">年間累計: ¥0</div><div class="metric-sub" id="d-expense-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">役員報酬</div><div class="metric-value" id="d-labor">¥0</div><div class="metric-sub" id="d-labor-year">年間累計: ¥0</div><div class="metric-sub" id="d-labor-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">税金・公課</div><div class="metric-value" id="d-tax">¥0</div><div class="metric-sub" id="d-tax-year">年間累計: ¥0</div><div class="metric-sub" id="d-tax-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">営業利益</div><div class="metric-value green" id="d-profit">¥0</div><div class="metric-sub" id="d-profit-year">年間累計: ¥0</div><div class="metric-sub" id="d-margin">利益率: -%</div></div>
-    <div class="metric-card" id="d-awaiting-card" onclick="goToInvoiced()" style="cursor:pointer" title="クリックすると案件ページの「請求済」を表示します">
+    <div class="metric-card accent" id="d-awaiting-card" onclick="goToInvoiced()" style="cursor:pointer" title="クリックすると案件ページの「請求済」を表示します">
       <div class="metric-label">💰 入金待ち</div>
-      <div class="metric-value" style="color:var(--amber)" id="d-awaiting">¥0</div>
+      <div class="metric-value" id="d-awaiting">¥0</div>
       <div class="metric-sub" id="d-awaiting-sub">0件（税込）</div></div>
     <div class="metric-card"><div class="metric-label">営業利益率</div><div class="metric-value" id="d-margin-rate">-%</div><div class="metric-sub" id="d-margin-year">年間累計: -%</div></div>
   </div>
@@ -288,9 +330,9 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <div class="card-header">
         <span class="card-title">月次推移</span>
         <div style="display:flex;gap:12px;font-size:11px;color:var(--text-secondary)">
-          <span><span style="color:#378ADD">●</span> 売上</span>
-          <span><span style="color:#1D9E75">●</span> 営業利益</span>
-          <span><span style="color:#EF9F27">●</span> 利益率</span>
+          <span><span style="color:#E8832A">●</span> 売上</span>
+          <span><span style="color:#1a2e4a">●</span> 営業利益</span>
+          <span><span style="color:#1D9E75">●</span> 利益率</span>
         </div>
       </div>
       <div class="chart-wrap">
@@ -715,6 +757,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </div>
 
 </main>
+</div>
 </div>
 
 <!-- MODALS -->
@@ -1214,7 +1257,7 @@ function gasEnabled(){return typeof GAS_URL==='string'&&/^https:\/\/script\.goog
 
 // state: 'off' | 'sync' | 'ok' | 'err'
 function setSyncStatus(state,detail){
-  const ind=document.getElementById('save-indicator');
+  const inds=[document.getElementById('save-indicator'),document.getElementById('save-indicator-side')];
   const dot=document.getElementById('gas-dot');
   const txt=document.getElementById('gas-status');
   const map={
@@ -1224,11 +1267,12 @@ function setSyncStatus(state,detail){
     err:{cls:'err',icon:'⚠',short:'同期エラー',long:'スプレッドシートに接続できませんでした。localStorageのデータで動作しています。'}
   };
   const m=map[state]||map.off;
-  if(ind){
+  inds.forEach(ind=>{
+    if(!ind)return;
     ind.className='save-indicator '+m.cls;
     ind.innerHTML=m.icon+' <span class="si-text">'+m.short+'</span>';
     ind.title=m.long+(detail?'\n'+detail:'');
-  }
+  });
   if(dot)dot.className='sync-dot '+m.cls;
   if(txt)txt.textContent=m.long+(detail?'（'+detail+'）':'');
 }
@@ -1346,11 +1390,26 @@ function refreshAll(){
   if(id==='settings')loadSettingsForm();
 }
 
+// ページ名（トップバーに表示する）
+const PAGE_TITLES={dashboard:'ダッシュボード',projects:'案件管理',quotes:'見積・請求',
+  ledger:'収支管理',csv:'CSV取込',report:'月次レポート',settings:'設定'};
+
+// スマホではサイドバーを開閉する
+function toggleSidebar(open){
+  const sb=document.getElementById('sidebar');
+  const bd=document.getElementById('sidebar-backdrop');
+  const next=open===undefined?!sb.classList.contains('open'):open;
+  sb.classList.toggle('open',next);
+  bd.classList.toggle('open',next);
+}
+
 function showPage(p,btn){
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
   if(btn)btn.classList.add('active');
+  document.getElementById('topbar-title').textContent=PAGE_TITLES[p]||'';
+  toggleSidebar(false);
   if(p==='dashboard')updateDashboard();
   if(p==='projects')renderProjects();
   if(p==='quotes')renderQuotes();
@@ -1403,7 +1462,7 @@ function marginColor(rate){return rate>=20?'#1D9E75':rate>=10?'#EF9F27':'#E24B4A
    ライブラリは使わず、色はテーマに合わせてCSS変数から読む。
    =================================================================== */
 
-const CHART_COLORS={sales:'#378ADD',profit:'#1D9E75',rate:'#EF9F27'};
+const CHART_COLORS={sales:'#E8832A',profit:'#1a2e4a',rate:'#1D9E75'};
 let chartSeries=null;   // 描画中のデータ（ツールチップで参照する）
 let chartPoints=null;   // 月ごとのX座標
 
@@ -2548,7 +2607,7 @@ function pct(actual,target){
 
 function progressBar(rate){
   const r=rate===null?0:Math.max(0,Math.min(100,rate));
-  const color=rate===null?'#9b9b9b':rate>=100?'#1D9E75':rate>=70?'#EF9F27':'#E24B4A';
+  const color=rate===null?'#9ca3af':rate>=100?'#1D9E75':'#E8832A';
   return`<div class="diff-bar"><div class="diff-fill" style="width:${r}%;background:${color}"></div></div>`;
 }
 
