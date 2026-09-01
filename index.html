@@ -159,6 +159,18 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .col-note{font-size:11px;color:var(--text-secondary);margin-top:2px}
 .col-req{color:var(--red-text);font-size:10px;margin-left:4px}
 .col-opt{color:var(--green-text);font-size:10px;margin-left:4px}
+/* ログイン画面 */
+.login-screen{position:fixed;inset:0;z-index:500;display:none;align-items:center;justify-content:center;padding:20px;background:var(--bg-tertiary)}
+.login-card{background:var(--bg-primary);border:0.5px solid var(--border);border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,0.14);padding:36px 32px;width:100%;max-width:380px}
+.login-logo{font-size:13px;font-weight:600;color:#1a2e4a;letter-spacing:1px;text-align:center}
+.login-title{font-size:19px;font-weight:700;text-align:center;margin:6px 0 24px;color:var(--text-primary)}
+.login-field{margin-bottom:14px}
+.login-field label{display:block;font-size:12px;color:var(--text-secondary);font-weight:500;margin-bottom:5px}
+.login-btn{width:100%;padding:11px;border:none;border-radius:var(--radius-md);background:#1a2e4a;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:6px}
+.login-btn:hover{opacity:0.9}
+.login-btn:disabled{opacity:0.5;cursor:not-allowed}
+.login-error{font-size:12px;color:var(--red);min-height:34px;margin-top:10px;line-height:1.6}
+
 /* 月次決算レポート */
 .report-sheet{background:#fff;color:#111;border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:28px}
 .report-head{text-align:center;border-bottom:2px solid #1a2e4a;padding-bottom:14px;margin-bottom:20px;color:#111}
@@ -189,7 +201,25 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </style>
 </head>
 <body>
-<div class="app">
+
+<div class="login-screen" id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">アスリンク株式会社</div>
+    <div class="login-title">経営管理システム</div>
+    <div class="login-field">
+      <label for="login-email">メールアドレス</label>
+      <input id="login-email" type="email" autocomplete="username" onkeydown="loginKeydown(event)">
+    </div>
+    <div class="login-field">
+      <label for="login-pass">パスワード</label>
+      <input id="login-pass" type="password" autocomplete="current-password" onkeydown="loginKeydown(event)">
+    </div>
+    <button class="login-btn" id="login-btn" onclick="doLogin()">ログイン</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<div class="app" id="app-root" style="display:none">
 
 <header class="topbar">
   <div class="logo">
@@ -207,6 +237,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </nav>
   <div class="topbar-right">
     <span class="save-indicator" id="save-indicator" title="データの保存状態"></span>
+    <button class="btn sm" onclick="logout()" title="ログアウト">🔓 <span class="si-text">ログアウト</span></button>
   </div>
 </header>
 
@@ -604,6 +635,22 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <button class="btn primary" onclick="saveSettings()">✓ 保存する</button>
     </div>
     <div id="settings-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">ログイン設定</span></div>
+    <div class="form-row single">
+      <div class="form-group"><label class="form-label">メールアドレス（変更不可）</label>
+        <input id="pw-email" type="email" value="tatsuya-ishii@us-links.com" readonly></div>
+    </div>
+    <div class="form-row three">
+      <div class="form-group"><label class="form-label">現在のパスワード</label><input id="pw-current" type="password" autocomplete="current-password"></div>
+      <div class="form-group"><label class="form-label">新しいパスワード</label><input id="pw-new" type="password" autocomplete="new-password"></div>
+      <div class="form-group"><label class="form-label">新しいパスワード（確認）</label><input id="pw-confirm" type="password" autocomplete="new-password"></div>
+    </div>
+    <div class="actions-row">
+      <button class="btn primary" onclick="changePassword()">✓ 変更する</button>
+    </div>
+    <div id="pw-msg" style="margin-top:8px;font-size:13px;text-align:right;min-height:20px"></div>
   </div>
   <div class="card">
     <div class="card-header">
@@ -2574,6 +2621,171 @@ function updatePlanMonthOptions(){
   else sel.value=String(months[0]);
 }
 
+/* ===== ログイン認証 ==================================================
+   メールアドレスとパスワードのSHA-256ハッシュをlocalStorageに保存し、
+   30日間セッションを維持する。ハッシュはソースには持たない。
+   =================================================================== */
+
+const AUTH_KEY='bizapp_auth_v1';
+const SESSION_KEY='bizapp_session_v1';
+const AUTH_EMAIL='tatsuya-ishii@us-links.com';
+const AUTH_DEFAULT_PASS='uslink2026';
+const SESSION_DAYS=30;
+const LOCK_SECONDS=30;
+
+let authFailCount=0;
+let authLockTimer=null;
+let appBooted=false;
+
+async function sha256(text){
+  if(!(window.crypto&&window.crypto.subtle)){
+    throw new Error('この環境では暗号化APIが使えません（https で開いてください）');
+  }
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function readAuth(){
+  try{return JSON.parse(localStorage.getItem(AUTH_KEY)||'null')}catch(e){return null}
+}
+function writeAuth(o){
+  try{localStorage.setItem(AUTH_KEY,JSON.stringify(o))}catch(e){}
+}
+
+// 初回アクセス時は既定のメール・パスワードのハッシュを作って保存する
+async function ensureCredentials(){
+  const a=readAuth();
+  if(a&&a.emailHash&&a.passHash)return a;
+  const created={
+    emailHash:await sha256(AUTH_EMAIL.toLowerCase()),
+    passHash:await sha256(AUTH_DEFAULT_PASS)
+  };
+  writeAuth(created);
+  return created;
+}
+
+function sessionValid(){
+  try{
+    const s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
+    return !!(s&&s.expires&&Date.now()<s.expires);
+  }catch(e){return false}
+}
+function startSession(){
+  try{localStorage.setItem(SESSION_KEY,JSON.stringify({expires:Date.now()+SESSION_DAYS*86400000}))}catch(e){}
+}
+function endSession(){
+  try{localStorage.removeItem(SESSION_KEY)}catch(e){}
+}
+
+function showLogin(){
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app-root').style.display='none';
+  const el=document.getElementById('login-email');
+  if(el&&!el.value)el.value=AUTH_EMAIL;
+  const p=document.getElementById('login-pass');
+  if(p){p.value='';p.focus();}
+}
+
+function bootApp(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app-root').style.display='';
+  if(appBooted)return;
+  appBooted=true;
+  updateDashboard();
+  loadFromGAS();
+}
+
+async function checkAuth(){
+  try{await ensureCredentials();}catch(e){/* 暗号APIが無くてもログイン画面は出す */}
+  if(sessionValid())bootApp();
+  else showLogin();
+}
+
+async function doLogin(){
+  if(authLockTimer)return;
+  const err=document.getElementById('login-error');
+  const email=document.getElementById('login-email').value.trim().toLowerCase();
+  const pass=document.getElementById('login-pass').value;
+  err.textContent='';
+  if(!email||!pass){err.textContent='メールアドレスとパスワードを入力してください';return;}
+
+  let cred;
+  try{cred=await ensureCredentials();}
+  catch(e){err.textContent=e.message;return;}
+
+  let eh,ph;
+  try{[eh,ph]=await Promise.all([sha256(email),sha256(pass)]);}
+  catch(e){err.textContent=e.message;return;}
+
+  // どちらが違うかは知らせない
+  if(eh===cred.emailHash&&ph===cred.passHash){
+    authFailCount=0;
+    startSession();
+    document.getElementById('login-pass').value='';
+    bootApp();
+    return;
+  }
+  authFailCount++;
+  err.textContent='メールアドレスまたはパスワードが正しくありません';
+  if(authFailCount>=3)lockLogin();
+}
+
+// 3回連続で失敗したら30秒ロックする
+function lockLogin(){
+  const btn=document.getElementById('login-btn');
+  const err=document.getElementById('login-error');
+  let left=LOCK_SECONDS;
+  btn.disabled=true;
+  const tick=()=>{
+    if(left<=0){
+      clearInterval(authLockTimer);
+      authLockTimer=null;authFailCount=0;
+      btn.disabled=false;err.textContent='';
+      return;
+    }
+    err.textContent='ログインを一時的にロックしました。あと '+left+' 秒お待ちください';
+    left--;
+  };
+  tick();
+  authLockTimer=setInterval(tick,1000);
+}
+
+function loginKeydown(e){
+  if(e.key==='Enter')doLogin();
+}
+
+function logout(){
+  if(!confirm('ログアウトしますか？'))return;
+  endSession();
+  showLogin();
+}
+
+/* ---- 設定ページのパスワード変更 ---- */
+
+async function changePassword(){
+  const msg=document.getElementById('pw-msg');
+  const cur=document.getElementById('pw-current').value;
+  const np=document.getElementById('pw-new').value;
+  const cf=document.getElementById('pw-confirm').value;
+  msg.style.color='var(--red)';
+  if(!cur||!np||!cf){msg.textContent='すべての欄を入力してください';return;}
+  if(np!==cf){msg.textContent='新しいパスワードが一致しません';return;}
+  if(np===cur){msg.textContent='現在のパスワードと同じです';return;}
+
+  let cred;
+  try{cred=await ensureCredentials();}
+  catch(e){msg.textContent=e.message;return;}
+  const curHash=await sha256(cur);
+  if(curHash!==cred.passHash){msg.textContent='現在のパスワードが正しくありません';return;}
+
+  cred.passHash=await sha256(np);
+  writeAuth(cred);
+  ['pw-current','pw-new','pw-confirm'].forEach(id=>document.getElementById(id).value='');
+  msg.style.color='var(--green)';
+  msg.textContent='✓ パスワードを変更しました';
+  setTimeout(()=>{msg.textContent=''},4000);
+}
+
 /* ===== 月次PL（Excel）出力 ==========================================
    SheetJS でExcelを生成する。書式（色・太字）に対応した xlsx-js-style を
    使い、読めなければ書式なしの公式ビルドにフォールバックする。
@@ -4460,9 +4672,8 @@ updatePlanMonthOptions();
 document.getElementById('l-date').value=today();
 document.getElementById('gas-sheet-link').href=SHEET_URL;
 setSyncStatus(gasEnabled()?'sync':'off');
-updateDashboard();
-// 起動時にスプレッドシートから読み込む（失敗時はlocalStorageのデータのまま動く）
-loadFromGAS();
+// 認証を確認してからアプリ本体を起動する
+checkAuth();
 </script>
 </body>
 </html>
