@@ -100,6 +100,8 @@ function doPost(e) {
     if (action === 'driveExtract') return respond_(driveExtract_(body.fileId), '');
     if (action === 'driveProcessed') return respond_({ ok: true, renamed: driveMarkProcessed_(body.fileIds) }, '');
     if (action === 'advise') return respond_(loanAdvice_(body.data), '');
+    if (action === 'fare') return respond_(fareLookup_(body.from, body.to), '');
+    if (action === 'distance') return respond_(distanceLookup_(body.origin, body.destination, body.apiKey), '');
   } catch (err) {
     return respond_({ ok: false, error: String(err && err.message || err) }, '');
   }
@@ -151,6 +153,7 @@ function readAll_() {
     nextLedgerId:  settings.nextLedgerId,
     nextFixedCostId: settings.nextFixedCostId,
     finance: settings.finance,
+    travel: settings.travel,
     currentFiscalYearId: settings.currentFiscalYearId,
     nextFiscalYearId: settings.nextFiscalYearId
   };
@@ -250,6 +253,7 @@ function readSettings_(sh) {
   var legacyPlan = null; // 月の区別が無かった頃の形式
   var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1, nextFixedCostId = 1;
   var finance = { cash: 0, loan: 0 };
+  var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15 };
   var currentFiscalYearId = 0, nextFiscalYearId = 1;
 
   rowObjects_(sh, SHEET_DEFS.settings).forEach(function (o) {
@@ -281,6 +285,12 @@ function readSettings_(sh) {
       finance.cash = num_(value);
     } else if (key === 'finance.loan') {
       finance.loan = num_(value);
+    } else if (key === 'travel.googleMapsApiKey') {
+      travel.googleMapsApiKey = str_(value);
+    } else if (key === 'travel.gasolinePrice') {
+      travel.gasolinePrice = num_(value) || 175;
+    } else if (key === 'travel.fuelEfficiency') {
+      travel.fuelEfficiency = parseFloat(str_(value)) || 15;
     } else if (key === 'currentFiscalYearId') {
       currentFiscalYearId = num_(value);
     } else if (key === 'nextFiscalYearId') {
@@ -306,6 +316,7 @@ function readSettings_(sh) {
     nextLedgerId: nextLedgerId,
     nextFixedCostId: nextFixedCostId,
     finance: finance,
+    travel: travel,
     currentFiscalYearId: currentFiscalYearId,
     nextFiscalYearId: nextFiscalYearId
   };
@@ -367,6 +378,10 @@ function writeAll_(data) {
   var fin = data.finance || {};
   settings.push(['finance.cash', num_(fin.cash)]);
   settings.push(['finance.loan', num_(fin.loan)]);
+  var tv = data.travel || {};
+  settings.push(['travel.googleMapsApiKey', str_(tv.googleMapsApiKey)]);
+  settings.push(['travel.gasolinePrice', num_(tv.gasolinePrice) || 175]);
+  settings.push(['travel.fuelEfficiency', parseFloat(tv.fuelEfficiency) || 15]);
   settings.push(['currentFiscalYearId', num_(data.currentFiscalYearId)]);
   settings.push(['nextFiscalYearId', num_(data.nextFiscalYearId) || 1]);
   settings.push(['updatedAt', Utilities.formatDate(new Date(), timezone_(ss), 'yyyy-MM-dd HH:mm:ss')]);
@@ -600,6 +615,94 @@ function normalizeCategory_(v) {
     if (s && s.indexOf(keys[i]) >= 0) return CATEGORY_MAP[keys[i]];
   }
   return 'その他経費';
+}
+
+
+// ===== 交通費の計算 =============================================
+// 運賃はAnthropic APIのウェブ検索で調べ、走行距離は Google Maps の
+// Distance Matrix API で取得する。どちらもブラウザからは呼べないので
+// （APIキーの露出とCORS）GAS側で実行する。
+
+/** 電車・バスのICカード運賃を調べる。 */
+function fareLookup_(from, to) {
+  var key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
+  if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY がスクリプト プロパティに設定されていません' };
+  from = str_(from); to = str_(to);
+  if (!from || !to) return { ok: false, error: '出発駅と到着駅を入力してください' };
+
+  var prompt = from + 'から' + to + 'までの電車のICカード運賃を調べて、'
+    + '金額だけを数値で返してください。例：320';
+
+  var payload = {
+    model: ANTHROPIC_MODEL,
+    max_tokens: 1024,
+    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }],
+    messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }]
+  };
+
+  var res;
+  try {
+    res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+  } catch (err) {
+    return { ok: false, error: 'APIに接続できませんでした: ' + (err && err.message || err) };
+  }
+
+  var code = res.getResponseCode();
+  var body;
+  try { body = JSON.parse(res.getContentText()); } catch (e) { body = null; }
+  if (code !== 200) {
+    return { ok: false, error: 'API エラー ' + code + ': ' + (body && body.error && body.error.message || res.getContentText().slice(0, 200)) };
+  }
+
+  var text = '';
+  (body.content || []).forEach(function (c) { if (c.type === 'text') text += c.text; });
+  var m = /(\d[\d,]*)/.exec(text.replace(/[０-９]/g, function (s) {
+    return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+  }));
+  if (!m) return { ok: false, error: '運賃を読み取れませんでした（回答: ' + text.slice(0, 80) + '）' };
+  return { ok: true, amount: num_(m[1]), note: text.slice(0, 200) };
+}
+
+/** 2地点間の走行距離（km）を Google Maps から取得する。 */
+function distanceLookup_(origin, destination, apiKey) {
+  origin = str_(origin); destination = str_(destination); apiKey = str_(apiKey);
+  if (!apiKey) return { ok: false, error: 'Google Maps APIキーが設定されていません' };
+  if (!origin || !destination) return { ok: false, error: '出発地と到着地を入力してください' };
+
+  var url = 'https://maps.googleapis.com/maps/api/distancematrix/json'
+    + '?origins=' + encodeURIComponent(origin)
+    + '&destinations=' + encodeURIComponent(destination)
+    + '&mode=driving&language=ja&region=jp&key=' + encodeURIComponent(apiKey);
+
+  var res;
+  try {
+    res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  } catch (err) {
+    return { ok: false, error: 'Google Mapsに接続できませんでした: ' + (err && err.message || err) };
+  }
+  var body;
+  try { body = JSON.parse(res.getContentText()); } catch (e) { body = null; }
+  if (!body) return { ok: false, error: 'Google Mapsの応答を読み取れませんでした' };
+  if (body.status !== 'OK') {
+    return { ok: false, error: 'Google Maps エラー: ' + body.status + (body.error_message ? '（' + body.error_message + '）' : '') };
+  }
+  var el = body.rows && body.rows[0] && body.rows[0].elements && body.rows[0].elements[0];
+  if (!el || el.status !== 'OK') {
+    return { ok: false, error: '経路が見つかりませんでした（' + (el && el.status || 'NOT_FOUND') + '）' };
+  }
+  return {
+    ok: true,
+    meters: el.distance.value,
+    km: Math.round(el.distance.value / 100) / 10,
+    text: el.distance.text,
+    duration: el.duration && el.duration.text || ''
+  };
 }
 
 

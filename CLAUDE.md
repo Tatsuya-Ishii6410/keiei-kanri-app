@@ -194,3 +194,13 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 収支一覧では摘要の下に小さいグレー文字で表示する
 - 月次PL（Excel）では勘定科目ごとに備考を改行で連結して備考列に出す
   （改行を含むセルは wrapText を有効にする）
+
+## 交通費の計算
+- 収支入力で区分「交通費」を選ぶと計算パネルが出る（電車・バス／車）
+- 運賃は GAS の fare アクション。claude-sonnet-4-6 の web_search（web_search_20260209）で
+  ICカード運賃を調べ、回答から数値を取り出す
+- 車は GAS の distance アクション。Google Maps Distance Matrix API で距離を取り、
+  距離 ×（ガソリン単価 ÷ 燃費）で算出する
+  ※ どちらもブラウザから直接は呼べない（APIキーの露出とCORS）ためGAS経由
+- 設定は state の travel:{googleMapsApiKey,gasolinePrice,fuelEfficiency}
+  settingsシートには travel.* で保存。APIキー未設定なら車モードは選べない

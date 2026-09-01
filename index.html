@@ -790,6 +790,21 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     </div>
   </div>
   <div class="card">
+    <div class="card-header"><span class="card-title">交通費計算設定</span></div>
+    <div class="form-row single">
+      <div class="form-group"><label class="form-label">Google Maps APIキー（車の距離計算に使用。空欄なら車モードは使えません）</label>
+        <input id="t-mapkey" type="text" placeholder="AIza..."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">ガソリン単価（円/L）</label><input id="t-gas" type="number" placeholder="175"></div>
+      <div class="form-group"><label class="form-label">燃費（km/L）</label><input id="t-fuel" type="number" step="0.1" placeholder="15"></div>
+    </div>
+    <div class="actions-row">
+      <button class="btn primary" onclick="saveTravelSettings()">✓ 保存する</button>
+    </div>
+    <div id="travel-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
+  </div>
+  <div class="card">
     <div class="card-header"><span class="card-title">財務情報（融資力診断に使用）</span></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">現預金残高（円）</label><input id="f-cash" type="number" placeholder="1500000"></div>
@@ -1124,11 +1139,53 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="modal-header"><span class="modal-title" id="modal-ledger-title">収支を入力</span><button class="btn sm" onclick="closeModal('modal-add-ledger')">✕</button></div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">日付</label><input id="l-date" type="date"></div>
-    <div class="form-group"><label class="form-label">区分</label><select id="l-type" onchange="updateMemoPlaceholder()"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option><option>社会保険料</option><option>住民税（特別徴収）</option><option>消費税（納付）</option><option>源泉所得税（納付）</option><option>法人税・住民税・事業税（納付）</option><option>その他税金・公課</option></select></div>
+    <div class="form-group"><label class="form-label">区分</label><select id="l-type" onchange="updateMemoPlaceholder();toggleTravelPanel()"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option><option>社会保険料</option><option>住民税（特別徴収）</option><option>消費税（納付）</option><option>源泉所得税（納付）</option><option>法人税・住民税・事業税（納付）</option><option>その他税金・公課</option></select></div>
   </div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">摘要</label><input id="l-desc" type="text" placeholder="例: 〇〇案件 6月分"></div>
     <div class="form-group"><label class="form-label">金額</label><input id="l-amount" type="number" placeholder="100000"></div>
+  </div>
+  <div id="travel-panel" style="display:none;background:var(--bg-secondary);border-radius:var(--radius-md);padding:14px;margin-bottom:12px">
+    <div class="form-label" style="margin-bottom:8px">交通費の計算</div>
+    <div style="display:flex;gap:16px;margin-bottom:10px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+        <input type="radio" name="travel-mode" id="travel-mode-train" value="train" checked onchange="setTravelMode('train')" style="width:auto"> 🚃 電車・バス
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+        <input type="radio" name="travel-mode" id="travel-mode-car" value="car" onchange="setTravelMode('car')" style="width:auto"> 🚗 車（マイカー）
+      </label>
+    </div>
+    <div id="travel-car-note" style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+      車を使うには、設定ページの「交通費計算設定」でGoogle Maps APIキーを登録してください。
+    </div>
+
+    <div id="travel-train">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">出発駅</label><input id="tv-from" type="text" placeholder="三宮"></div>
+        <div class="form-group"><label class="form-label">到着駅</label><input id="tv-to" type="text" placeholder="大阪"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+          <input id="tv-round" type="checkbox" style="width:auto"> 往復
+        </label>
+        <button class="btn sm" id="tv-search" onclick="searchFare()">🔍 運賃を検索</button>
+      </div>
+    </div>
+
+    <div id="travel-car" style="display:none">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">出発地</label><input id="tv-origin" type="text" placeholder="神戸市中央区..."></div>
+        <div class="form-group"><label class="form-label">到着地</label><input id="tv-dest" type="text" placeholder="大阪市北区..."></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+          <input id="tv-car-round" type="checkbox" style="width:auto"> 往復
+        </label>
+        <button class="btn sm" id="tv-calc" onclick="calcCarCost()">🔍 距離を計算</button>
+      </div>
+    </div>
+
+    <div id="travel-result" style="margin-top:10px"></div>
   </div>
   <div class="form-row single">
     <div class="form-group"><label class="form-label">備考（任意）</label><textarea id="l-memo" placeholder="同席者・目的・場所など（任意）"></textarea></div>
@@ -1230,6 +1287,8 @@ const defaultState={
   ],
   currentFiscalYearId:1,
   nextFiscalYearId:2,
+  // 交通費の計算設定
+  travel:{googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15},
   // 財務情報（融資力診断で使う）
   finance:{cash:0,loan:0},
   // 固定費: {id,type,desc,amount,startMonth,endMonth,enabled}
@@ -1305,6 +1364,9 @@ function mergeState(parsed){
     const a=s.fiscalYears.find(f=>f.active)||s.fiscalYears[0];
     s.currentFiscalYearId=a?a.id:null;
   }
+  s.travel=Object.assign({googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15},(parsed&&parsed.travel)||{});
+  s.travel.gasolinePrice=parseInt(s.travel.gasolinePrice)||175;
+  s.travel.fuelEfficiency=parseFloat(s.travel.fuelEfficiency)||15;
   s.finance=Object.assign({cash:0,loan:0},(parsed&&parsed.finance)||{});
   s.finance.cash=parseInt(s.finance.cash)||0;
   s.finance.loan=parseInt(s.finance.loan)||0;
@@ -2422,6 +2484,137 @@ async function driveRegister(){
   closeModal('modal-drive-import');
   alert(rows.length+'件を収支に登録しました'+(renamed>0?`\n（${renamed}件のファイルを「処理済み_」にリネームしました）`:''));
   refreshAll();
+}
+
+/* ===== 交通費の計算 ==================================================
+   運賃の検索も距離の取得もGAS経由で行う。
+   （ブラウザからはAPIキーを持てず、Google Maps側もCORSで拒否されるため）
+   =================================================================== */
+
+let travelResult=null;   // {amount, desc}
+
+function travelSettings(){
+  const t=S.travel||{};
+  return{
+    googleMapsApiKey:t.googleMapsApiKey||'',
+    gasolinePrice:parseInt(t.gasolinePrice)||175,
+    fuelEfficiency:parseFloat(t.fuelEfficiency)||15
+  };
+}
+
+// 区分が交通費のときだけ計算パネルを出す
+function toggleTravelPanel(){
+  const on=document.getElementById('l-type').value==='交通費';
+  document.getElementById('travel-panel').style.display=on?'':'none';
+  if(on)setTravelMode(document.querySelector('input[name="travel-mode"]:checked').value);
+}
+
+function setTravelMode(mode){
+  const car=mode==='car';
+  document.getElementById('travel-train').style.display=car?'none':'';
+  document.getElementById('travel-car').style.display=car?'':'none';
+  document.getElementById('travel-result').innerHTML='';
+  travelResult=null;
+}
+
+// APIキーの有無で車のモードを有効・無効にする
+function refreshTravelMode(){
+  const hasKey=!!travelSettings().googleMapsApiKey;
+  const radio=document.getElementById('travel-mode-car');
+  radio.disabled=!hasKey;
+  radio.parentElement.style.opacity=hasKey?'':'0.5';
+  document.getElementById('travel-car-note').style.display=hasKey?'none':'';
+  if(!hasKey){
+    document.getElementById('travel-mode-train').checked=true;
+    setTravelMode('train');
+  }
+}
+
+function travelMsg(html){document.getElementById('travel-result').innerHTML=html||''}
+
+/* ---- 電車・バス ---- */
+
+async function searchFare(){
+  const from=document.getElementById('tv-from').value.trim();
+  const to=document.getElementById('tv-to').value.trim();
+  const round=document.getElementById('tv-round').checked;
+  if(!from||!to){alert('出発駅と到着駅を入力してください');return;}
+  const btn=document.getElementById('tv-search');
+  btn.disabled=true;
+  travelMsg('<div class="alert alert-info"><span class="spinner"></span> 運賃を検索しています...</div>');
+  try{
+    const json=await gasCall({action:'fare',from,to});
+    if(!json.ok)throw new Error(json.error||'運賃を取得できませんでした');
+    const one=json.amount;
+    const total=round?one*2:one;
+    travelResult={amount:total,desc:`${from}→${to}（電車）`+(round?'　往復':'')};
+    travelMsg(`<div class="alert alert-success">
+      ${from} → ${to}：<strong>${fmt(one)}</strong>（IC）
+      ${round?`<br>往復：<strong>${fmt(total)}</strong>`:''}
+      </div>
+      <button class="btn primary" onclick="applyTravelResult()">この金額で登録</button>`);
+  }catch(e){
+    travelMsg(`<div class="alert alert-error">❌ ${e.message}<br><small>金額欄に手で入力することもできます。</small></div>`);
+  }
+  btn.disabled=false;
+}
+
+/* ---- 車 ---- */
+
+async function calcCarCost(){
+  const cfg=travelSettings();
+  const origin=document.getElementById('tv-origin').value.trim();
+  const dest=document.getElementById('tv-dest').value.trim();
+  const round=document.getElementById('tv-car-round').checked;
+  if(!origin||!dest){alert('出発地と到着地を入力してください');return;}
+  const btn=document.getElementById('tv-calc');
+  btn.disabled=true;
+  travelMsg('<div class="alert alert-info"><span class="spinner"></span> 走行距離を計算しています...</div>');
+  try{
+    const json=await gasCall({action:'distance',origin,destination:dest,apiKey:cfg.googleMapsApiKey});
+    if(!json.ok)throw new Error(json.error||'距離を取得できませんでした');
+    const km=Math.round(json.km*(round?2:1)*10)/10;
+    const cost=Math.round(km*(cfg.gasolinePrice/cfg.fuelEfficiency));
+    travelResult={amount:cost,desc:`${origin}→${dest}（車）${km}km`+(round?'　往復':'')};
+    travelMsg(`<div class="alert alert-success">
+      走行距離：<strong>${km}km</strong>${round?'（往復）':''} ／
+      ガソリン代：<strong>${fmt(cost)}</strong>
+      <div style="font-size:11px;margin-top:2px">${cfg.gasolinePrice}円/L・${cfg.fuelEfficiency}km/L で計算</div>
+      </div>
+      <button class="btn primary" onclick="applyTravelResult()">この金額で登録</button>`);
+  }catch(e){
+    travelMsg(`<div class="alert alert-error">❌ ${e.message}</div>`);
+  }
+  btn.disabled=false;
+}
+
+// 計算結果を金額欄と摘要欄に入れる
+function applyTravelResult(){
+  if(!travelResult)return;
+  document.getElementById('l-amount').value=travelResult.amount;
+  const desc=document.getElementById('l-desc');
+  if(!desc.value.trim())desc.value=travelResult.desc;
+  travelMsg(`<div class="alert alert-success">✓ 金額と摘要に反映しました。内容を確認して「保存」してください。</div>`);
+}
+
+/* ---- 設定ページ ---- */
+
+function loadTravelForm(){
+  const t=travelSettings();
+  document.getElementById('t-mapkey').value=t.googleMapsApiKey;
+  document.getElementById('t-gas').value=t.gasolinePrice;
+  document.getElementById('t-fuel').value=t.fuelEfficiency;
+}
+
+function saveTravelSettings(){
+  if(!S.travel)S.travel={};
+  S.travel.googleMapsApiKey=document.getElementById('t-mapkey').value.trim();
+  S.travel.gasolinePrice=parseInt(document.getElementById('t-gas').value)||175;
+  S.travel.fuelEfficiency=parseFloat(document.getElementById('t-fuel').value)||15;
+  saveState();
+  refreshTravelMode();
+  const msg=document.getElementById('travel-msg');
+  msg.textContent='✓ 保存しました';setTimeout(()=>{msg.textContent=''},3000);
 }
 
 /* ===== 固定費 =========================================================
@@ -4695,6 +4888,11 @@ function openLedgerModal(id){
   document.getElementById('l-amount').value=l?l.amount:'';
   document.getElementById('l-memo').value=l?(l.memo||''):'';
   updateMemoPlaceholder();
+  ['tv-from','tv-to','tv-origin','tv-dest'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('tv-round').checked=false;
+  document.getElementById('tv-car-round').checked=false;
+  refreshTravelMode();
+  toggleTravelPanel();
   document.getElementById('modal-ledger-title').textContent=l?'収支を編集':'収支を入力';
   document.getElementById('modal-ledger-submit').textContent=l?'✓ 保存':'+ 追加';
   openModal('modal-add-ledger');
@@ -4783,6 +4981,7 @@ function loadSettingsForm(){
   if(!S.finance)S.finance={cash:0,loan:0};
   document.getElementById('f-cash').value=S.finance.cash||0;
   document.getElementById('f-loan').value=S.finance.loan||0;
+  loadTravelForm();
   renderFiscalList();
 }
 
