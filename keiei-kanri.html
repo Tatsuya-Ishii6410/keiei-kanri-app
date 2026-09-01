@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>経営管理アプリ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -16,6 +19,10 @@
   --red:#E24B4A;--red-bg:#FCEBEB;--red-text:#A32D2D;
   --gray-bg:#F1EFE8;--gray-text:#5F5E5A;
   --purple-bg:#EFE9FA;--purple-text:#6B3FA0;
+  --font-body:'Inter','Noto Sans JP',-apple-system,BlinkMacSystemFont,'Hiragino Sans',Meiryo,sans-serif;
+  --font-ja:'Noto Sans JP','Hiragino Sans',Meiryo,sans-serif;
+  --font-num:'Inter','Noto Sans JP',sans-serif;
+  --lh-base:1.6;--lh-mobile:1.65;--ls-mobile:0.02em;
   --navy:#1a2e4a;--navy-text:#a0b4c8;
   --orange:#E8832A;--orange-dark:#cf7220;--orange-bg:#FDF0E3;
   --radius-md:8px;--radius-lg:12px;
@@ -35,15 +42,15 @@
   }
 }
 /* ===== レイアウト（サイドバー型） ===== */
-body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku Gothic ProN',Meiryo,sans-serif;color:var(--text-primary);background:var(--bg-tertiary);font-size:14px;line-height:1.6}
+body{font-family:var(--font-body);font-weight:400;color:var(--text-primary);background:var(--bg-tertiary);font-size:14px;line-height:var(--lh-base)}
 .app{display:flex;min-height:100vh;background:var(--bg-tertiary)}
 
 .sidebar{position:fixed;top:0;left:0;bottom:0;width:220px;z-index:120;background:var(--navy);display:flex;flex-direction:column;overflow-y:auto}
 .sidebar-head{padding:20px 18px 16px}
-.sidebar-logo{font-size:16px;font-weight:600;color:#fff;display:flex;align-items:center;gap:8px}
+.sidebar-logo{font-size:16px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px}
 .sidebar-company{font-size:11px;color:var(--navy-text);margin-top:4px}
 .sidebar-nav{display:flex;flex-direction:column;gap:2px;padding:6px 10px;flex:1}
-.nav-btn{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;font-size:13px;border:none;background:transparent;color:var(--navy-text);cursor:pointer;border-radius:var(--radius-md);transition:all 0.15s;font-family:inherit;text-align:left}
+.nav-btn{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;font-size:13px;font-weight:500;border:none;background:transparent;color:var(--navy-text);cursor:pointer;border-radius:var(--radius-md);transition:all 0.15s;font-family:inherit;text-align:left}
 .nav-btn:hover{background:rgba(255,255,255,0.08);color:#fff}
 .nav-btn.active{background:var(--orange);color:#fff;font-weight:600}
 .sidebar-foot{padding:12px 14px 16px;border-top:1px solid rgba(255,255,255,0.12);display:flex;flex-direction:column;gap:8px}
@@ -56,6 +63,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .main{flex:1;min-width:0;margin-left:220px;display:flex;flex-direction:column}
 .topbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 24px;height:56px;background:var(--bg-primary);border-bottom:1px solid var(--border);box-shadow:0 1px 3px rgba(0,0,0,0.04)}
 .topbar-title{font-size:16px;font-weight:700;color:var(--navy)}
+/* 数値はInterで揃える（金額は右寄せのセル） */
+td[style*="text-align:right"],.badge{font-family:var(--font-num)}
+tbody tr[style*="font-weight:bold"] td,td[style*="font-weight:bold"],td[style*="font-weight:600"]{font-weight:700}
 .topbar-right{display:flex;align-items:center;gap:12px}
 .menu-btn{display:none;padding:6px 10px;border:1px solid var(--border-hover);border-radius:var(--radius-md);background:transparent;color:var(--text-primary);cursor:pointer;font-family:inherit;font-size:13px}
 .content{flex:1;padding:24px;max-width:1200px;width:100%}
@@ -72,10 +82,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .page{display:none}
 .page.active{display:block}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-.section-title{font-size:17px;font-weight:600;color:var(--navy);display:flex;align-items:center;gap:8px}
+.section-title{font-size:17px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px}
 .card{background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;padding:22px 24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(16,24,40,0.05)}
 .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.card-title{font-size:14px;font-weight:500}
+.card-title{font-size:14px;font-weight:700;color:var(--navy)}
 .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
 .metric-grid.two-by{grid-template-columns:repeat(2,1fr)}
 @media(max-width:640px){.metric-grid.two-by{grid-template-columns:1fr}}
@@ -85,8 +95,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .metric-card.accent::before{background:rgba(255,255,255,0.5)}
 .metric-card.accent .metric-label,.metric-card.accent .metric-sub{color:rgba(255,255,255,0.85)}
 .metric-card.accent .metric-value{color:#fff!important}
-.metric-label{font-size:12px;color:#6b7280;margin-bottom:6px}
-.metric-value{font-size:24px;font-weight:600;letter-spacing:-0.5px}
+.metric-label{font-size:12px;font-weight:500;color:#6b7280;margin-bottom:6px}
+.metric-value{font-family:var(--font-num);font-size:24px;font-weight:700;letter-spacing:-0.5px}
 .metric-value.blue{color:var(--blue)}
 .metric-value.green{color:var(--green)}
 .metric-value.red{color:var(--red)}
@@ -103,7 +113,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Hiragino Kaku
 .btn:disabled{opacity:0.4;cursor:not-allowed}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;padding:11px 14px;font-size:12px;font-weight:600;color:#6b7280;background:var(--bg-secondary);border-bottom:1px solid var(--border);white-space:nowrap}
+th{text-align:left;padding:11px 14px;font-size:12px;font-weight:700;color:#6b7280;background:var(--bg-secondary);border-bottom:1px solid var(--border);white-space:nowrap}
 td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
 tbody tr:last-child td{border-bottom:none}
 tbody tr:hover{background:#f0f7ff}
@@ -118,7 +128,7 @@ tbody tr:hover{background:#f0f7ff}
 .form-row.three{grid-template-columns:1fr 1fr 1fr}
 .form-row.single{grid-template-columns:1fr}
 .form-group{display:flex;flex-direction:column;gap:5px}
-.form-label{font-size:12px;color:var(--text-secondary);font-weight:500}
+.form-label{font-size:12px;color:var(--text-secondary);font-weight:500;font-family:var(--font-ja)}
 input,select,textarea{font-family:inherit;font-size:13px;width:100%;padding:7px 10px;border:0.5px solid var(--border);border-radius:var(--radius-md);background:var(--bg-primary);color:var(--text-primary);transition:border-color 0.15s}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--blue)}
 textarea{resize:vertical;min-height:70px}
@@ -156,7 +166,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   #modal-preview-quote .actions-row .btn{width:100%;justify-content:center}
 }
 .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--navy)}
-.modal-title{font-size:16px;font-weight:600;color:var(--navy)}
+.modal-title{font-size:16px;font-weight:700;color:var(--navy)}
 .actions-row{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
@@ -192,11 +202,11 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 /* ログイン画面 */
 .login-screen{position:fixed;inset:0;z-index:500;display:none;align-items:center;justify-content:center;padding:20px;background:var(--bg-tertiary)}
 .login-card{background:var(--bg-primary);border:0.5px solid var(--border);border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,0.14);padding:36px 32px;width:100%;max-width:380px}
-.login-logo{font-size:13px;font-weight:600;color:#1a2e4a;letter-spacing:1px;text-align:center}
-.login-title{font-size:19px;font-weight:700;text-align:center;margin:6px 0 24px;color:var(--text-primary)}
+.login-logo{font-family:var(--font-ja);font-size:13px;font-weight:700;color:#1a2e4a;letter-spacing:1px;text-align:center}
+.login-title{font-family:'Inter',sans-serif;font-size:19px;font-weight:600;text-align:center;margin:6px 0 24px;color:var(--text-primary)}
 .login-field{margin-bottom:14px}
-.login-field label{display:block;font-size:12px;color:var(--text-secondary);font-weight:500;margin-bottom:5px}
-.login-btn{width:100%;padding:11px;border:none;border-radius:var(--radius-md);background:#1a2e4a;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:6px}
+.login-field label{display:block;font-family:var(--font-ja);font-size:12px;color:var(--text-secondary);font-weight:500;margin-bottom:5px}
+.login-btn{width:100%;padding:11px;border:none;border-radius:var(--radius-md);background:#1a2e4a;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter','Noto Sans JP',sans-serif;margin-top:6px}
 .login-btn:hover{opacity:0.9}
 .login-btn:disabled{opacity:0.5;cursor:not-allowed}
 .login-error{font-size:12px;color:var(--red);min-height:34px;margin-top:10px;line-height:1.6}
@@ -221,6 +231,12 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 }
 /* ===== レスポンシブ（タブレット 768px / スマホ 480px） ===== */
 @media(max-width:768px){
+  body{line-height:var(--lh-mobile);letter-spacing:var(--ls-mobile)}
+  .section-title{font-size:18px}
+  .card-title{font-size:15px}
+  .metric-value{font-size:26px}
+  td,th{padding:12px 10px}
+  .metric-card{padding:18px 18px 18px 22px}
   .two-col,.three-col{grid-template-columns:1fr}
   .form-row{grid-template-columns:1fr}
   .form-row.three{grid-template-columns:1fr 1fr}
@@ -234,7 +250,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   .menu-btn{display:inline-flex;align-items:center;min-height:40px}
   .topbar{padding:0 12px}
   .content{padding:16px 12px}
-  .card{padding:16px 14px;margin-bottom:14px}
+  .card{padding:20px;margin-bottom:16px}
   .metric-grid{gap:12px}
 
   /* 横に長い表はスクロールさせる（潰さない） */
@@ -259,7 +275,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   .metric-grid,.metric-grid.two-by{grid-template-columns:1fr}
   .form-row.three{grid-template-columns:1fr}
   .content{padding:12px 10px}
-  .card{padding:14px 12px}
+  .card{padding:16px 14px}
   .modal{padding:16px 14px;border-radius:12px}
 
   /* セレクトやボタンの並びを縦に */
@@ -4397,6 +4413,8 @@ function createBulkInvoices(){
    アプリのダークモード設定に影響されないよう、色は固定値をインラインで指定する。
    ===================================================================== */
 const DOC_NAVY='#1a2e4a';
+// 帳票はダウンロード後も同じ見た目にするため、フォントは実名で持つ
+const DOC_NUM_FONT="'Inter','Noto Sans JP','Hiragino Kaku Gothic ProN',Meiryo,sans-serif";
 const DOC_RED='#e53e3e';
 
 // 書類番号: INV-YYYYMM-001（請求書）/ EST-YYYYMM-001（見積書）
@@ -4472,8 +4490,8 @@ function buildDocHtml(q,c){
   const client=(q.client||'').replace(/\s*御中\s*$/,'');
   const th='padding:10px 12px;background:'+DOC_NAVY+';color:#fff;font-weight:bold;';
   const td='padding:10px 12px;border-bottom:1px solid #e0e0e0;';
-  const sumTd='padding:10px 12px;border-bottom:1px solid #e0e0e0;text-align:right;';
-  const totalTd='padding:10px 12px;background:'+DOC_NAVY+';color:#fff;font-weight:bold;text-align:right;';
+  const sumTd='padding:10px 12px;border-bottom:1px solid #e0e0e0;text-align:right;font-family:'+DOC_NUM_FONT+';';
+  const totalTd='padding:10px 12px;background:'+DOC_NAVY+';color:#fff;font-weight:bold;text-align:right;font-family:'+DOC_NUM_FONT+';';
 
   // 月額固定の契約かどうか。契約期間があれば月数と期間合計も出す。
   const monthly=!!q.isMonthly;
@@ -4507,7 +4525,7 @@ function buildDocHtml(q,c){
   </div>
   <div style="background:#f5f5f5;border:1px solid #ddd;border-radius:6px;text-align:center;padding:16px;margin-bottom:${months||q.paymentMethod?'14px':'26px'}">
     <div style="font-size:12px;color:#555">${lb.amountLabel}${monthly?'（月額）':''}</div>
-    <div style="font-size:32px;font-weight:bold;color:${DOC_NAVY};margin-top:2px">${docYen(total)}-</div>
+    <div style="font-size:32px;font-weight:bold;color:${DOC_NAVY};margin-top:2px;font-family:${DOC_NUM_FONT}">${docYen(total)}-</div>
     ${periodTotal!==null?`<div style="font-size:12px;color:#555;margin-top:6px">契約期間合計 <strong style="color:${DOC_NAVY};font-size:14px">${docYen(periodTotal)}-</strong>（${months}ヶ月）</div>`:''}
   </div>
   ${(months||q.paymentMethod)?`<div style="border:1px solid #ddd;border-radius:6px;padding:12px 16px;margin-bottom:26px;font-size:12px;line-height:1.9">
@@ -4562,6 +4580,8 @@ function downloadQuote(){
   const q=currentQuoteData;
   const kind=q.type||'見積書';
   const html='<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>'+kind+' '+q.id+'</title>'
+    +'<link rel="preconnect" href="https://fonts.googleapis.com">'
+    +'<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">'
     +'<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#fff}'
     +'.sheet{max-width:794px;margin:0 auto}'  /* A4縦の幅（210mm ≒ 794px） */
     +'@page{size:A4 portrait;margin:0}'

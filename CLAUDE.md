@@ -177,3 +177,13 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   表内の操作ボタンを縦積み、見積・請求の一覧は番号と顧客の列を隠す
 - 表を潰さず横スクロールさせるため .table-wrap table{min-width:560px}
 - 見積・請求のタブは .tab-full / .tab-short で表記を切り替える
+
+## フォント
+- Google Fonts の Inter（数字・欧文）と Noto Sans JP（和文）を読み込む
+- --font-body（本文）／--font-ja（和文）／--font-num（数値）の3変数で使い分ける
+  --font-num は 'Inter','Noto Sans JP',sans-serif。Interに和文グリフが無いため
+  Noto を続けて指定し、和文が入る箇所（バッジなど）でも崩れないようにしている
+- 見出し・数値・th・合計行は 700、ラベルとナビは 500、本文は 400
+- 帳票（buildDocHtml）はダウンロード後も同じ見た目にするため、
+  CSS変数ではなく DOC_NUM_FONT の実名フォントを使い、
+  ダウンロードするHTMLにも Google Fonts の link を入れている
