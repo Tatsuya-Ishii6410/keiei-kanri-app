@@ -1124,11 +1124,14 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="modal-header"><span class="modal-title" id="modal-ledger-title">収支を入力</span><button class="btn sm" onclick="closeModal('modal-add-ledger')">✕</button></div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">日付</label><input id="l-date" type="date"></div>
-    <div class="form-group"><label class="form-label">区分</label><select id="l-type"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option><option>社会保険料</option><option>住民税（特別徴収）</option><option>消費税（納付）</option><option>源泉所得税（納付）</option><option>法人税・住民税・事業税（納付）</option><option>その他税金・公課</option></select></div>
+    <div class="form-group"><label class="form-label">区分</label><select id="l-type" onchange="updateMemoPlaceholder()"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option><option>社会保険料</option><option>住民税（特別徴収）</option><option>消費税（納付）</option><option>源泉所得税（納付）</option><option>法人税・住民税・事業税（納付）</option><option>その他税金・公課</option></select></div>
   </div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">摘要</label><input id="l-desc" type="text" placeholder="例: 〇〇案件 6月分"></div>
     <div class="form-group"><label class="form-label">金額</label><input id="l-amount" type="number" placeholder="100000"></div>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">備考（任意）</label><textarea id="l-memo" placeholder="同席者・目的・場所など（任意）"></textarea></div>
   </div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-add-ledger')">キャンセル</button>
@@ -1285,6 +1288,7 @@ function mergeState(parsed){
   });
   if(!Array.isArray(s.quotes))s.quotes=[];
   if(!Array.isArray(s.ledger))s.ledger=[];
+  s.ledger.forEach(l=>{l.memo=l.memo||'';});
   if(!Array.isArray(s.fixedCosts))s.fixedCosts=[];
   if(!Array.isArray(s.fiscalYears))s.fiscalYears=[];
   s.fiscalYears=s.fiscalYears.map(f=>({
@@ -3400,6 +3404,7 @@ function plCell(v,opt){
   if(o.total)st.fill={fgColor:{rgb:PL_GRAY}};
   if(o.color)st.font=Object.assign({},st.font,{color:{rgb:o.color}});
   if(o.right)st.alignment={horizontal:'right'};
+  if(o.wrap)st.alignment=Object.assign({},st.alignment,{wrapText:true,vertical:'top'});
   if(Object.keys(st).length)cell.s=st;
   return cell;
 }
@@ -3409,7 +3414,7 @@ function plRow(label,amount,note,opt){
   return[
     plCell(label,o),
     amount===null||amount===undefined?plCell('',o):plCell(amount,Object.assign({money:true},o)),
-    plCell(note||'',o)
+    plCell(note||'',Object.assign({},o,{wrap:String(note||'').indexOf('\n')>=0}))
   ];
 }
 
@@ -3430,12 +3435,17 @@ function buildMonthlyPL(mi){
   // 販売管理費（役員報酬・税金公課も含めた支出すべて）
   const accounts=LEDGER_TYPES.filter(x=>x!=='売上');
   const byAccount={};
+  const memoByAccount={};
   accounts.forEach(k=>{byAccount[k]=0});
   S.ledger.forEach(l=>{
     if(!l.date||new Date(l.date).getMonth()!==mi)return;
     if(l.type==='売上')return;
     if(byAccount[l.type]===undefined)byAccount[l.type]=0; // 旧区分もそのまま出す
     byAccount[l.type]+=l.amount;
+    if(l.memo){
+      if(!memoByAccount[l.type])memoByAccount[l.type]=[];
+      memoByAccount[l.type].push(l.memo);
+    }
   });
   const sgaTotal=Object.keys(byAccount).reduce((a,k)=>a+byAccount[k],0);
   const profit=salesTotal-sgaTotal;
@@ -3465,7 +3475,7 @@ function buildMonthlyPL(mi){
 
   rows.push([plCell('【販売管理費】',{head:true}),plCell('',{head:true}),plCell('',{head:true})]);
   rows.push([plCell('勘定科目',{bold:true}),plCell('金額',{bold:true,right:true}),plCell('備考',{bold:true})]);
-  Object.keys(byAccount).forEach(k=>rows.push(plRow(k,byAccount[k],'')));
+  Object.keys(byAccount).forEach(k=>rows.push(plRow(k,byAccount[k],(memoByAccount[k]||[]).join('\n'))));
   rows.push(plRow('販売管理費合計',sgaTotal,'',{total:true}));
   rows.push(['','','']);
 
@@ -4671,7 +4681,7 @@ function renderLedger(){
   document.getElementById('ledger-list-title').textContent=
     (all?'全期間':(mi+1)+'月')+'の収支（'+sorted.length+'件）';
   document.getElementById('ledger-list').innerHTML=sorted.map(l=>{
-    return`<tr><td style="font-size:12px;white-space:nowrap">${l.date}</td><td>${ledgerBadge(l.type)}</td><td style="font-size:12px">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}</td><td style="font-weight:500">${fmt(l.amount)}</td><td><div style="display:flex;gap:4px"><button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button><button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button></div></td></tr>`;
+    return`<tr><td style="font-size:12px;white-space:nowrap">${l.date}</td><td>${ledgerBadge(l.type)}</td><td style="font-size:12px">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}${l.memo?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${l.memo}</div>`:''}</td><td style="font-weight:500">${fmt(l.amount)}</td><td><div style="display:flex;gap:4px"><button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button><button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button></div></td></tr>`;
   }).join('');
 }
 
@@ -4683,9 +4693,20 @@ function openLedgerModal(id){
   document.getElementById('l-type').value=l?l.type:'売上';
   document.getElementById('l-desc').value=l?l.desc:'';
   document.getElementById('l-amount').value=l?l.amount:'';
+  document.getElementById('l-memo').value=l?(l.memo||''):'';
+  updateMemoPlaceholder();
   document.getElementById('modal-ledger-title').textContent=l?'収支を編集':'収支を入力';
   document.getElementById('modal-ledger-submit').textContent=l?'✓ 保存':'+ 追加';
   openModal('modal-add-ledger');
+}
+
+// 交際費は誰と何のためかを残したいので、例文を変える
+function updateMemoPlaceholder(){
+  const el=document.getElementById('l-memo');
+  if(!el)return;
+  el.placeholder=document.getElementById('l-type').value==='交際費'
+    ?'例：〇〇社 山田様と会食、△△の件'
+    :'同席者・目的・場所など（任意）';
 }
 
 function saveLedger(){
@@ -4693,13 +4714,14 @@ function saveLedger(){
   const type=document.getElementById('l-type').value;
   const desc=document.getElementById('l-desc').value.trim();
   const amount=parseInt(document.getElementById('l-amount').value)||0;
+  const memo=document.getElementById('l-memo').value.trim();
   if(!date||!desc||!amount){alert('日付・摘要・金額を入力してください');return;}
   if(editLedgerId!==null){
     const l=S.ledger.find(x=>x.id===editLedgerId);
     if(!l){alert('対象の収支が見つかりませんでした');return;}
-    Object.assign(l,{date,type,desc,amount});
+    Object.assign(l,{date,type,desc,amount,memo});
   }else{
-    S.ledger.push({id:S.nextLedgerId++,date,type,desc,amount});
+    S.ledger.push({id:S.nextLedgerId++,date,type,desc,amount,memo});
   }
   editLedgerId=null;
   saveState();closeModal('modal-add-ledger');refreshAll();

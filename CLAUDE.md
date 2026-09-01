@@ -187,3 +187,10 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 帳票（buildDocHtml）はダウンロード後も同じ見た目にするため、
   CSS変数ではなく DOC_NUM_FONT の実名フォントを使い、
   ダウンロードするHTMLにも Google Fonts の link を入れている
+
+## 収支の備考
+- ledger の各エントリに memo（任意）を持つ。GASの ledger シートにも memo 列がある
+- 収支入力モーダルの備考欄は、区分が「交際費」のときだけ placeholder を変える
+- 収支一覧では摘要の下に小さいグレー文字で表示する
+- 月次PL（Excel）では勘定科目ごとに備考を改行で連結して備考列に出す
+  （改行を含むセルは wrapText を有効にする）

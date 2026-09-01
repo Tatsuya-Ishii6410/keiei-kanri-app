@@ -37,7 +37,7 @@ var SHEET_DEFS = {
     'invoiceStatus', 'paidMonth', 'paidAmount'],
   quotes:   ['id', 'subject', 'client', 'amount', 'type', 'date', 'expire', 'due',
     'contractStart', 'contractEnd', 'paymentMethod', 'isMonthly', 'items', 'note'],
-  ledger:   ['id', 'date', 'type', 'desc', 'amount', 'fixedCostId'],
+  ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'fixedCostId'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
   fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
   settings: ['key', 'value']
@@ -209,6 +209,7 @@ function readLedger_(sh) {
       type: str_(o.type),
       desc: str_(o.desc),
       amount: num_(o.amount),
+      memo: str_(o.memo),
       fixedCostId: str_(o.fixedCostId) === '' ? null : num_(o.fixedCostId)
     };
   }).filter(function (l) { return l.date !== '' && l.desc !== ''; });
@@ -336,7 +337,7 @@ function writeAll_(data) {
   });
 
   var ledger = (data.ledger || []).map(function (l) {
-    return [num_(l.id), str_(l.date), str_(l.type), str_(l.desc), num_(l.amount),
+    return [num_(l.id), str_(l.date), str_(l.type), str_(l.desc), num_(l.amount), str_(l.memo),
       (l.fixedCostId === null || l.fixedCostId === undefined || l.fixedCostId === '') ? '' : num_(l.fixedCostId)];
   });
 
