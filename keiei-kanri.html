@@ -2764,7 +2764,8 @@ function hasLinkedInvoice(p){
 function bulkStatusTargets(){
   const mi=bulkStatusMonth();
   const mode=bulkStatusMode();
-  const alive=p=>p.status!=='失注';
+  // 対象は「進行中」「完了」のみ（商談中・契約済・失注は除外）
+  const alive=p=>p.status==='進行中'||p.status==='完了';
   if(mode==='to-paid'||mode==='to-uninvoiced'){
     return S.projects.filter(p=>alive(p)&&invoiceStatusOf(p)==='invoiced');
   }
