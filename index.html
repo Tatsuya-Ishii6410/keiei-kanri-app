@@ -1002,14 +1002,21 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <div class="modal">
   <div class="modal-header"><span class="modal-title">入金確認</span><button class="btn sm" onclick="closeModal('modal-payment')">✕</button></div>
   <div id="pay-info" style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:14px"></div>
-  <div class="form-row">
-    <div class="form-group"><label class="form-label">入金金額（税込）</label><input id="pay-amount" type="number"></div>
-    <div class="form-group"><label class="form-label">入金日</label><input id="pay-date" type="date"></div>
-  </div>
   <div class="form-row single">
-    <div class="form-group"><label class="form-label">摘要</label><input id="pay-desc" type="text"></div>
+    <div class="form-group"><label class="form-label">入金日（この日付で収支に登録されます）</label><input id="pay-date" type="date"></div>
   </div>
-  <div style="font-size:12px;color:var(--text-muted)">確認すると案件が「入金済」になり、収支に「売上」として登録されます。</div>
+  <div class="form-row single" style="margin-bottom:6px">
+    <label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input id="pay-toledger" type="checkbox" checked onchange="togglePayLedgerFields()" style="width:auto"> 収支管理に売上として登録する
+    </label>
+  </div>
+  <div id="pay-ledger-fields">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">入金金額（税込）</label><input id="pay-amount" type="number"></div>
+      <div class="form-group"><label class="form-label">摘要</label><input id="pay-desc" type="text"></div>
+    </div>
+  </div>
+  <div style="font-size:12px;color:var(--text-muted)">確認すると案件が「入金済」になります。チェックを外すとステータスだけを変更します。</div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-payment')">キャンセル</button>
     <button class="btn success" onclick="confirmPayment()">✓ 入金確認・収支に登録</button>
@@ -3093,24 +3100,45 @@ function openPaymentModal(id){
   document.getElementById('pay-amount').value=grossAmount(p.amount);
   document.getElementById('pay-date').value=today();
   document.getElementById('pay-desc').value=`${p.client||p.name} ${ym}分 入金`;
+  document.getElementById('pay-toledger').checked=true;
+  togglePayLedgerFields();
   openModal('modal-payment');
+}
+
+// 収支に登録しないときは金額と摘要を隠す
+function togglePayLedgerFields(){
+  const on=document.getElementById('pay-toledger').checked;
+  document.getElementById('pay-ledger-fields').style.display=on?'':'none';
 }
 
 function confirmPayment(){
   const p=S.projects.find(x=>x.id===payTargetId);
   if(!p){alert('対象の案件が見つかりませんでした');return;}
-  const amount=parseInt(document.getElementById('pay-amount').value)||0;
+  const toLedger=document.getElementById('pay-toledger').checked;
   const date=document.getElementById('pay-date').value;
+  const amount=parseInt(document.getElementById('pay-amount').value)||0;
   const desc=document.getElementById('pay-desc').value.trim();
-  if(!amount||!date||!desc){alert('入金金額・入金日・摘要を入力してください');return;}
+  if(!date){alert('入金日を入力してください');return;}
+  if(toLedger&&(!amount||!desc)){alert('入金金額と摘要を入力してください');return;}
 
+  const label=p.client||p.name;
+  const ok=toLedger
+    ?confirm(`${date} に ${label}（${amount.toLocaleString()}円）の入金を収支に登録します。よろしいですか？`)
+    :confirm(`${date} 付けで ${label} を「入金済」にします。収支には登録しません。よろしいですか？`);
+  if(!ok)return;
+
+  // 収支の日付は必ずモーダルで入力した入金日を使う
   markProjectPaid(p,date,amount);
-  S.ledger.push({id:S.nextLedgerId++,date,type:'売上',desc,amount,projectId:p.id});
+  if(toLedger){
+    S.ledger.push({id:S.nextLedgerId++,date,type:'売上',desc,amount,projectId:p.id});
+  }
   payTargetId=null;
   saveState();
   closeModal('modal-payment');
   refreshAll();
-  alert('入金を確認し、収支に登録しました');
+  alert(toLedger
+    ?`✓ ${desc} を収支に登録しました（${date}）`
+    :`✓ ${label} を入金済みにしました（${date}）`);
 }
 
 // 案件を入金済みにする（収支への登録は呼び出し側で行う）
