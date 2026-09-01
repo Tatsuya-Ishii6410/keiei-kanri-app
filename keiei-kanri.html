@@ -328,6 +328,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
         <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
       </select>
       <button class="btn" onclick="openBulkInvoiceModal()">📄 一括請求書作成</button>
+      <button class="btn" onclick="openBulkStatusModal()">📋 一括ステータス変更</button>
       <button class="btn primary" onclick="openProjectModal()">+ 案件追加</button>
     </div>
   </div>
@@ -825,6 +826,43 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-drive-import')">閉じる</button>
     <button class="btn success" id="drive-register-btn" onclick="driveRegister()" style="display:none">✓ 収支に登録する</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-bulk-status">
+<div class="modal wide">
+  <div class="modal-header"><span class="modal-title">入金ステータス一括変更</span><button class="btn sm" onclick="closeModal('modal-bulk-status')">✕</button></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">対象月</label>
+      <select id="bs-month" onchange="updateBulkStatusForm()"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option></select>
+    </div>
+    <div class="form-group"><label class="form-label">変更内容</label>
+      <select id="bs-mode" onchange="updateBulkStatusForm()">
+        <option value="to-invoiced">未請求 → 請求済</option>
+        <option value="to-paid">請求済 → 入金済</option>
+      </select>
+    </div>
+  </div>
+  <div id="bs-paid-options" style="display:none">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">入金日</label><input id="bs-date" type="date"></div>
+      <div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:22px">
+        <input id="bs-toledger" type="checkbox" checked style="width:auto"> 収支にも「売上」として登録する
+      </label></div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 8px">
+    <span class="form-label" id="bs-count"></span>
+    <span style="display:flex;gap:6px">
+      <button class="btn sm" onclick="setBulkStatusCheckAll(true)">全選択</button>
+      <button class="btn sm" onclick="setBulkStatusCheckAll(false)">全解除</button>
+    </span>
+  </div>
+  <div id="bs-list"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-bulk-status')">キャンセル</button>
+    <button class="btn primary" id="bs-submit" onclick="applyBulkStatus()">✓ 変更する</button>
   </div>
 </div>
 </div>
@@ -2038,15 +2076,24 @@ function createQuote(){
     items:currentQuoteItems.map(it=>({...it})),
     note:document.getElementById('q-note').value.trim()
   };
-  S.quotes.push(qdata);saveState();currentQuoteData=qdata;
-  closeModal('modal-create-quote');showPreviewModal();renderQuotes();
+  S.quotes.push(qdata);
+  // 案件に紐づく請求書を出したら、その案件を「請求済」にする
+  if(type==='請求書'){
+    qdata.items.forEach(it=>{
+      if(!it.projectId)return;
+      const p=S.projects.find(x=>x.id===it.projectId);
+      if(p&&invoiceStatusOf(p)==='uninvoiced')p.invoiceStatus='invoiced';
+    });
+  }
+  saveState();currentQuoteData=qdata;
+  closeModal('modal-create-quote');showPreviewModal();renderQuotes();refreshAll();
 }
 
 function quickQuote(pid){
   const p=S.projects.find(x=>x.id===pid);if(!p)return;
   applyDocTypeLabels('見積書');
   resetContractFields();
-  currentQuoteItems=[{name:p.name,qty:1,unit:p.amount,total:p.amount}];
+  currentQuoteItems=[{name:p.name,qty:1,unit:p.amount,total:p.amount,projectId:p.id}];
   document.getElementById('q-subject').value=p.name;
   document.getElementById('q-client').value=(p.client||'')+' 御中';
   document.getElementById('q-date').value=today();
@@ -2664,6 +2711,144 @@ function updatePlanMonthOptions(){
   sel.innerHTML=months.map(m=>`<option value="${m}">${m+1}月</option>`).join('');
   if(months.map(String).indexOf(keep)>=0)sel.value=keep;
   else sel.value=String(months[0]);
+}
+
+/* ===== 入金ステータスの一括変更 ======================================
+   「未請求→請求済」と「請求済→入金済」の2パターン。
+   入金済にするときは収支への一括登録もできる。
+   =================================================================== */
+
+function bulkStatusMode(){
+  const el=document.getElementById('bs-mode');
+  return el?el.value:'to-invoiced';
+}
+function bulkStatusMonth(){
+  return parseInt(document.getElementById('bs-month').value)||0;
+}
+
+function openBulkStatusModal(){
+  const now=new Date();
+  const prev=(now.getMonth()+11)%12;   // 既定は前月
+  document.getElementById('bs-month').value=String(prev);
+  document.getElementById('bs-mode').value='to-invoiced';
+  document.getElementById('bs-date').value=
+    now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-01';
+  document.getElementById('bs-toledger').checked=true;
+  updateBulkStatusForm();
+  openModal('modal-bulk-status');
+}
+
+function updateBulkStatusForm(){
+  const paid=bulkStatusMode()==='to-paid';
+  document.getElementById('bs-paid-options').style.display=paid?'':'none';
+  renderBulkStatusList();
+}
+
+// 変更対象の案件
+function bulkStatusTargets(){
+  const mi=bulkStatusMonth();
+  if(bulkStatusMode()==='to-paid'){
+    return S.projects.filter(p=>p.status!=='失注'&&invoiceStatusOf(p)==='invoiced');
+  }
+  return S.projects.filter(p=>p.status!=='失注'&&invoiceStatusOf(p)==='uninvoiced'&&projectHasMonth(p,mi));
+}
+
+function renderBulkStatusList(){
+  const mi=bulkStatusMonth();
+  const paid=bulkStatusMode()==='to-paid';
+  const list=bulkStatusTargets();
+  const el=document.getElementById('bs-list');
+  const btn=document.getElementById('bs-submit');
+
+  if(list.length===0){
+    el.innerHTML='<div class="empty-state">'+(paid
+      ?'請求済の案件がありません。'
+      :(mi+1)+'月に売上が発生する未請求の案件がありません。')+'</div>';
+    btn.disabled=true;
+    document.getElementById('bs-count').textContent='';
+    return;
+  }
+  btn.disabled=false;
+  el.innerHTML='<div class="table-wrap"><table><thead><tr>'
+    +'<th style="width:36px"></th><th>顧客名</th><th>案件名</th><th>現在</th>'
+    +(paid?'<th style="min-width:120px">入金金額（税込）</th>':'<th style="text-align:right">対象月の金額</th>')
+    +'</tr></thead><tbody>'
+    +list.map(p=>{
+      const gross=grossAmount(projectMonthAmount(p,mi));
+      return`<tr>
+      <td><input type="checkbox" class="bs-check" value="${p.id}" checked onchange="updateBulkStatusCount()" style="width:auto"></td>
+      <td style="font-size:12px">${p.client||'-'}</td>
+      <td style="font-weight:500">${p.name}</td>
+      <td>${invoiceBadge(p)}</td>
+      ${paid
+        ?`<td><input type="number" class="bs-amount" data-id="${p.id}" value="${gross}" style="font-size:12px"></td>`
+        :`<td style="text-align:right">${fmt(projectMonthAmount(p,mi))}</td>`}
+    </tr>`;}).join('')
+    +'</tbody></table></div>';
+  updateBulkStatusCount();
+}
+
+function selectedBulkStatusIds(){
+  return Array.from(document.querySelectorAll('.bs-check'))
+    .filter(c=>c.checked).map(c=>parseInt(c.value));
+}
+
+function bulkStatusAmounts(){
+  const map={};
+  document.querySelectorAll('.bs-amount').forEach(inp=>{
+    map[parseInt(inp.dataset.id)]=parseInt(inp.value)||0;
+  });
+  return map;
+}
+
+function updateBulkStatusCount(){
+  const n=selectedBulkStatusIds().length;
+  document.getElementById('bs-count').textContent=n+'件を選択中';
+  document.getElementById('bs-submit').disabled=n===0;
+}
+
+function setBulkStatusCheckAll(checked){
+  document.querySelectorAll('.bs-check').forEach(c=>{c.checked=checked});
+  updateBulkStatusCount();
+}
+
+function applyBulkStatus(){
+  const ids=selectedBulkStatusIds();
+  if(ids.length===0){alert('対象の案件を選択してください');return;}
+  const mi=bulkStatusMonth();
+  const paid=bulkStatusMode()==='to-paid';
+  const targets=S.projects.filter(p=>ids.indexOf(p.id)>=0);
+
+  if(!paid){
+    targets.forEach(p=>{p.invoiceStatus='invoiced';});
+    saveState();closeModal('modal-bulk-status');refreshAll();
+    alert(targets.length+'件のステータスを変更しました（未請求 → 請求済）');
+    return;
+  }
+
+  const date=document.getElementById('bs-date').value||today();
+  const toLedger=document.getElementById('bs-toledger').checked;
+  const amounts=bulkStatusAmounts();
+  const y=monthYear(mi);
+  let added=0;
+  targets.forEach(p=>{
+    const amount=amounts[p.id]||grossAmount(projectMonthAmount(p,mi));
+    markProjectPaid(p,date,amount);
+    if(toLedger&&amount>0){
+      S.ledger.push({
+        id:S.nextLedgerId++,
+        date,
+        type:'売上',
+        desc:`${p.client||p.name} ${y}年${mi+1}月分 入金`,
+        amount,
+        projectId:p.id
+      });
+      added++;
+    }
+  });
+  saveState();closeModal('modal-bulk-status');refreshAll();
+  alert(targets.length+'件のステータスを変更しました（請求済 → 入金済）'
+    +(added>0?`\n（${added}件を収支に登録しました）`:''));
 }
 
 /* ===== 売上入金の突合 ================================================
@@ -3961,7 +4146,7 @@ function bulkInvoiceGroups(){
   const byClient={};
   S.projects.filter(p=>ids.indexOf(p.id)>=0).forEach(p=>{
     const unit=projectMonthAmount(p,mi);
-    const item={name:names[p.id]||defaultItemName(p,mi),qty:1,unit,total:unit};
+    const item={name:names[p.id]||defaultItemName(p,mi),qty:1,unit,total:unit,projectId:p.id};
     const client=(p.client||'').trim();
     if(merge&&client){
       if(!byClient[client]){byClient[client]={client,items:[]};groups.push(byClient[client]);}
