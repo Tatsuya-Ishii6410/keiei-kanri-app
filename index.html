@@ -539,8 +539,10 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <button class="btn primary" onclick="openLedgerModal(null,'actual')">+ 実績入力</button>
       <button class="btn" onclick="openLedgerModal(null,'planned_in')">+ 入金予定</button>
       <button class="btn" onclick="openLedgerModal(null,'planned_out')">+ 出金予定</button>
+      <button class="btn" onclick="openSettleModal()">🚃 交通費精算を追加</button>
     </div>
   </div>
+  <div id="cf-settle-notice"></div>
   <div class="card">
     <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
       <div class="form-group" style="max-width:220px">
@@ -1024,6 +1026,25 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </div>
 </div>
 
+<div class="modal-overlay" id="modal-settle">
+<div class="modal wide">
+  <div class="modal-header"><span class="modal-title">交通費精算 出金予定を追加</span><button class="btn sm" onclick="closeModal('modal-settle')">✕</button></div>
+  <div class="form-row three">
+    <div class="form-group"><label class="form-label">対象月</label>
+      <select id="st-month" onchange="updateSettleForm()"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option></select>
+    </div>
+    <div class="form-group"><label class="form-label">出金予定日</label><input id="st-date" type="date"></div>
+    <div class="form-group"><label class="form-label">摘要</label><input id="st-desc" type="text"></div>
+  </div>
+  <div id="st-warn"></div>
+  <div id="st-list" style="margin-top:8px"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-settle')">キャンセル</button>
+    <button class="btn primary" id="st-submit" onclick="createSettlement()">出金予定として登録</button>
+  </div>
+</div>
+</div>
+
 <div class="modal-overlay" id="modal-plan-confirm">
 <div class="modal">
   <div class="modal-header"><span class="modal-title">入金を実績にする</span><button class="btn sm" onclick="closeModal('modal-plan-confirm')">✕</button></div>
@@ -1393,6 +1414,7 @@ function mergeState(parsed){
     l.memo=l.memo||'';
     if(['actual','planned_in','planned_out'].indexOf(l.status)<0)l.status='actual';
     l.expectedDate=l.expectedDate||'';
+    l.settlementMonth=l.settlementMonth||'';
   });
   s.bankBalance=parseInt(s.bankBalance)||0;
   if(!Array.isArray(s.fixedCosts))s.fixedCosts=[];
@@ -2641,6 +2663,7 @@ function renderLedger(){
     `${all?'全期間':(mi+1)+'月'}末の残高予測：<strong style="color:${forecast>=0?'var(--green)':'var(--red)'}">${fmt(forecast)}</strong>`
     +`<span style="font-size:11px;color:var(--text-muted)">（口座残高 ${fmt(bankBalance())} ＋実績 ${fmt(t.actualIn-t.actualOut)} ＋予定 ${fmt(t.planIn-t.planOut)}）</span>`;
 
+  renderSettleNotice();
   document.getElementById('cf-actual-in').textContent=fmt(t.actualIn);
   document.getElementById('cf-actual-out').textContent=fmt(t.actualOut);
   document.getElementById('cf-plan-in').textContent=fmt(t.planIn);
@@ -2843,6 +2866,123 @@ function nextMonth25(){
   const now=new Date();
   const d=new Date(now.getFullYear(),now.getMonth()+1,25);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-25';
+}
+
+/* ===== 交通費の精算（出金予定への反映） ==============================
+   その月の交通費（実績）を合算し、翌月25日の出金予定として登録する。
+   登録済みかどうかは ledger の settlementMonth（YYYY-MM）で判定する。
+   =================================================================== */
+
+// その月の交通費の実績
+function travelActualsOf(mi){
+  return S.ledger
+    .filter(l=>isActual(l)&&l.type==='交通費'&&inMonth(l.date,mi))
+    .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+}
+
+function travelActualTotal(mi){
+  return travelActualsOf(mi).reduce((a,l)=>a+l.amount,0);
+}
+
+// その月の精算がすでに登録されているか
+function settlementFor(ym){
+  return S.ledger.find(l=>l.settlementMonth===ym)||null;
+}
+
+// mi の年月（YYYY-MM）
+function ymOfMonth(mi){
+  return monthYear(mi)+'-'+String(mi+1).padStart(2,'0');
+}
+
+// mi の翌月25日
+function nextMonth25Of(mi){
+  const abs=monthYear(mi)*12+mi+1;
+  return Math.floor(abs/12)+'-'+String(abs%12+1).padStart(2,'0')+'-25';
+}
+
+function openSettleModal(mi){
+  const now=new Date();
+  const target=(mi===undefined||mi===null)?(now.getMonth()+11)%12:mi;
+  document.getElementById('st-month').value=String(target);
+  updateSettleForm();
+  openModal('modal-settle');
+}
+
+function settleMonth(){
+  return parseInt(document.getElementById('st-month').value)||0;
+}
+
+function updateSettleForm(){
+  const mi=settleMonth();
+  const y=monthYear(mi);
+  const rows=travelActualsOf(mi);
+  const total=travelActualTotal(mi);
+  const ym=ymOfMonth(mi);
+  const dup=settlementFor(ym);
+
+  document.getElementById('st-date').value=nextMonth25Of(mi);
+  document.getElementById('st-desc').value=`交通費精算 ${y}年${mi+1}月分`;
+
+  document.getElementById('st-warn').innerHTML=dup
+    ?`<div class="alert alert-warning">${mi+1}月分の交通費精算はすでに登録されています（${ledgerDateOf(dup)}／${fmt(dup.amount)}）。</div>`
+    :'';
+
+  document.getElementById('st-list').innerHTML=rows.length===0
+    ?`<div class="empty-state">${mi+1}月の交通費の実績がありません。</div>`
+    :'<div class="table-wrap"><table><thead><tr><th>日付</th><th>摘要</th><th style="text-align:right">金額</th></tr></thead><tbody>'
+      +rows.map(l=>`<tr>
+        <td style="font-size:12px;white-space:nowrap">${l.date}</td>
+        <td style="font-size:12px">${l.desc}</td>
+        <td style="text-align:right">${fmt(l.amount)}</td>
+      </tr>`).join('')
+      +`<tr style="font-weight:bold;background:var(--bg-secondary)">
+        <td colspan="2">合計（${rows.length}件）</td>
+        <td style="text-align:right">${fmt(total)}</td>
+      </tr></tbody></table></div>`;
+
+  document.getElementById('st-submit').disabled=rows.length===0;
+}
+
+function createSettlement(){
+  const mi=settleMonth();
+  const y=monthYear(mi);
+  const ym=ymOfMonth(mi);
+  const rows=travelActualsOf(mi);
+  const total=travelActualTotal(mi);
+  if(rows.length===0){alert('対象の交通費がありません');return;}
+
+  const dup=settlementFor(ym);
+  if(dup&&!confirm(`${mi+1}月分の交通費精算はすでに登録されています。もう1件追加しますか？`))return;
+
+  const date=document.getElementById('st-date').value||nextMonth25Of(mi);
+  const desc=document.getElementById('st-desc').value.trim()||`交通費精算 ${y}年${mi+1}月分`;
+
+  S.ledger.push({
+    id:S.nextLedgerId++,
+    date,
+    expectedDate:date,
+    type:'交通費',
+    desc,
+    amount:total,
+    memo:`${mi+1}月分交通費 ${rows.length}件の合計`,
+    status:'planned_out',
+    settlementMonth:ym
+  });
+  saveState();closeModal('modal-settle');refreshAll();
+  alert(`✓ ${desc}（${fmt(total)}）を ${date} の出金予定として登録しました`);
+}
+
+// 前月の精算が未登録なら知らせる
+function renderSettleNotice(){
+  const el=document.getElementById('cf-settle-notice');
+  if(!el)return;
+  const prev=(new Date().getMonth()+11)%12;
+  const total=travelActualTotal(prev);
+  if(total<=0||settlementFor(ymOfMonth(prev))){el.innerHTML='';return;}
+  el.innerHTML=`<div class="alert alert-warning">
+    ⚠️ ${prev+1}月の交通費精算（${fmt(total)}）がまだ登録されていません。
+    <button class="btn sm" style="margin-left:auto" onclick="openSettleModal(${prev})">交通費精算を追加</button>
+  </div>`;
 }
 
 /* ===== 交通費の計算 ==================================================

@@ -37,7 +37,7 @@ var SHEET_DEFS = {
     'invoiceStatus', 'paidMonth', 'paidAmount'],
   quotes:   ['id', 'subject', 'client', 'amount', 'type', 'date', 'expire', 'due',
     'contractStart', 'contractEnd', 'paymentMethod', 'isMonthly', 'items', 'note'],
-  ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'fixedCostId'],
+  ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'settlementMonth', 'fixedCostId'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
   fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
   settings: ['key', 'value']
@@ -45,7 +45,7 @@ var SHEET_DEFS = {
 
 // 日付として自動変換されると困る列（テキスト書式を強制する）
 var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'value',
-  'startMonth', 'endMonth', 'contractStart', 'contractEnd', 'paidMonth', 'expectedDate'];
+  'startMonth', 'endMonth', 'contractStart', 'contractEnd', 'paidMonth', 'expectedDate', 'settlementMonth'];
 
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
@@ -217,6 +217,7 @@ function readLedger_(sh) {
       status: str_(o.status) || 'actual',
       expectedDate: str_(o.expectedDate),
       projectId: str_(o.projectId) === '' ? null : num_(o.projectId),
+      settlementMonth: ym_(o.settlementMonth),
       fixedCostId: str_(o.fixedCostId) === '' ? null : num_(o.fixedCostId)
     };
   }).filter(function (l) { return l.date !== '' && l.desc !== ''; });
@@ -357,6 +358,7 @@ function writeAll_(data) {
     return [num_(l.id), str_(l.date), str_(l.type), str_(l.desc), num_(l.amount), str_(l.memo),
       str_(l.status) || 'actual', str_(l.expectedDate),
       (l.projectId === null || l.projectId === undefined || l.projectId === '') ? '' : num_(l.projectId),
+      ym_(l.settlementMonth),
       (l.fixedCostId === null || l.fixedCostId === undefined || l.fixedCostId === '') ? '' : num_(l.fixedCostId)];
   });
 
