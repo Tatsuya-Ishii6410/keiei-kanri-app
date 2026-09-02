@@ -525,9 +525,16 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 
 <!-- LEDGER -->
 <div id="page-ledger" class="page">
+  <div class="section-header">
+    <h1 class="section-title">キャッシュフロー管理</h1>
+  </div>
+  <div class="tab-group">
+    <button class="tab active" onclick="switchCfTab('cf',this)">💰 キャッシュフロー</button>
+    <button class="tab" onclick="switchCfTab('travel',this)">🚃 交通費台帳</button>
+  </div>
+  <div id="cf-pane-main">
   <div class="section-header" style="flex-wrap:wrap;gap:10px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <h1 class="section-title">キャッシュフロー管理</h1>
       <select id="ledger-month" onchange="renderLedger()" style="width:auto;font-size:13px">
         <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
       </select>
@@ -539,7 +546,6 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <button class="btn primary" onclick="openLedgerModal(null,'actual')">+ 実績入力</button>
       <button class="btn" onclick="openLedgerModal(null,'planned_in')">+ 入金予定</button>
       <button class="btn" onclick="openLedgerModal(null,'planned_out')">+ 出金予定</button>
-      <button class="btn" onclick="openSettleModal()">🚃 交通費精算を追加</button>
     </div>
   </div>
   <div id="cf-settle-notice"></div>
@@ -577,6 +583,28 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
         <thead><tr><th>日付</th><th>区分</th><th>摘要</th><th style="text-align:right">入金</th><th style="text-align:right">出金</th><th>状態</th><th>操作</th></tr></thead>
         <tbody id="ledger-list"></tbody>
       </table></div>
+    </div>
+  </div>
+  </div>
+
+  <div id="cf-pane-travel" style="display:none">
+    <div class="section-header" style="flex-wrap:wrap;gap:10px">
+      <select id="tl-month" onchange="renderTravelLedger()" style="width:auto;font-size:13px">
+        <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
+      </select>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn primary" onclick="openTravelEntry()">+ 交通費を追加</button>
+        <button class="btn" onclick="openSettleModal()">🚃 交通費精算を追加</button>
+      </div>
+    </div>
+    <div class="card"><div id="tl-summary"></div></div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">交通費一覧</span></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>日付</th><th>出発</th><th>到着/摘要</th><th style="text-align:right">金額</th><th>備考</th><th>操作</th></tr></thead>
+        <tbody id="tl-list"></tbody>
+      </table></div>
+      <div id="tl-empty" class="empty-state" style="display:none">交通費の記録がありません。</div>
     </div>
   </div>
 </div>
@@ -1023,6 +1051,41 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-bulk-status')">キャンセル</button>
     <button class="btn primary" id="bs-submit" onclick="applyBulkStatus()">✓ 変更する</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-travel-entry">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title" id="te-title">交通費を追加</span><button class="btn sm" onclick="closeModal('modal-travel-entry')">✕</button></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">日付</label><input id="te-date" type="date"></div>
+    <div class="form-group"><label class="form-label">移動手段</label>
+      <select id="te-mode" onchange="toggleTravelSearch()">
+        <option>電車・バス</option><option>タクシー</option><option>車</option><option>その他</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">出発地</label><input id="te-from" type="text" placeholder="三宮"></div>
+    <div class="form-group"><label class="form-label">到着地</label><input id="te-to" type="text" placeholder="大阪"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">金額</label><input id="te-amount" type="number" placeholder="420"></div>
+    <div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:22px">
+      <input id="te-round" type="checkbox" style="width:auto"> 往復（金額を2倍にします）
+    </label></div>
+  </div>
+  <div class="form-row single" id="te-search-row">
+    <div><button class="btn sm" id="te-search" onclick="searchTravelFare()">🔍 運賃を検索</button></div>
+  </div>
+  <div id="te-result" style="margin:8px 0"></div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">備考（任意）</label><input id="te-memo" type="text" placeholder="訪問先・目的など"></div>
+  </div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-travel-entry')">キャンセル</button>
+    <button class="btn primary" id="te-submit" onclick="saveTravelEntry()">+ 追加</button>
   </div>
 </div>
 </div>
@@ -2876,6 +2939,180 @@ function nextMonth25(){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-25';
 }
 
+/* ===== 交通費台帳 ====================================================
+   ledger の「交通費」区分をそのまま使う（別のデータは持たない）。
+   摘要は「{出発}→{到着}（{手段}）」の形で保存し、表示時に分解する。
+   =================================================================== */
+
+const TRAVEL_MODES=['電車・バス','タクシー','車','その他'];
+let editTravelId=null;
+
+function switchCfTab(name,btn){
+  btn.closest('.tab-group').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('cf-pane-main').style.display=name==='cf'?'':'none';
+  document.getElementById('cf-pane-travel').style.display=name==='travel'?'':'none';
+  if(name==='travel')renderTravelLedger();
+}
+
+function currentTravelMonth(){
+  const el=document.getElementById('tl-month');
+  if(!el||el.value==='')return null;
+  return parseInt(el.value);
+}
+
+// 摘要を出発・到着に分ける
+function travelParse(desc){
+  const s=String(desc||'');
+  const i=s.indexOf('→');
+  if(i<0)return{from:'',to:s};
+  return{from:s.slice(0,i).trim(),to:s.slice(i+1).trim()};
+}
+
+function travelLedgerRows(mi){
+  return S.ledger
+    .filter(l=>isActual(l)&&l.type==='交通費'&&(mi===null||inMonth(l.date,mi)))
+    .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+}
+
+function travelRowHtml(l){
+  const p=travelParse(l.desc);
+  return`<tr>
+    <td style="font-size:12px;white-space:nowrap">${l.date}</td>
+    <td style="font-size:12px">${p.from||'-'}</td>
+    <td style="font-size:12px">${p.to||'-'}</td>
+    <td style="text-align:right;font-weight:500">${fmt(l.amount)}</td>
+    <td style="font-size:11px;color:var(--text-secondary)">${l.memo||''}</td>
+    <td><div style="display:flex;gap:4px">
+      <button class="btn sm" onclick="openTravelEntry(${l.id})">✏️ 編集</button>
+      <button class="btn sm danger" onclick="deleteLedger(${l.id})">🗑️ 削除</button>
+    </div></td>
+  </tr>`;
+}
+
+function renderTravelLedger(){
+  const mi=currentTravelMonth();
+  const rows=travelLedgerRows(mi);
+  const total=rows.reduce((a,l)=>a+l.amount,0);
+
+  // サマリー
+  let status='';
+  if(mi!==null){
+    const done=settlementFor(ymOfMonth(mi));
+    status=done
+      ?`<span class="badge badge-green">${ledgerDateOf(done)} に精算予定として登録済み</span>`
+      :`<span class="badge badge-amber">未登録</span>（${nextMonth25Of(mi)} に精算予定）`;
+  }
+  document.getElementById('tl-summary').innerHTML=
+    `<div style="font-size:14px">${mi===null?'全期間':(mi+1)+'月'}の交通費合計：`
+    +`<strong style="font-size:18px">${fmt(total)}</strong>（${rows.length}件）</div>`
+    +(status?`<div style="font-size:12px;margin-top:4px">精算状況：${status}</div>`:'');
+
+  const tb=document.getElementById('tl-list');
+  if(rows.length===0){
+    tb.innerHTML='';
+    document.getElementById('tl-empty').style.display='';
+    return;
+  }
+  document.getElementById('tl-empty').style.display='none';
+
+  if(mi!==null){
+    tb.innerHTML=rows.map(travelRowHtml).join('');
+    return;
+  }
+  // 全期間は月ごとにまとめて小計を出す
+  const byMonth={};
+  rows.forEach(l=>{
+    const k=String(l.date).slice(0,7);
+    (byMonth[k]=byMonth[k]||[]).push(l);
+  });
+  tb.innerHTML=Object.keys(byMonth).sort().map(k=>{
+    const list=byMonth[k];
+    const sub=list.reduce((a,l)=>a+l.amount,0);
+    return`<tr style="background:var(--bg-secondary)">
+        <td colspan="6" style="font-weight:600;font-size:12px">${k}</td>
+      </tr>`
+      +list.map(travelRowHtml).join('')
+      +`<tr style="background:var(--bg-secondary);font-weight:600">
+        <td colspan="3" style="text-align:right">${k} 小計（${list.length}件）</td>
+        <td style="text-align:right">${fmt(sub)}</td>
+        <td colspan="2"></td>
+      </tr>`;
+  }).join('');
+}
+
+/* ---- 入力モーダル ---- */
+
+function openTravelEntry(id){
+  const l=(id!==undefined&&id!==null)?S.ledger.find(x=>x.id===id):null;
+  editTravelId=l?l.id:null;
+  const p=l?travelParse(l.desc):{from:'',to:''};
+  document.getElementById('te-date').value=l?l.date:today();
+  document.getElementById('te-mode').value=TRAVEL_MODES[0];
+  document.getElementById('te-from').value=p.from;
+  document.getElementById('te-to').value=p.to.replace(/（[^）]*）$/,'');
+  document.getElementById('te-amount').value=l?l.amount:'';
+  document.getElementById('te-memo').value=l?(l.memo||''):'';
+  document.getElementById('te-round').checked=false;
+  document.getElementById('te-result').innerHTML='';
+  document.getElementById('te-title').textContent=l?'交通費を編集':'交通費を追加';
+  document.getElementById('te-submit').textContent=l?'✓ 保存':'+ 追加';
+  toggleTravelSearch();
+  openModal('modal-travel-entry');
+}
+
+// 運賃検索は電車・バスのときだけ出す
+function toggleTravelSearch(){
+  const el=document.getElementById('te-search-row');
+  el.style.display=document.getElementById('te-mode').value==='電車・バス'?'':'none';
+}
+
+async function searchTravelFare(){
+  const from=document.getElementById('te-from').value.trim();
+  const to=document.getElementById('te-to').value.trim();
+  if(!from||!to){alert('出発地と到着地を入力してください');return;}
+  const btn=document.getElementById('te-search');
+  const out=document.getElementById('te-result');
+  btn.disabled=true;
+  out.innerHTML='<div class="alert alert-info"><span class="spinner"></span> 運賃を検索しています...</div>';
+  try{
+    const json=await gasCall({action:'fare',from,to});
+    if(!json.ok)throw new Error(json.error||'運賃を取得できませんでした');
+    document.getElementById('te-amount').value=json.amount;
+    out.innerHTML=`<div class="alert alert-success">${from} → ${to}：<strong>${fmt(json.amount)}</strong>（IC）を金額に入れました</div>`;
+  }catch(e){
+    out.innerHTML=`<div class="alert alert-error">❌ ${e.message}<br><small>金額は手入力もできます。</small></div>`;
+  }
+  btn.disabled=false;
+}
+
+function saveTravelEntry(){
+  const date=document.getElementById('te-date').value;
+  const mode=document.getElementById('te-mode').value;
+  const from=document.getElementById('te-from').value.trim();
+  const to=document.getElementById('te-to').value.trim();
+  const memo=document.getElementById('te-memo').value.trim();
+  const round=document.getElementById('te-round').checked;
+  let amount=parseInt(document.getElementById('te-amount').value)||0;
+  if(!date||!amount){alert('日付と金額を入力してください');return;}
+  if(!from&&!to){alert('出発地か到着地を入力してください');return;}
+  if(round)amount*=2;
+
+  const desc=(from&&to?`${from}→${to}`:(to||from))+`（${mode}）`+(round?'　往復':'');
+  const values={date,expectedDate:'',type:'交通費',desc,amount,memo,status:'actual'};
+
+  if(editTravelId!==null){
+    const l=S.ledger.find(x=>x.id===editTravelId);
+    if(!l){alert('対象が見つかりませんでした');return;}
+    Object.assign(l,values);
+  }else{
+    S.ledger.push(Object.assign({id:S.nextLedgerId++},values));
+  }
+  editTravelId=null;
+  saveState();closeModal('modal-travel-entry');
+  renderTravelLedger();refreshAll();
+}
+
 /* ===== 交通費の精算（出金予定への反映） ==============================
    その月の交通費（実績）を合算し、翌月25日の出金予定として登録する。
    登録済みかどうかは ledger の settlementMonth（YYYY-MM）で判定する。
@@ -2976,7 +3213,7 @@ function createSettlement(){
     status:'planned_out',
     settlementMonth:ym
   });
-  saveState();closeModal('modal-settle');refreshAll();
+  saveState();closeModal('modal-settle');renderTravelLedger();refreshAll();
   alert(`✓ ${desc}（${fmt(total)}）を ${date} の出金予定として登録しました`);
 }
 
@@ -5932,6 +6169,7 @@ document.getElementById('month-select').value=new Date().getMonth();
 document.getElementById('project-month').value=new Date().getMonth();
 document.getElementById('quote-month').value=new Date().getMonth();
 document.getElementById('ledger-month').value=new Date().getMonth();
+document.getElementById('tl-month').value=new Date().getMonth();
 renderFiscalSelects();
 updatePlanMonthOptions();
 document.getElementById('l-date').value=today();
