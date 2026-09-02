@@ -559,6 +559,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="metric-card"><div class="metric-label">入金予定</div><div class="metric-value blue" id="cf-plan-in">¥0</div></div>
     <div class="metric-card"><div class="metric-label">出金予定</div><div class="metric-value" style="color:var(--amber)" id="cf-plan-out">¥0</div></div>
   </div>
+  <div id="cf-travel-note"></div>
   <div>
     <div class="card">
       <div class="card-header">
@@ -2609,10 +2610,16 @@ function inMonth(dateStr,mi){
   return !isNaN(d.getTime())&&d.getMonth()===mi;
 }
 
+// 交通費の実績は都度払いではなく翌月まとめて精算するため、
+// 口座の動きとしては扱わない（精算の出金予定だけを反映する）
+function isCashRelevant(l){
+  return !(isActual(l)&&l.type==='交通費');
+}
+
 // その月のキャッシュフロー（実績・予定をまとめて日付順）
 function cashflowRows(mi){
   return S.ledger
-    .filter(l=>inMonth(ledgerDateOf(l),mi))
+    .filter(l=>isCashRelevant(l)&&inMonth(ledgerDateOf(l),mi))
     .sort((a,b)=>String(ledgerDateOf(a)).localeCompare(String(ledgerDateOf(b))));
 }
 
@@ -2664,6 +2671,7 @@ function renderLedger(){
     +`<span style="font-size:11px;color:var(--text-muted)">（口座残高 ${fmt(bankBalance())} ＋実績 ${fmt(t.actualIn-t.actualOut)} ＋予定 ${fmt(t.planIn-t.planOut)}）</span>`;
 
   renderSettleNotice();
+  renderTravelNote(mi);
   document.getElementById('cf-actual-in').textContent=fmt(t.actualIn);
   document.getElementById('cf-actual-out').textContent=fmt(t.actualOut);
   document.getElementById('cf-plan-in').textContent=fmt(t.planIn);
@@ -2970,6 +2978,23 @@ function createSettlement(){
   });
   saveState();closeModal('modal-settle');refreshAll();
   alert(`✓ ${desc}（${fmt(total)}）を ${date} の出金予定として登録しました`);
+}
+
+// 交通費は口座残高に含めないので、別枠で金額と精算状況を出す
+function renderTravelNote(mi){
+  const el=document.getElementById('cf-travel-note');
+  if(!el)return;
+  if(mi===null){el.innerHTML='';return;}
+  const total=travelActualTotal(mi);
+  if(total<=0){el.innerHTML='';return;}
+  const done=settlementFor(ymOfMonth(mi));
+  const tail=done
+    ?`${ledgerDateOf(done)} に精算予定として登録済み`
+    :`${nextMonth25Of(mi)} に一括精算予定`;
+  el.innerHTML=`<div class="alert alert-info" style="margin-bottom:16px">
+    🚃 ${mi+1}月の交通費：<strong>${fmt(total)}</strong>（${tail}）
+    <span style="font-size:11px;color:var(--text-secondary)">※個別の交通費は口座残高に含めていません</span>
+  </div>`;
 }
 
 // 前月の精算が未登録なら知らせる

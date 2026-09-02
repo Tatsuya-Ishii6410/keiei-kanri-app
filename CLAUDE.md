@@ -219,4 +219,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   翌月25日の出金予定（planned_out）として登録する
 - 登録済み判定は ledger の settlementMonth（YYYY-MM）。GASの ledger シートにも列がある
 - 精算そのものは planned_out なので、翌月の交通費実績には混ざらない
+- ★ 交通費の実績（type=交通費 かつ actual）は CF管理の一覧・実績出金・残高予測から除外する
+  （isCashRelevant）。都度払いではなく翌月まとめて精算するため。
+  PL・ダッシュボード・月次レポートの経費集計には従来どおり含める
+- 交通費の金額と精算状況はサマリーカードの下に注記として出す（renderTravelNote）
 - CF管理を開いたとき、前月の精算が未登録で交通費があればバナーで知らせる
