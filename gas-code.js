@@ -40,12 +40,15 @@ var SHEET_DEFS = {
   ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'settlementMonth', 'fixedCostId'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
   fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
+  monthlyBillings: ['id', 'projectId', 'billingMonth', 'amount', 'invoiceStatus',
+    'invoiceId', 'paidDate', 'paidAmount', 'expectedPayDate', 'note'],
   settings: ['key', 'value']
 };
 
 // 日付として自動変換されると困る列（テキスト書式を強制する）
 var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'value',
-  'startMonth', 'endMonth', 'contractStart', 'contractEnd', 'paidMonth', 'expectedDate', 'settlementMonth'];
+  'startMonth', 'endMonth', 'contractStart', 'contractEnd', 'paidMonth', 'expectedDate', 'settlementMonth',
+  'billingMonth', 'paidDate', 'expectedPayDate', 'invoiceId'];
 
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
@@ -146,12 +149,14 @@ function readAll_() {
     ledger:   readLedger_(ss.getSheetByName('ledger')),
     fixedCosts: readFixedCosts_(ss.getSheetByName('fixedCosts')),
     fiscalYears: readFiscalYears_(ss.getSheetByName('fiscalYears')),
+    monthlyBillings: readMonthlyBillings_(ss.getSheetByName('monthlyBillings')),
     company:  settings.company,
     plan:     settings.plan,
     nextProjectId: settings.nextProjectId,
     nextQuoteNum:  settings.nextQuoteNum,
     nextLedgerId:  settings.nextLedgerId,
     nextFixedCostId: settings.nextFixedCostId,
+    nextBillingId: settings.nextBillingId,
     finance: settings.finance,
     travel: settings.travel,
     bankBalance: settings.bankBalance,
@@ -223,6 +228,24 @@ function readLedger_(sh) {
   }).filter(function (l) { return l.date !== '' && l.desc !== ''; });
 }
 
+function readMonthlyBillings_(sh) {
+  return rowObjects_(sh, SHEET_DEFS.monthlyBillings).map(function (o) {
+    var paidAmount = str_(o.paidAmount);
+    return {
+      id: num_(o.id),
+      projectId: num_(o.projectId),
+      billingMonth: ym_(o.billingMonth),
+      amount: num_(o.amount),
+      invoiceStatus: str_(o.invoiceStatus) || 'uninvoiced',
+      invoiceId: str_(o.invoiceId) || null,
+      paidDate: str_(o.paidDate) || null,
+      paidAmount: paidAmount === '' ? null : num_(paidAmount),
+      expectedPayDate: str_(o.expectedPayDate) || null,
+      note: str_(o.note)
+    };
+  }).filter(function (b) { return b.id && b.projectId && b.billingMonth !== ''; });
+}
+
 function readFiscalYears_(sh) {
   return rowObjects_(sh, SHEET_DEFS.fiscalYears).map(function (o) {
     return {
@@ -256,7 +279,7 @@ function readSettings_(sh) {
   var plan = [];
   for (var i = 0; i < 12; i++) plan.push({ sales: 0, expense: 0, labor: 0, tax: 0 });
   var legacyPlan = null; // 月の区別が無かった頃の形式
-  var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1, nextFixedCostId = 1;
+  var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1, nextFixedCostId = 1, nextBillingId = 1;
   var finance = { loan: 0 };
   var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15 };
   var bankBalance = 0;
@@ -287,6 +310,8 @@ function readSettings_(sh) {
       nextLedgerId = num_(value) || 1;
     } else if (key === 'nextFixedCostId') {
       nextFixedCostId = num_(value) || 1;
+    } else if (key === 'nextBillingId') {
+      nextBillingId = num_(value) || 1;
     } else if (key === 'finance.loan') {
       finance.loan = num_(value);
     } else if (key === 'travel.googleMapsApiKey') {
@@ -321,6 +346,7 @@ function readSettings_(sh) {
     nextQuoteNum: nextQuoteNum,
     nextLedgerId: nextLedgerId,
     nextFixedCostId: nextFixedCostId,
+    nextBillingId: nextBillingId,
     finance: finance,
     travel: travel,
     bankBalance: bankBalance,
@@ -367,6 +393,13 @@ function writeAll_(data) {
       ym_(f.startMonth), ym_(f.endMonth), !!f.enabled];
   });
 
+  var monthlyBillings = (data.monthlyBillings || []).map(function (b) {
+    return [num_(b.id), num_(b.projectId), ym_(b.billingMonth), num_(b.amount),
+      str_(b.invoiceStatus) || 'uninvoiced', str_(b.invoiceId),
+      str_(b.paidDate), (b.paidAmount === null || b.paidAmount === undefined || b.paidAmount === '') ? '' : num_(b.paidAmount),
+      str_(b.expectedPayDate), str_(b.note)];
+  });
+
   var fiscalYears = (data.fiscalYears || []).map(function (f) {
     return [num_(f.id), str_(f.name), ym_(f.startMonth), ym_(f.endMonth),
       num_(f.salesTarget), num_(f.profitTarget), !!f.active];
@@ -385,6 +418,7 @@ function writeAll_(data) {
   settings.push(['nextQuoteNum', num_(data.nextQuoteNum) || 1]);
   settings.push(['nextLedgerId', num_(data.nextLedgerId) || 1]);
   settings.push(['nextFixedCostId', num_(data.nextFixedCostId) || 1]);
+  settings.push(['nextBillingId', num_(data.nextBillingId) || 1]);
   var fin = data.finance || {};
   settings.push(['finance.loan', num_(fin.loan)]);
   var tv = data.travel || {};
@@ -401,6 +435,7 @@ function writeAll_(data) {
   writeSheet_(ss.getSheetByName('ledger'),   SHEET_DEFS.ledger,   ledger);
   writeSheet_(ss.getSheetByName('fixedCosts'), SHEET_DEFS.fixedCosts, fixedCosts);
   writeSheet_(ss.getSheetByName('fiscalYears'), SHEET_DEFS.fiscalYears, fiscalYears);
+  writeSheet_(ss.getSheetByName('monthlyBillings'), SHEET_DEFS.monthlyBillings, monthlyBillings);
   writeSheet_(ss.getSheetByName('settings'), SHEET_DEFS.settings, settings);
   SpreadsheetApp.flush();
 }

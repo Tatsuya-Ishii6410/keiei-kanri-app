@@ -239,3 +239,14 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - ★ CF管理で calcProjectSalesByMonth / salesByMonth / salesYearTotal を使わないこと
   案件ベースの発生売上はダッシュボード・レポート・PL側の話
 - 「計画 vs 実績」カードもCF管理内では口座ベース（ledgerの売上のみ）で比較する
+
+## 月次請求レコード（monthlyBillings）
+- 案件の月ごとの請求金額・ステータスを持つ。GASは monthlyBillings シート
+  {id,projectId,billingMonth(YYYY-MM),amount,invoiceStatus,invoiceId,
+   paidDate,paidAmount,expectedPayDate,note}
+- syncMonthlyBillings() が不足分だけ自動生成する（既存レコードは絶対に上書きしない）
+  対象は契約済・進行中・完了。案件ページを開いたときと案件を保存したときに実行
+- calcProjectSalesByMonth はレコードがあればその金額、無ければ案件の月額を使う
+- invoiceStatusOf(p) はレコードがあればそこから導く（全月入金済→paid、
+  1件でも請求済→invoiced）。レコードが無い案件は従来どおり p.invoiceStatus
+- 一括ステータス変更・入金確認は対象月のレコードだけを更新する

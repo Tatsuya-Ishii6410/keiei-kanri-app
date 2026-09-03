@@ -460,7 +460,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
   <div class="card">
     <div class="table-wrap"><table>
-      <thead><tr><th>案件名</th><th>顧客</th><th>金額</th><th>状態</th><th>入金</th><th>期間・種別</th><th>操作</th></tr></thead>
+      <thead><tr><th style="width:34px"></th><th>案件名</th><th>顧客</th><th>金額</th><th>状態</th><th>入金</th><th>期間・種別</th><th>操作</th></tr></thead>
       <tbody id="project-list"></tbody>
     </table></div>
     <div id="project-empty" class="empty-state" style="display:none">案件がありません。「案件追加」から登録してください。</div>
@@ -1014,6 +1014,36 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </div>
 </div>
 
+<div class="modal-overlay" id="modal-billing">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title">月次請求レコードの編集</span><button class="btn sm" onclick="closeModal('modal-billing')">✕</button></div>
+  <div id="mb-info" style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:14px"></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">請求金額（税抜）</label><input id="mb-amount" type="number"></div>
+    <div class="form-group"><label class="form-label">ステータス</label>
+      <select id="mb-status" onchange="toggleBillingPaidFields()">
+        <option value="uninvoiced">未請求</option><option value="invoiced">請求済</option>
+        <option value="paid">入金済</option><option value="paid_manual">入金済（手動）</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">入金予定日</label><input id="mb-expect" type="date"></div>
+  </div>
+  <div class="form-row" id="mb-paid-fields" style="display:none">
+    <div class="form-group"><label class="form-label">入金日</label><input id="mb-paiddate" type="date"></div>
+    <div class="form-group"><label class="form-label">入金金額</label><input id="mb-paidamount" type="number"></div>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">備考</label><input id="mb-note" type="text"></div>
+  </div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-billing')">キャンセル</button>
+    <button class="btn primary" onclick="saveBilling()">✓ 保存</button>
+  </div>
+</div>
+</div>
+
 <div class="modal-overlay" id="modal-bulk-status">
 <div class="modal wide">
   <div class="modal-header"><span class="modal-title">入金ステータス一括変更</span><button class="btn sm" onclick="closeModal('modal-bulk-status')">✕</button></div>
@@ -1415,6 +1445,9 @@ const defaultState={
   ],
   currentFiscalYearId:1,
   nextFiscalYearId:2,
+  // 月次請求レコード（案件の月ごとの請求金額・ステータス）
+  monthlyBillings:[],
+  nextBillingId:1,
   // 現在の口座残高（キャッシュフローの起点）
   bankBalance:0,
   // 交通費の計算設定
@@ -1483,6 +1516,20 @@ function mergeState(parsed){
     l.expectedDate=l.expectedDate||'';
     l.settlementMonth=l.settlementMonth||'';
   });
+  if(!Array.isArray(s.monthlyBillings))s.monthlyBillings=[];
+  s.monthlyBillings=s.monthlyBillings.map(b=>({
+    id:parseInt(b.id)||0,
+    projectId:parseInt(b.projectId)||0,
+    billingMonth:String(b.billingMonth||''),
+    amount:parseInt(b.amount)||0,
+    invoiceStatus:['uninvoiced','invoiced','paid','paid_manual'].indexOf(b.invoiceStatus)>=0?b.invoiceStatus:'uninvoiced',
+    invoiceId:b.invoiceId||null,
+    paidDate:b.paidDate||null,
+    paidAmount:b.paidAmount?parseInt(b.paidAmount):null,
+    expectedPayDate:b.expectedPayDate||null,
+    note:String(b.note||'')
+  })).filter(b=>b.id&&b.projectId&&b.billingMonth);
+  if(!s.nextBillingId)s.nextBillingId=Math.max(0,...s.monthlyBillings.map(b=>b.id))+1;
   s.bankBalance=parseInt(s.bankBalance)||0;
   if(!Array.isArray(s.fixedCosts))s.fixedCosts=[];
   if(!Array.isArray(s.fiscalYears))s.fiscalYears=[];
@@ -1909,7 +1956,7 @@ function calcProjectSalesByMonth(monthIndex){
     // 単発、または終了日が無い案件は開始月だけ計上する
     const end=p.end?new Date(p.end):null;
     if(p.contract==='single'||!end||isNaN(end.getTime())){
-      if(start.getMonth()===monthIndex)total+=amount;
+      if(start.getMonth()===monthIndex)total+=billingAmountAt(p,startAbs,amount);
       return;
     }
 
@@ -1918,7 +1965,7 @@ function calcProjectSalesByMonth(monthIndex){
     const per=p.contract==='annual'?Math.round(amount/12):amount;
     const last=startAbs+Math.min(endAbs-startAbs,119); // 念のための上限
     for(let a=startAbs;a<=last;a++){
-      if(a%12===monthIndex)total+=per;
+      if(a%12===monthIndex)total+=billingAmountAt(p,a,per);
     }
   });
   return total;
@@ -2151,6 +2198,7 @@ function currentProjectMonth(){
 }
 
 function renderProjects(){
+  syncMonthlyBillings();
   const tb=document.getElementById('project-list');
   const mi=currentProjectMonth();
   // 失注の案件は一覧にも合計にも含めない
@@ -2181,6 +2229,7 @@ function renderProjects(){
   }
   document.getElementById('project-empty').style.display='none';
   tb.innerHTML=list.map(p=>`<tr>
+    <td><button class="btn sm" onclick="toggleBillingRows(${p.id})" title="月次請求">${expandedProjects[p.id]?'▼':'▶'}</button></td>
     <td style="font-weight:500">${p.name}</td>
     <td style="font-size:12px;color:var(--text-secondary)">${p.client||'-'}</td>
     <td>${fmt(p.amount)}</td>
@@ -2194,7 +2243,7 @@ function renderProjects(){
       <button class="btn sm" onclick="quickQuote(${p.id})">📄 見積</button>
       <button class="btn sm danger" onclick="deleteProject(${p.id})">削除</button>
     </div></td>
-  </tr>`).join('');
+  </tr>`+billingRowsHtml(p,8)).join('');
 }
 
 // id を渡すと編集、省略すると新規追加モードでモーダルを開く
@@ -3987,7 +4036,13 @@ function applyBulkStatus(){
   if(!cfg.payment){
     const planDate=cfg.to==='invoiced'?document.getElementById('bs-plandate').value:'';
     let planned=0;
+    const ym=billingYm(mi);
     targets.forEach(p=>{
+      // 選んだ月の請求レコードだけを変更する（他の月は触らない）
+      const b=ensureBilling(p,ym);
+      b.invoiceStatus=cfg.to;
+      if(cfg.to==='uninvoiced'){b.paidDate=null;b.paidAmount=null;}
+      if(cfg.to==='invoiced'&&planDate)b.expectedPayDate=planDate;
       p.invoiceStatus=cfg.to;
       if(cfg.to==='uninvoiced'){p.paidMonth='';p.paidAmount=0;}
       if(cfg.to==='invoiced'&&planDate&&addPlannedInForProject(p,planDate,mi))planned++;
@@ -4005,8 +4060,11 @@ function applyBulkStatus(){
   const manual=cfg.to==='paid_manual';
   const y=monthYear(mi);
   let added=0;
+  const ymPaid=billingYm(mi);
   targets.forEach(p=>{
     const amount=(cfg.amount?amounts[p.id]:0)||grossAmount(projectMonthAmount(p,mi));
+    const b=ensureBilling(p,ymPaid);
+    b.invoiceStatus=cfg.to;b.paidDate=date;b.paidAmount=amount;
     markProjectPaid(p,date,amount,cfg.to);
     if(toLedger&&amount>0){
       S.ledger.push({
@@ -4025,6 +4083,213 @@ function applyBulkStatus(){
     +(added>0?`\n（${added}件を収支に登録しました）`:''));
 }
 
+/* ===== 月次請求レコード ==============================================
+   案件の月ごとの請求金額とステータスを個別に持つ。
+   金額が月によって変わるケースに対応するため、案件の金額は
+   あくまで既定値として扱い、レコードがあればそちらを優先する。
+   =================================================================== */
+
+let editBillingId=null;
+const expandedProjects={};   // 案件ごとのアコーディオン開閉
+
+function billingList(){
+  if(!Array.isArray(S.monthlyBillings))S.monthlyBillings=[];
+  return S.monthlyBillings;
+}
+
+function billingsOf(projectId){
+  return billingList()
+    .filter(b=>b.projectId===projectId)
+    .sort((a,b)=>String(a.billingMonth).localeCompare(String(b.billingMonth)));
+}
+
+function findBilling(projectId,ym){
+  return billingList().find(b=>b.projectId===projectId&&b.billingMonth===ym)||null;
+}
+
+// 請求レコードを作る対象の案件か
+function billableProject(p){
+  return p.status==='契約済'||p.status==='進行中'||p.status==='完了';
+}
+
+// 案件の契約期間を絶対月で返す（[開始, 終了]）。単発や終了日なしは開始月のみ。
+function projectMonthRange(p){
+  if(!p.start)return null;
+  const start=new Date(p.start);
+  if(isNaN(start.getTime()))return null;
+  const startAbs=start.getFullYear()*12+start.getMonth();
+  const end=p.end?new Date(p.end):null;
+  if(p.contract==='single'||!end||isNaN(end.getTime()))return[startAbs,startAbs];
+  const endAbs=end.getFullYear()*12+end.getMonth();
+  if(endAbs<startAbs)return[startAbs,startAbs];
+  return[startAbs,startAbs+Math.min(endAbs-startAbs,119)];
+}
+
+// 案件の月額（請求レコードの既定値）
+function projectDefaultMonthly(p){
+  const amount=p.amount||0;
+  return p.contract==='annual'?Math.round(amount/12):amount;
+}
+
+// 足りない請求レコードを作る。既存レコードは金額もステータスも触らない。
+function syncMonthlyBillings(){
+  billingList();
+  let added=0;
+  S.projects.forEach(p=>{
+    if(!billableProject(p))return;
+    const range=projectMonthRange(p);
+    if(!range)return;
+    const per=projectDefaultMonthly(p);
+    for(let a=range[0];a<=range[1];a++){
+      const ym=absToYm(a);
+      if(findBilling(p.id,ym))continue;
+      S.monthlyBillings.push({
+        id:S.nextBillingId++,
+        projectId:p.id,
+        billingMonth:ym,
+        amount:per,
+        invoiceStatus:'uninvoiced',
+        invoiceId:null,
+        paidDate:null,
+        paidAmount:null,
+        expectedPayDate:null,
+        note:''
+      });
+      added++;
+    }
+  });
+  if(added>0)saveState();
+  return added;
+}
+
+// その月の請求金額（レコードがあれば優先、なければ案件の既定値）
+function billingAmountAt(p,abs,fallback){
+  const b=findBilling(p.id,absToYm(abs));
+  return b?(parseInt(b.amount)||0):fallback;
+}
+
+/* ---- 案件のステータスは請求レコードから導く ---- */
+
+// レコードがある案件はその内容から、無ければ案件の値をそのまま使う（後方互換）
+function invoiceStatusOf(p){
+  if(!p)return'uninvoiced';
+  const list=billingsOf(p.id);
+  if(list.length===0){
+    return INVOICE_STATES[p.invoiceStatus]?p.invoiceStatus:'uninvoiced';
+  }
+  const paidLike=b=>b.invoiceStatus==='paid'||b.invoiceStatus==='paid_manual';
+  if(list.every(paidLike))return list.some(b=>b.invoiceStatus==='paid_manual')&&!list.some(b=>b.invoiceStatus==='paid')?'paid_manual':'paid';
+  if(list.some(b=>b.invoiceStatus==='invoiced'))return'invoiced';
+  return'uninvoiced';
+}
+
+/* ---- 一覧のアコーディオン ---- */
+
+function toggleBillingRows(projectId){
+  expandedProjects[projectId]=!expandedProjects[projectId];
+  renderProjects();
+}
+
+function billingRowsHtml(p,colspan){
+  if(!expandedProjects[p.id])return'';
+  const list=billingsOf(p.id);
+  const body=list.length===0
+    ?'<div class="empty-state">月次請求レコードがありません。</div>'
+    :'<div class="table-wrap"><table><thead><tr>'
+      +'<th>対象月</th><th style="text-align:right">請求金額</th><th>ステータス</th><th>入金予定日</th><th>操作</th>'
+      +'</tr></thead><tbody>'
+      +list.map(b=>`<tr>
+        <td style="white-space:nowrap">${b.billingMonth}</td>
+        <td style="text-align:right">${fmt(b.amount)}</td>
+        <td><span class="badge ${INVOICE_STATES[b.invoiceStatus]?INVOICE_STATES[b.invoiceStatus].cls:'badge-gray'}">${INVOICE_STATES[b.invoiceStatus]?INVOICE_STATES[b.invoiceStatus].label:'未請求'}</span></td>
+        <td style="font-size:12px">${b.expectedPayDate||'-'}</td>
+        <td><button class="btn sm" onclick="openBillingModal(${b.id})">✏️ 編集</button></td>
+      </tr>`).join('')
+      +`<tr style="font-weight:600;background:var(--bg-secondary)">
+        <td>合計（${list.length}ヶ月）</td>
+        <td style="text-align:right">${fmt(list.reduce((a,b)=>a+(b.amount||0),0))}</td>
+        <td colspan="3"></td>
+      </tr></tbody></table></div>`;
+  return`<tr><td colspan="${colspan}" style="background:var(--bg-secondary);padding:12px 14px">${body}</td></tr>`;
+}
+
+/* ---- 編集モーダル ---- */
+
+function openBillingModal(id){
+  const b=billingList().find(x=>x.id===id);
+  if(!b)return;
+  editBillingId=id;
+  const p=S.projects.find(x=>x.id===b.projectId);
+  document.getElementById('mb-info').innerHTML=
+    `<div style="font-weight:600">${p?p.name:'（案件不明）'}</div>`
+    +`<div style="font-size:12px;color:var(--text-secondary)">${p&&p.client||''}　対象月：${b.billingMonth}</div>`;
+  document.getElementById('mb-amount').value=b.amount||0;
+  document.getElementById('mb-status').value=b.invoiceStatus||'uninvoiced';
+  document.getElementById('mb-expect').value=b.expectedPayDate||'';
+  document.getElementById('mb-paiddate').value=b.paidDate||'';
+  document.getElementById('mb-paidamount').value=b.paidAmount||'';
+  document.getElementById('mb-note').value=b.note||'';
+  toggleBillingPaidFields();
+  openModal('modal-billing');
+}
+
+// 入金済のときだけ入金日・入金金額を出す
+function toggleBillingPaidFields(){
+  const st=document.getElementById('mb-status').value;
+  const paid=st==='paid'||st==='paid_manual';
+  document.getElementById('mb-paid-fields').style.display=paid?'':'none';
+}
+
+function saveBilling(){
+  const b=billingList().find(x=>x.id===editBillingId);
+  if(!b){alert('対象のレコードが見つかりませんでした');return;}
+  const st=document.getElementById('mb-status').value;
+  const paid=st==='paid'||st==='paid_manual';
+  b.amount=parseInt(document.getElementById('mb-amount').value)||0;
+  b.invoiceStatus=st;
+  b.expectedPayDate=document.getElementById('mb-expect').value||null;
+  b.paidDate=paid?(document.getElementById('mb-paiddate').value||null):null;
+  b.paidAmount=paid?(parseInt(document.getElementById('mb-paidamount').value)||null):null;
+  b.note=document.getElementById('mb-note').value.trim();
+  editBillingId=null;
+  saveState();closeModal('modal-billing');refreshAll();
+}
+
+/* ---- 一括変更・入金確認から使う ---- */
+
+// 案件のその月のレコード（無ければ作る）
+function ensureBilling(p,ym){
+  let b=findBilling(p.id,ym);
+  if(b)return b;
+  b={
+    id:S.nextBillingId++,projectId:p.id,billingMonth:ym,
+    amount:projectDefaultMonthly(p),invoiceStatus:'uninvoiced',
+    invoiceId:null,paidDate:null,paidAmount:null,expectedPayDate:null,note:''
+  };
+  S.monthlyBillings.push(b);
+  return b;
+}
+
+// 月インデックスから YYYY-MM（期の並びで年を決める）
+function billingYm(mi){
+  return monthYear(mi)+'-'+String(mi+1).padStart(2,'0');
+}
+
+// 入金待ち（請求済のレコードの税込合計）
+function awaitingPayment(){
+  const rows=billingList().filter(b=>{
+    if(b.invoiceStatus!=='invoiced')return false;
+    const p=S.projects.find(x=>x.id===b.projectId);
+    return p&&p.status!=='失注';
+  });
+  if(rows.length>0){
+    return{count:rows.length,total:rows.reduce((a,b)=>a+grossAmount(b.amount),0),list:rows};
+  }
+  // レコードが無い場合は従来どおり案件ベースで見る
+  const list=S.projects.filter(p=>invoiceStatusOf(p)==='invoiced'&&p.status!=='失注');
+  return{count:list.length,total:list.reduce((a,p)=>a+grossAmount(p.amount),0),list};
+}
+
 /* ===== 売上入金の突合 ================================================
    案件に請求・入金の状態を持たせ、前月分の売上が翌月に税込で入金される
    運用に合わせて、入金確認と収支への登録をまとめて行う。
@@ -4040,9 +4305,6 @@ const INVOICE_STATES={
 
 let payTargetId=null;
 
-function invoiceStatusOf(p){
-  return INVOICE_STATES[p&&p.invoiceStatus]?p.invoiceStatus:'uninvoiced';
-}
 
 function invoiceBadge(p){
   const st=INVOICE_STATES[invoiceStatusOf(p)];
@@ -4101,6 +4363,9 @@ function confirmPayment(){
   if(!ok)return;
 
   // 収支の日付は必ずモーダルで入力した入金日を使う
+  // 請求レコードがあれば、対応する月のレコードを入金済にする
+  const b=billingsOf(p.id).find(x=>x.invoiceStatus==='invoiced')||null;
+  if(b){b.invoiceStatus='paid';b.paidDate=date;b.paidAmount=amount;}
   markProjectPaid(p,date,amount);
   if(toLedger){
     S.ledger.push({id:S.nextLedgerId++,date,type:'売上',desc,amount,projectId:p.id});
@@ -4507,6 +4772,20 @@ async function downloadMonthlyPL(){
    当月までを実績、翌月以降を予定として表示する。
    =================================================================== */
 
+// その月の請求レコードの状況を短くまとめる
+function billingSummaryOfMonth(fy,mi){
+  const ym=monthYear(mi)+'-'+String(mi+1).padStart(2,'0');
+  const rows=billingList().filter(b=>b.billingMonth===ym);
+  if(rows.length===0)return'<span style="color:var(--text-muted)">-</span>';
+  const n=st=>rows.filter(b=>b.invoiceStatus===st).length;
+  const paid=n('paid')+n('paid_manual');
+  const parts=[];
+  if(paid)parts.push('入金'+paid);
+  if(n('invoiced'))parts.push('請求'+n('invoiced'));
+  if(n('uninvoiced'))parts.push('未請求'+n('uninvoiced'));
+  return parts.join(' / ')+`（計${rows.length}）`;
+}
+
 // 予実レポートで選択中の期
 function forecastFiscalYear(){
   const el=document.getElementById('forecast-fiscal');
@@ -4604,6 +4883,7 @@ function generateForecast(){
       <td style="text-align:right;font-weight:600">${fmt(r.total)}</td>
       <td style="text-align:right">${mom}</td>
       <td>${badge(r.state)}</td>
+      <td style="font-size:11px">${billingSummaryOfMonth(fy,r.index)}</td>
     </tr>`;
   }).join('');
   const sumProject=rows.reduce((a,r)=>a+r.projectSales,0);
@@ -4664,7 +4944,7 @@ function generateForecast(){
     <div class="table-wrap"><table>
       <thead><tr>
         <th>月</th><th style="text-align:right">案件売上（実績/予定）</th><th style="text-align:right">収支売上入力</th>
-        <th style="text-align:right">合計</th><th style="text-align:right">前月比</th><th>状態</th>
+        <th style="text-align:right">合計</th><th style="text-align:right">前月比</th><th>状態</th><th>請求状況</th>
       </tr></thead>
       <tbody>${monthRows}
         <tr style="font-weight:bold;background:var(--bg-secondary)">
@@ -4672,7 +4952,7 @@ function generateForecast(){
           <td style="text-align:right">${fmt(sumProject)}</td>
           <td style="text-align:right">${fmt(sumLedgerCol)}</td>
           <td style="text-align:right">${fmt(sumTotal)}</td>
-          <td colspan="2"></td>
+          <td colspan="3"></td>
         </tr>
       </tbody>
     </table></div>
