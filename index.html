@@ -565,11 +565,14 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="metric-card"><div class="metric-label">入金予定</div><div class="metric-value blue" id="cf-plan-in">¥0</div></div>
     <div class="metric-card"><div class="metric-label">出金予定</div><div class="metric-value" style="color:var(--amber)" id="cf-plan-out">¥0</div></div>
   </div>
+  <div style="font-size:11px;color:var(--text-muted);margin:-8px 0 16px">
+    ※CF管理は口座の実際の入出金ベースです。案件の発生売上はダッシュボードをご確認ください。
+  </div>
   <div id="cf-travel-note"></div>
   <div>
     <div class="card">
       <div class="card-header">
-        <span class="card-title">計画 vs 実績（<span id="plan-month-label">今月</span>）／ 実績のみ集計</span>
+        <span class="card-title">計画 vs 実績（<span id="plan-month-label">今月</span>）／ 実績は口座ベース</span>
         <button class="btn sm" onclick="openPlanModal()">✏️ 計画編集</button>
       </div>
       <div class="table-wrap"><table>
@@ -2706,6 +2709,26 @@ function cashflowTotals(rows){
   return t;
 }
 
+/* CF管理はすべて口座の実際の動き（ledger）だけで集計する。
+   案件ベースの売上（calcProjectSalesByMonth など）はここでは使わない。 */
+function cfRowsOf(mi){
+  return S.ledger.filter(l=>isCashRelevant(l)&&inMonth(ledgerDateOf(l),mi));
+}
+// その月の入金実績（ledgerの売上区分・実績・交通費を除く）
+function cfInflow(mi){
+  return cfRowsOf(mi).filter(l=>isActual(l)&&isInflow(l)).reduce((a,l)=>a+l.amount,0);
+}
+// その月の出金実績（交通費を除く）
+function cfOutflow(mi){
+  return cfRowsOf(mi).filter(l=>isActual(l)&&!isInflow(l)).reduce((a,l)=>a+l.amount,0);
+}
+function cfPlannedIn(mi){
+  return cfRowsOf(mi).filter(l=>ledgerStatusOf(l)==='planned_in').reduce((a,l)=>a+l.amount,0);
+}
+function cfPlannedOut(mi){
+  return cfRowsOf(mi).filter(l=>ledgerStatusOf(l)==='planned_out').reduce((a,l)=>a+l.amount,0);
+}
+
 function bankBalance(){return parseInt(S.bankBalance)||0}
 
 function saveBankBalance(){
@@ -2725,7 +2748,9 @@ function renderLedger(){
   const mi=currentLedgerMonth();
   const all=mi===null;
   const rows=cashflowRows(mi);
-  const t=cashflowTotals(rows);
+  // 口座の実際の動きだけを集計する（案件ベースの売上は使わない）
+  const t={actualIn:cfInflow(mi),actualOut:cfOutflow(mi),
+    planIn:cfPlannedIn(mi),planOut:cfPlannedOut(mi)};
 
   document.getElementById('cf-balance').value=bankBalance();
   const forecast=bankBalance()+t.actualIn-t.actualOut+t.planIn-t.planOut;
@@ -2740,9 +2765,9 @@ function renderLedger(){
   document.getElementById('cf-plan-in').textContent=fmt(t.planIn);
   document.getElementById('cf-plan-out').textContent=fmt(t.planOut);
 
-  // 計画 vs 実績（実績は status=actual のみ）
+  // 計画 vs 実績（実績は口座に入った分だけ。案件ベースの売上は含めない）
   const lt=all?sumLedgerYear():sumLedger(mi);
-  const sales=all?salesYearTotal():salesByMonth(mi);
+  const sales=lt.sales;
   const pl=all?planYearTotal():planOf(mi);
   document.getElementById('plan-month-label').textContent=all?'全期間':(mi+1)+'月';
   document.getElementById('plan-table').innerHTML=[

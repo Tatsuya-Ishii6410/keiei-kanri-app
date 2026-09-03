@@ -232,3 +232,10 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   （出発・到着を別フィールドで持たないので、摘要の形式は崩さないこと）
 - 全期間表示では月ごとにグループ化して小計行を出す
 - 「🚃 交通費精算を追加」はこのタブに置く（CFメインからは外した）
+
+## CF管理は口座ベース
+- CF管理の集計は cfInflow / cfOutflow / cfPlannedIn / cfPlannedOut のみを使う
+  （すべて ledger 由来。交通費の実績は除外）
+- ★ CF管理で calcProjectSalesByMonth / salesByMonth / salesYearTotal を使わないこと
+  案件ベースの発生売上はダッシュボード・レポート・PL側の話
+- 「計画 vs 実績」カードもCF管理内では口座ベース（ledgerの売上のみ）で比較する
