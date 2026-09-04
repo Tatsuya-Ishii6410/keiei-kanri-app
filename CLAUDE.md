@@ -269,3 +269,9 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   「既存を残す／PDFで上書き／両方残す」を選ぶ
 - quotes は source（'manual' / 'drive_sync'）と driveFileId を持つ
   source 未設定の既存データは manual として扱う
+- 入金予定日は monthlyBilling の expectedPayDate（月ごとに別々に持てる）。
+  未設定のときの既定値は nextMonthEndOf()＝請求月の翌月末日
+- CF管理の「前月の請求済み案件を入金予定にする」は
+  前月の請求済みレコードを対象に、各レコードの expectedPayDate を使う
+- 入金予定の重複判定 hasPlannedIn(projectId, date) は日付も見るので、
+  同じ案件でも月が違えば予定を作れる
