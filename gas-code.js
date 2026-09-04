@@ -690,16 +690,26 @@ function findFolderByName_(root, name, depth) {
 
 /** {year}年{month}月 のフォルダを探してPDF一覧を返す。 */
 function invoiceFolderList_(year, month) {
-  var name = num_(year) + '年' + num_(month) + '月';
+  var ym = num_(year) + '年' + num_(month) + '月';
+  // 実際のフォルダ名にはスラッシュが入っているので、両方の綴りで探す
+  var names = ['請求書/' + ym, ym];
   var root;
   try {
     root = DriveApp.getFolderById(INVOICE_FOLDER_ID);
   } catch (err) {
     return { ok: false, error: '請求書フォルダを開けませんでした（ID: ' + INVOICE_FOLDER_ID + '）' };
   }
-  var folder = findFolderByName_(root, name, 2);
-  if (!folder) return { ok: false, error: '「' + name + '」のフォルダが見つかりませんでした' };
-  return { ok: true, folderId: folder.getId(), folderName: name, url: folder.getUrl(), files: driveList_(folder.getId()) };
+  var folder = null, matched = '';
+  for (var i = 0; i < names.length && !folder; i++) {
+    folder = findFolderByName_(root, names[i], 2);
+    if (folder) matched = names[i];
+  }
+  if (!folder) {
+    return { ok: false, error: '「' + ym + '」のフォルダが見つかりませんでした。\n'
+      + 'ドライブの「請求書関係」フォルダ内に「請求書/' + ym + '」または「' + ym + '」'
+      + 'という名前のフォルダがあるか確認してください。' };
+  }
+  return { ok: true, folderId: folder.getId(), folderName: matched, url: folder.getUrl(), files: driveList_(folder.getId()) };
 }
 
 /** PDFをテキストにして返す。 */
