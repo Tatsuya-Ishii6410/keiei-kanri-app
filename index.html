@@ -1015,6 +1015,28 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </div>
 </div>
 
+<div class="modal-overlay" id="modal-conflict" style="z-index:220">
+<div class="modal">
+  <div class="modal-header"><span class="modal-title">⚠️ 類似データが見つかりました</span></div>
+  <div class="two-col" style="gap:12px">
+    <div>
+      <div class="form-label" style="margin-bottom:6px">既存データ</div>
+      <div id="cflt-existing" style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px;font-size:12px;line-height:1.9"></div>
+    </div>
+    <div>
+      <div class="form-label" style="margin-bottom:6px">ドライブのPDF</div>
+      <div id="cflt-incoming" style="background:var(--orange-bg);border-radius:var(--radius-md);padding:12px;font-size:12px;line-height:1.9"></div>
+    </div>
+  </div>
+  <div style="font-size:13px;font-weight:600;margin:16px 0 8px">どちらを正としますか？</div>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <button class="btn" onclick="resolveConflict('keep')">既存データを残す（PDFはスキップ）</button>
+    <button class="btn primary" onclick="resolveConflict('overwrite')">PDFのデータで上書きする</button>
+    <button class="btn" onclick="resolveConflict('both')">両方残す（重複覚悟で追加）</button>
+  </div>
+</div>
+</div>
+
 <div class="modal-overlay" id="modal-invoice-sync">
 <div class="modal wide">
   <div class="modal-header"><span class="modal-title">ドライブから請求書を同期</span><button class="btn sm" onclick="closeModal('modal-invoice-sync')">✕</button></div>
@@ -1534,6 +1556,7 @@ function mergeState(parsed){
     p.paidAmount=parseInt(p.paidAmount)||0;
   });
   if(!Array.isArray(s.quotes))s.quotes=[];
+  s.quotes.forEach(q=>{if(q.source!=='drive_sync')q.source='manual';});
   if(!Array.isArray(s.ledger))s.ledger=[];
   s.ledger.forEach(l=>{
     l.memo=l.memo||'';
@@ -2394,7 +2417,7 @@ function renderQuoteTable(type,prefix){
     const due=q.due||q.expire||'';
     const overdue=isInvoice&&due&&due<nowYmd;   // 支払期限切れ
     return`<tr>
-      <td style="font-size:12px;color:var(--text-muted);white-space:nowrap">${q.id}</td>
+      <td style="font-size:12px;color:var(--text-muted);white-space:nowrap">${q.id}<div><span class="badge ${q.source==='drive_sync'?'badge-blue':'badge-gray'}" style="font-size:10px">${q.source==='drive_sync'?'ドライブ':'手動'}</span></div></td>
       <td style="font-weight:500">${q.subject}</td>
       <td style="font-size:12px">${q.client||''}</td>
       <td style="white-space:nowrap">${fmt(q.amount)}</td>
@@ -2502,6 +2525,7 @@ function createQuote(){
     date:document.getElementById('q-date').value||today(),
     expire,
     due:type==='請求書'?expire:'',
+    source:'manual',
     contractStart,
     contractEnd,
     paymentMethod:document.getElementById('q-payment').value,
@@ -4169,11 +4193,27 @@ function openInvoiceSyncModal(){
   openModal('modal-invoice-sync');
 }
 
-// すでに同じ月・同じ顧客の請求書が登録されているか
-function invAlreadySynced(client,ym){
-  return S.quotes.some(q=>q.type==='請求書'
+// 既存データとの重なりを調べる
+//   exact   … 同じPDFから同期済み、または請求書番号が一致
+//   similar … 同じ顧客・同じ対象月の請求書がすでにある
+function invDupCheck(client,ym,fileId,invoiceNumber){
+  if(invoiceNumber){
+    const byNo=S.quotes.find(q=>q.id===invoiceNumber);
+    if(byNo)return{type:'exact',existing:byNo,reason:'番号一致'};
+  }
+  if(fileId){
+    const byFile=S.quotes.find(q=>q.driveFileId===fileId);
+    if(byFile)return{type:'exact',existing:byFile,reason:'同じPDFを同期済み'};
+  }
+  const similar=S.quotes.find(q=>q.type==='請求書'
     &&String(q.date||'').slice(0,7)===ym
-    &&String(q.client||'').indexOf(client)>=0);
+    &&client&&String(q.client||'').indexOf(client)>=0);
+  if(similar)return{type:'similar',existing:similar,reason:'同じ顧客・同じ月'};
+  return{type:'none',existing:null,reason:''};
+}
+
+function quoteSourceLabel(q){
+  return q&&q.source==='drive_sync'?'ドライブ同期':'手動作成';
 }
 
 async function invLoadFolder(){
@@ -4200,7 +4240,8 @@ async function invLoadFolder(){
     .filter(f=>f.mimeType==='application/pdf')
     .map(f=>{
       const client=invClientFromName(f.name);
-      return{id:f.id,name:f.name,client,synced:invAlreadySynced(client,ym)};
+      const dup=invDupCheck(client,ym,f.id,null);
+      return{id:f.id,name:f.name,client,dup:dup.type,existing:dup.existing,reason:dup.reason};
     });
   if(invFiles.length===0){
     invMsg(`<div class="alert alert-warning">「${json.folderName}」にPDFがありません</div>`);
@@ -4208,26 +4249,74 @@ async function invLoadFolder(){
     document.getElementById('inv-sync-btn').style.display='none';
     return;
   }
-  const yet=invFiles.filter(f=>!f.synced).length;
-  invMsg(`<div class="alert alert-info">「${json.folderName}」に ${invFiles.length}件のPDFがあります（未登録 ${yet}件）`
+  const yet=invFiles.filter(f=>f.dup==='none').length;
+  const sim=invFiles.filter(f=>f.dup==='similar').length;
+  invMsg(`<div class="alert alert-info">「${json.folderName}」に ${invFiles.length}件のPDFがあります`
+    +`（未登録 ${yet}件${sim>0?` / 類似あり ${sim}件`:''}）`
     +(json.url?`　<a href="${json.url}" target="_blank" rel="noopener">フォルダを開く</a>`:'')+'</div>');
   renderInvFileList();
+}
+
+function invStateBadge(f){
+  if(f.dup==='exact')return`<span class="badge badge-green">✓ 登録済（${f.reason}）</span>`;
+  if(f.dup==='similar')return'<span class="badge badge-amber">⚠️ 類似データあり</span>';
+  return'<span class="badge badge-blue">未登録</span>';
+}
+
+function toggleInvDetail(i){
+  const el=document.getElementById('inv-detail-'+i);
+  if(el)el.style.display=el.style.display==='none'?'':'none';
 }
 
 function renderInvFileList(){
   document.getElementById('inv-list').innerHTML=
     '<div class="table-wrap"><table><thead><tr>'
-    +'<th style="width:36px"></th><th>ファイル名</th><th>顧客名</th><th>同期状態</th>'
+    +'<th style="width:36px"></th><th>ファイル名</th><th>顧客名</th><th>同期状態</th><th>既存データ</th>'
     +'</tr></thead><tbody>'
-    +invFiles.map((f,i)=>`<tr>
-      <td><input type="checkbox" class="inv-check" value="${i}" ${f.synced?'':'checked'} style="width:auto"></td>
+    +invFiles.map((f,i)=>{
+      const ex=f.existing;
+      const detail=ex?`<div id="inv-detail-${i}" style="display:none;margin-top:6px;padding:8px 10px;background:var(--bg-secondary);border-radius:var(--radius-md);font-size:11px;line-height:1.8">
+          請求書番号：${ex.id}<br>顧客名：${ex.client||'-'}<br>金額：${fmt(ex.amount)}<br>
+          作成日：${ex.date||'-'}<br>作成方法：${quoteSourceLabel(ex)}
+        </div>`:'';
+      return`<tr>
+      <td><input type="checkbox" class="inv-check" value="${i}" ${f.dup==='none'?'checked':''} style="width:auto"></td>
       <td style="font-size:11px">${f.name}</td>
       <td style="font-size:12px">${f.client||'-'}</td>
-      <td>${f.synced?'<span class="badge badge-green">✓ 登録済み</span>':'<span class="badge badge-gray">未登録</span>'}</td>
-    </tr>`).join('')
+      <td>${invStateBadge(f)}</td>
+      <td style="font-size:11px">${ex?`<a href="javascript:void(0)" onclick="toggleInvDetail(${i})">既存データを表示</a>${detail}`:'-'}</td>
+    </tr>`;}).join('')
     +'</tbody></table></div>';
   document.getElementById('inv-sync-btn').style.display='';
 }
+
+/* ---- 競合の確認 ---- */
+
+let conflictResolve=null;
+
+function askConflict(existing,incoming){
+  return new Promise(resolve=>{
+    conflictResolve=resolve;
+    const row=(a,b)=>`<div><span style="display:inline-block;width:96px;color:var(--text-secondary)">${a}</span>${b}</div>`;
+    document.getElementById('cflt-existing').innerHTML=
+      row('請求書番号',existing.id)+row('顧客名',existing.client||'-')
+      +row('金額',fmt(existing.amount))+row('作成日',existing.date||'-')
+      +row('作成方法',quoteSourceLabel(existing));
+    document.getElementById('cflt-incoming').innerHTML=
+      row('請求書番号',incoming.id)+row('顧客名',incoming.client||'-')
+      +row('金額',fmt(incoming.amount))+row('発行日',incoming.date||'-');
+    openModal('modal-conflict');
+  });
+}
+
+function resolveConflict(choice){
+  closeModal('modal-conflict');
+  const r=conflictResolve;
+  conflictResolve=null;
+  if(r)r(choice);
+}
+
+/* ---- 同期 ---- */
 
 async function syncInvoices(){
   const idx=Array.from(document.querySelectorAll('.inv-check'))
@@ -4239,8 +4328,9 @@ async function syncInvoices(){
   const btn=document.getElementById('inv-sync-btn');
   btn.disabled=true;
 
-  let added=0,billed=0,planned=0;
+  let added=0,skipExact=0,skipUser=0,updated=0,billed=0,planned=0;
   const errors=[];
+
   for(let n=0;n<idx.length;n++){
     const f=invFiles[idx[n]];
     invMsg(`<div class="alert alert-info"><span class="spinner"></span> 読み取り中... ${n+1}/${idx.length}　${f.name}</div>`);
@@ -4253,10 +4343,8 @@ async function syncInvoices(){
     const p=parseInvoiceText(json.contentSnippet);
     const client=p.client||f.client;
     const id=p.id||makeDocNumber('請求書');
-    if(S.quotes.some(q=>q.id===id)){continue;}   // 同じ番号は入れない
-
     const sub=p.sub||Math.round((p.total||0)/1.1);
-    S.quotes.push({
+    const incoming={
       id,
       subject:`${y}年${mi+1}月分 ご請求`,
       client:client+' 御中',
@@ -4267,17 +4355,35 @@ async function syncInvoices(){
       due:p.due||'',
       contractStart:'',contractEnd:'',paymentMethod:'',isMonthly:false,
       items:[{name:`${y}年${mi+1}月分`,qty:1,unit:sub,total:sub}],
-      note:''
-    });
-    added++;
+      note:'',
+      source:'drive_sync',
+      driveFileId:f.id
+    };
 
-    // 顧客名から案件を探して、その月の請求レコードを請求済にする
+    // 読み取った番号も含めて、もう一度重なりを調べる
+    const dup=invDupCheck(client,ym,f.id,id);
+    let target=null;
+    if(dup.type==='exact'){skipExact++;continue;}
+    if(dup.type==='similar'){
+      const choice=await askConflict(dup.existing,incoming);
+      if(choice==='keep'){skipUser++;continue;}
+      if(choice==='overwrite'){
+        Object.assign(dup.existing,incoming);
+        target=dup.existing;updated++;
+      }else{
+        S.quotes.push(incoming);target=incoming;added++;
+      }
+    }else{
+      S.quotes.push(incoming);target=incoming;added++;
+    }
+
+    // 顧客名が一致する案件の、その月の請求レコードを請求済にする
     const proj=S.projects.find(x=>x.client&&client&&
       (x.client.indexOf(client)>=0||client.indexOf(x.client)>=0));
-    if(proj){
+    if(proj&&target){
       const b=ensureBilling(proj,ym);
       if(b.invoiceStatus==='uninvoiced'){b.invoiceStatus='invoiced';billed++;}
-      b.invoiceId=id;
+      b.invoiceId=target.id;
       if(p.due)b.expectedPayDate=p.due;
       if(p.due&&addPlannedInForProject(proj,p.due,mi))planned++;
     }
@@ -4287,8 +4393,11 @@ async function syncInvoices(){
   btn.disabled=false;
   closeModal('modal-invoice-sync');
   refreshAll();
-  alert(`${added}件の請求書を同期しました\n`
-    +`・${added}件を請求書データに追加\n`
+  alert(`${added+updated}件の請求書を同期しました\n`
+    +`・${added}件を新規追加（ドライブPDF）\n`
+    +`・${skipExact}件をスキップ（番号一致・登録済み）\n`
+    +`・${skipUser}件をスキップ（既存データを選択）\n`
+    +`・${updated}件を上書き更新\n`
     +`・${billed}件のmonthlyBillingを請求済みに更新\n`
     +`・${planned}件の入金予定をCF管理に追加`
     +(errors.length?`\n\n読み取れなかったファイル:\n`+errors.join('\n'):''));
@@ -5891,6 +6000,7 @@ function createBulkInvoices(){
       date,
       due,
       expire:due,
+      source:'manual',
       items:g.items.map(it=>({...it})),
       note
     });

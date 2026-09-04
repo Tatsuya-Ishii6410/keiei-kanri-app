@@ -262,3 +262,9 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   （GASにPDFのテキスト抽出機能が無いため。変換した一時ファイルは毎回ゴミ箱に入れる）
 - 同期すると quotes に請求書を追加し、顧客名が一致する案件の
   その月の monthlyBilling を invoiced にして、支払期限で入金予定を作る
+- 重複判定は invDupCheck()：請求書番号の一致か同じPDFの同期済み（exact）／
+  同じ顧客・同じ月の請求書あり（similar）／なし（none）
+  similar のまま同期しようとすると競合モーダルで
+  「既存を残す／PDFで上書き／両方残す」を選ぶ
+- quotes は source（'manual' / 'drive_sync'）と driveFileId を持つ
+  source 未設定の既存データは manual として扱う

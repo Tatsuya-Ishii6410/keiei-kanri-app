@@ -36,7 +36,8 @@ var SHEET_DEFS = {
   projects: ['id', 'name', 'client', 'amount', 'status', 'start', 'end', 'contract', 'memo',
     'invoiceStatus', 'paidMonth', 'paidAmount'],
   quotes:   ['id', 'subject', 'client', 'amount', 'type', 'date', 'expire', 'due',
-    'contractStart', 'contractEnd', 'paymentMethod', 'isMonthly', 'items', 'note'],
+    'contractStart', 'contractEnd', 'paymentMethod', 'isMonthly',
+    'source', 'driveFileId', 'items', 'note'],
   ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'settlementMonth', 'fixedCostId'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
   fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
@@ -48,7 +49,7 @@ var SHEET_DEFS = {
 // 日付として自動変換されると困る列（テキスト書式を強制する）
 var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'value',
   'startMonth', 'endMonth', 'contractStart', 'contractEnd', 'paidMonth', 'expectedDate', 'settlementMonth',
-  'billingMonth', 'paidDate', 'expectedPayDate', 'invoiceId'];
+  'billingMonth', 'paidDate', 'expectedPayDate', 'invoiceId', 'driveFileId'];
 
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
@@ -206,6 +207,8 @@ function readQuotes_(sh) {
       contractEnd: ym_(o.contractEnd),
       paymentMethod: str_(o.paymentMethod),
       isMonthly: bool_(o.isMonthly),
+      source: str_(o.source) || 'manual',
+      driveFileId: str_(o.driveFileId),
       items: items,
       note: str_(o.note)
     };
@@ -378,6 +381,7 @@ function writeAll_(data) {
       str_(q.id), str_(q.subject), str_(q.client), num_(q.amount), str_(q.type) || '見積書',
       str_(q.date), str_(q.expire), str_(q.due),
       ym_(q.contractStart), ym_(q.contractEnd), str_(q.paymentMethod), !!q.isMonthly,
+      str_(q.source) || 'manual', str_(q.driveFileId),
       JSON.stringify(q.items || []), str_(q.note)
     ];
   });
