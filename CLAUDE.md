@@ -250,3 +250,15 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - invoiceStatusOf(p) はレコードがあればそこから導く（全月入金済→paid、
   1件でも請求済→invoiced）。レコードが無い案件は従来どおり p.invoiceStatus
 - 一括ステータス変更・入金確認は対象月のレコードだけを更新する
+
+## 請求書フォルダとの同期
+- 請求書関係フォルダID：14QU-Gwgpj-wM6an0i7I8tzF0DoPMoFOP
+- 月別サブフォルダ：「{YYYY}年{M}月」（請求書フォルダの直下、または1階層下を探す）
+- ファイル名：「【アスリンク請求書YYYYMM分】{顧客名}御中.pdf」
+- 見積・請求ページの請求書タブ「☁️ ドライブから請求書を同期」から実行
+- GASのアクション：invoiceList（月フォルダのPDF一覧）／driveRead（PDFをテキスト化）
+  driveList は folderId を渡せる（省略時は経費取込フォルダ）
+- PDFのテキスト化は Drive API で一時的にGoogleドキュメントへ変換して読む
+  （GASにPDFのテキスト抽出機能が無いため。変換した一時ファイルは毎回ゴミ箱に入れる）
+- 同期すると quotes に請求書を追加し、顧客名が一致する案件の
+  その月の monthlyBilling を invoiced にして、支払期限で入金予定を作る

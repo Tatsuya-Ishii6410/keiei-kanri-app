@@ -497,7 +497,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="card">
       <div class="card-header">
         <span class="card-title" id="invoice-summary">0件　合計: ¥0（税込）</span>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="openInvoiceSyncModal()">☁️ ドライブから請求書を同期</button>
           <button class="btn" onclick="openBulkInvoiceModal()">📄 一括請求書作成</button>
           <button class="btn primary" onclick="openCreateInvoiceModal()">+ 請求書作成</button>
         </div>
@@ -1010,6 +1011,30 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-drive-import')">閉じる</button>
     <button class="btn success" id="drive-register-btn" onclick="driveRegister()" style="display:none">✓ 収支に登録する</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-invoice-sync">
+<div class="modal wide">
+  <div class="modal-header"><span class="modal-title">ドライブから請求書を同期</span><button class="btn sm" onclick="closeModal('modal-invoice-sync')">✕</button></div>
+  <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
+    請求書関係フォルダの「{年}年{月}月」フォルダにあるPDFを読み取り、
+    請求書データ・月次請求レコード・入金予定に反映します。
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">対象月</label>
+      <select id="inv-month"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option></select>
+    </div>
+    <div class="form-group"><label class="form-label">&nbsp;</label>
+      <button class="btn primary" id="inv-load-btn" onclick="invLoadFolder()">📂 フォルダを確認する</button>
+    </div>
+  </div>
+  <div id="inv-msg" style="margin:12px 0"></div>
+  <div id="inv-list"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-invoice-sync')">閉じる</button>
+    <button class="btn success" id="inv-sync-btn" onclick="syncInvoices()" style="display:none">🔄 選択したファイルを同期</button>
   </div>
 </div>
 </div>
@@ -4081,6 +4106,192 @@ function applyBulkStatus(){
   saveState();closeModal('modal-bulk-status');refreshAll();
   alert(targets.length+'件のステータスを変更しました（'+cfg.label+'）'
     +(added>0?`\n（${added}件を収支に登録しました）`:''));
+}
+
+/* ===== ドライブの請求書フォルダと同期 ================================
+   月別フォルダのPDFを読み、請求書データ・月次請求レコード・入金予定に反映する。
+   PDFのテキスト化はGAS側で行う（ブラウザからDriveは触れないため）。
+   =================================================================== */
+
+let invFiles=[];   // {id,name,client,synced}
+
+// ファイル名「【アスリンク請求書YYYYMM分】{顧客名}御中.pdf」から顧客名を取る
+function invClientFromName(name){
+  const m=/】\s*(.+?)\s*御中/.exec(String(name||''));
+  if(m)return m[1].trim();
+  return String(name||'').replace(/\.pdf$/i,'').trim();
+}
+
+// 和暦なしの「2026年9月30日」を YYYY-MM-DD にする
+function invJpDate(text){
+  const m=/(\d{4})年(\d{1,2})月(\d{1,2})日/.exec(String(text||''));
+  if(!m)return'';
+  return m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
+}
+
+function invNum(text){
+  const m=/([\d,]+)/.exec(String(text||''));
+  return m?parseInt(m[1].replace(/,/g,''))||0:0;
+}
+
+// PDFのテキストから請求書の内容を読み取る
+function parseInvoiceText(text){
+  const t=String(text||'');
+  const pick=re=>{const m=re.exec(t);return m?m[1]:'';};
+  const lines=t.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  let client='';
+  for(let i=0;i<Math.min(lines.length,6);i++){
+    const m=/^(.+?)\s*御中$/.exec(lines[i]);
+    if(m){client=m[1].trim();break;}
+  }
+  return{
+    id:pick(/請求書番号[:：\s]+([A-Z0-9\-]+)/),
+    date:invJpDate(pick(/発行日[:：\s]+(\d{4}年\d{1,2}月\d{1,2}日)/)),
+    due:invJpDate(pick(/お支払期限[:：\s]+(\d{4}年\d{1,2}月\d{1,2}日)/)),
+    total:invNum(pick(/合計金額（税込）\s*¥?([\d,]+)/)),
+    sub:invNum(pick(/小計（税抜）\s*¥?([\d,]+)/)),
+    client
+  };
+}
+
+function invMonth(){
+  return parseInt(document.getElementById('inv-month').value)||0;
+}
+function invMsg(html){document.getElementById('inv-msg').innerHTML=html||''}
+
+function openInvoiceSyncModal(){
+  const now=new Date();
+  document.getElementById('inv-month').value=String((now.getMonth()+11)%12);
+  invFiles=[];
+  document.getElementById('inv-list').innerHTML='';
+  document.getElementById('inv-sync-btn').style.display='none';
+  invMsg('');
+  openModal('modal-invoice-sync');
+}
+
+// すでに同じ月・同じ顧客の請求書が登録されているか
+function invAlreadySynced(client,ym){
+  return S.quotes.some(q=>q.type==='請求書'
+    &&String(q.date||'').slice(0,7)===ym
+    &&String(q.client||'').indexOf(client)>=0);
+}
+
+async function invLoadFolder(){
+  const mi=invMonth();
+  const y=monthYear(mi);
+  const btn=document.getElementById('inv-load-btn');
+  btn.disabled=true;
+  invMsg('<div class="alert alert-info"><span class="spinner"></span> フォルダを確認しています...</div>');
+  let json;
+  try{
+    json=await gasCall({action:'invoiceList',year:y,month:mi+1});
+  }catch(e){
+    invMsg(`<div class="alert alert-error">❌ ${e.message}</div>`);btn.disabled=false;return;
+  }
+  btn.disabled=false;
+  if(!json.ok){
+    invMsg(`<div class="alert alert-error">❌ ${json.error||'フォルダを取得できませんでした'}</div>`);
+    document.getElementById('inv-list').innerHTML='';
+    document.getElementById('inv-sync-btn').style.display='none';
+    return;
+  }
+  const ym=y+'-'+String(mi+1).padStart(2,'0');
+  invFiles=(json.files||[])
+    .filter(f=>f.mimeType==='application/pdf')
+    .map(f=>{
+      const client=invClientFromName(f.name);
+      return{id:f.id,name:f.name,client,synced:invAlreadySynced(client,ym)};
+    });
+  if(invFiles.length===0){
+    invMsg(`<div class="alert alert-warning">「${json.folderName}」にPDFがありません</div>`);
+    document.getElementById('inv-list').innerHTML='';
+    document.getElementById('inv-sync-btn').style.display='none';
+    return;
+  }
+  const yet=invFiles.filter(f=>!f.synced).length;
+  invMsg(`<div class="alert alert-info">「${json.folderName}」に ${invFiles.length}件のPDFがあります（未登録 ${yet}件）`
+    +(json.url?`　<a href="${json.url}" target="_blank" rel="noopener">フォルダを開く</a>`:'')+'</div>');
+  renderInvFileList();
+}
+
+function renderInvFileList(){
+  document.getElementById('inv-list').innerHTML=
+    '<div class="table-wrap"><table><thead><tr>'
+    +'<th style="width:36px"></th><th>ファイル名</th><th>顧客名</th><th>同期状態</th>'
+    +'</tr></thead><tbody>'
+    +invFiles.map((f,i)=>`<tr>
+      <td><input type="checkbox" class="inv-check" value="${i}" ${f.synced?'':'checked'} style="width:auto"></td>
+      <td style="font-size:11px">${f.name}</td>
+      <td style="font-size:12px">${f.client||'-'}</td>
+      <td>${f.synced?'<span class="badge badge-green">✓ 登録済み</span>':'<span class="badge badge-gray">未登録</span>'}</td>
+    </tr>`).join('')
+    +'</tbody></table></div>';
+  document.getElementById('inv-sync-btn').style.display='';
+}
+
+async function syncInvoices(){
+  const idx=Array.from(document.querySelectorAll('.inv-check'))
+    .filter(c=>c.checked).map(c=>parseInt(c.value));
+  if(idx.length===0){alert('同期するファイルを選択してください');return;}
+  const mi=invMonth();
+  const y=monthYear(mi);
+  const ym=y+'-'+String(mi+1).padStart(2,'0');
+  const btn=document.getElementById('inv-sync-btn');
+  btn.disabled=true;
+
+  let added=0,billed=0,planned=0;
+  const errors=[];
+  for(let n=0;n<idx.length;n++){
+    const f=invFiles[idx[n]];
+    invMsg(`<div class="alert alert-info"><span class="spinner"></span> 読み取り中... ${n+1}/${idx.length}　${f.name}</div>`);
+    let json;
+    try{
+      json=await gasCall({action:'driveRead',fileId:f.id});
+    }catch(e){errors.push(`${f.name}：${e.message}`);continue;}
+    if(!json.ok){errors.push(`${f.name}：${json.error}`);continue;}
+
+    const p=parseInvoiceText(json.contentSnippet);
+    const client=p.client||f.client;
+    const id=p.id||makeDocNumber('請求書');
+    if(S.quotes.some(q=>q.id===id)){continue;}   // 同じ番号は入れない
+
+    const sub=p.sub||Math.round((p.total||0)/1.1);
+    S.quotes.push({
+      id,
+      subject:`${y}年${mi+1}月分 ご請求`,
+      client:client+' 御中',
+      amount:p.total||0,
+      type:'請求書',
+      date:p.date||`${ym}-01`,
+      expire:p.due||'',
+      due:p.due||'',
+      contractStart:'',contractEnd:'',paymentMethod:'',isMonthly:false,
+      items:[{name:`${y}年${mi+1}月分`,qty:1,unit:sub,total:sub}],
+      note:''
+    });
+    added++;
+
+    // 顧客名から案件を探して、その月の請求レコードを請求済にする
+    const proj=S.projects.find(x=>x.client&&client&&
+      (x.client.indexOf(client)>=0||client.indexOf(x.client)>=0));
+    if(proj){
+      const b=ensureBilling(proj,ym);
+      if(b.invoiceStatus==='uninvoiced'){b.invoiceStatus='invoiced';billed++;}
+      b.invoiceId=id;
+      if(p.due)b.expectedPayDate=p.due;
+      if(p.due&&addPlannedInForProject(proj,p.due,mi))planned++;
+    }
+  }
+
+  saveState();
+  btn.disabled=false;
+  closeModal('modal-invoice-sync');
+  refreshAll();
+  alert(`${added}件の請求書を同期しました\n`
+    +`・${added}件を請求書データに追加\n`
+    +`・${billed}件のmonthlyBillingを請求済みに更新\n`
+    +`・${planned}件の入金予定をCF管理に追加`
+    +(errors.length?`\n\n読み取れなかったファイル:\n`+errors.join('\n'):''));
 }
 
 /* ===== 月次請求レコード ==============================================

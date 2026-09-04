@@ -99,7 +99,9 @@ function doPost(e) {
 
   // ドライブ連携はスプレッドシートに書かないのでロックを取らない
   try {
-    if (action === 'driveList') return respond_({ ok: true, files: driveList_() }, '');
+    if (action === 'driveList') return respond_({ ok: true, files: driveList_(body.folderId) }, '');
+    if (action === 'invoiceList') return respond_(invoiceFolderList_(body.year, body.month), '');
+    if (action === 'driveRead') return respond_(driveRead_(body.fileId), '');
     if (action === 'driveExtract') return respond_(driveExtract_(body.fileId), '');
     if (action === 'driveProcessed') return respond_({ ok: true, renamed: driveMarkProcessed_(body.fileIds) }, '');
     if (action === 'advise') return respond_(loanAdvice_(body.data), '');
@@ -533,9 +535,9 @@ function isSupportedMime_(mime) {
     || mime === 'image/gif' || mime === 'image/webp';
 }
 
-/** 取込フォルダ内の対象ファイル一覧を返す。 */
-function driveList_() {
-  var folder = DriveApp.getFolderById(EXPENSE_FOLDER_ID);
+/** フォルダ内の対象ファイル一覧を返す（既定は経費取込フォルダ）。 */
+function driveList_(folderId) {
+  var folder = DriveApp.getFolderById(folderId || EXPENSE_FOLDER_ID);
   var it = folder.getFiles();
   var out = [];
   while (it.hasNext()) {
@@ -660,6 +662,76 @@ function normalizeCategory_(v) {
     if (s && s.indexOf(keys[i]) >= 0) return CATEGORY_MAP[keys[i]];
   }
   return 'その他経費';
+}
+
+
+// ===== 請求書フォルダの参照 =====================================
+// 請求書関係フォルダの下に「2026年9月」のような月別フォルダがある想定。
+// PDFのテキストはDrive APIでGoogleドキュメントに変換して取り出す
+// （GASにはPDFからテキストを取る機能が無いため）。
+var INVOICE_FOLDER_ID = '14QU-Gwgpj-wM6an0i7I8tzF0DoPMoFOP';
+
+/** 指定した名前のフォルダを depth 階層まで探す。 */
+function findFolderByName_(root, name, depth) {
+  var it = root.getFoldersByName(name);
+  if (it.hasNext()) return it.next();
+  if (depth <= 0) return null;
+  var subs = root.getFolders();
+  while (subs.hasNext()) {
+    var found = findFolderByName_(subs.next(), name, depth - 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** {year}年{month}月 のフォルダを探してPDF一覧を返す。 */
+function invoiceFolderList_(year, month) {
+  var name = num_(year) + '年' + num_(month) + '月';
+  var root;
+  try {
+    root = DriveApp.getFolderById(INVOICE_FOLDER_ID);
+  } catch (err) {
+    return { ok: false, error: '請求書フォルダを開けませんでした（ID: ' + INVOICE_FOLDER_ID + '）' };
+  }
+  var folder = findFolderByName_(root, name, 2);
+  if (!folder) return { ok: false, error: '「' + name + '」のフォルダが見つかりませんでした' };
+  return { ok: true, folderId: folder.getId(), folderName: name, url: folder.getUrl(), files: driveList_(folder.getId()) };
+}
+
+/** PDFをテキストにして返す。 */
+function driveRead_(fileId) {
+  if (!fileId) return { ok: false, error: 'fileId がありません' };
+  var file;
+  try {
+    file = DriveApp.getFileById(fileId);
+  } catch (err) {
+    return { ok: false, error: 'ファイルが見つかりません' };
+  }
+  var docId = null;
+  try {
+    var res = UrlFetchApp.fetch(
+      'https://www.googleapis.com/drive/v3/files/' + fileId + '/copy?ocrLanguage=ja&supportsAllDrives=true',
+      {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+        payload: JSON.stringify({ name: '__tmp_ocr__', mimeType: 'application/vnd.google-apps.document' }),
+        muteHttpExceptions: true
+      });
+    var body;
+    try { body = JSON.parse(res.getContentText()); } catch (e) { body = null; }
+    if (res.getResponseCode() !== 200) {
+      return { ok: false, error: 'PDFをテキストにできませんでした（' + res.getResponseCode() + '）: '
+        + (body && body.error && body.error.message || '') };
+    }
+    docId = body.id;
+    var text = DocumentApp.openById(docId).getBody().getText();
+    return { ok: true, name: file.getName(), contentSnippet: text };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message || err) };
+  } finally {
+    if (docId) { try { DriveApp.getFileById(docId).setTrashed(true); } catch (e2) { } }
+  }
 }
 
 
