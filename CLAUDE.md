@@ -275,3 +275,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   前月の請求済みレコードを対象に、各レコードの expectedPayDate を使う
 - 入金予定の重複判定 hasPlannedIn(projectId, date) は日付も見るので、
   同じ案件でも月が違えば予定を作れる
+- 請求レコードを「請求済」にすると addPlannedInForBilling() が
+  CF管理に入金予定を作る。重複判定は ledger の projectId × billingMonth
+- ★ GASの応答に含まれない項目は keepLocalWhenMissing() で手元の値を残す。
+  シート未追加の古いデプロイに読み直されてデータが消えるのを防ぐため

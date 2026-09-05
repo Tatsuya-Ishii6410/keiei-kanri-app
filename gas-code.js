@@ -38,7 +38,7 @@ var SHEET_DEFS = {
   quotes:   ['id', 'subject', 'client', 'amount', 'type', 'date', 'expire', 'due',
     'contractStart', 'contractEnd', 'paymentMethod', 'isMonthly',
     'source', 'driveFileId', 'items', 'note'],
-  ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'settlementMonth', 'fixedCostId'],
+  ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'settlementMonth', 'billingMonth', 'fixedCostId'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
   fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
   monthlyBillings: ['id', 'projectId', 'billingMonth', 'amount', 'invoiceStatus',
@@ -228,6 +228,7 @@ function readLedger_(sh) {
       expectedDate: str_(o.expectedDate),
       projectId: str_(o.projectId) === '' ? null : num_(o.projectId),
       settlementMonth: ym_(o.settlementMonth),
+      billingMonth: ym_(o.billingMonth),
       fixedCostId: str_(o.fixedCostId) === '' ? null : num_(o.fixedCostId)
     };
   }).filter(function (l) { return l.date !== '' && l.desc !== ''; });
@@ -390,7 +391,7 @@ function writeAll_(data) {
     return [num_(l.id), str_(l.date), str_(l.type), str_(l.desc), num_(l.amount), str_(l.memo),
       str_(l.status) || 'actual', str_(l.expectedDate),
       (l.projectId === null || l.projectId === undefined || l.projectId === '') ? '' : num_(l.projectId),
-      ym_(l.settlementMonth),
+      ym_(l.settlementMonth), ym_(l.billingMonth),
       (l.fixedCostId === null || l.fixedCostId === undefined || l.fixedCostId === '') ? '' : num_(l.fixedCostId)];
   });
 

@@ -1563,6 +1563,7 @@ function mergeState(parsed){
     if(['actual','planned_in','planned_out'].indexOf(l.status)<0)l.status='actual';
     l.expectedDate=l.expectedDate||'';
     l.settlementMonth=l.settlementMonth||'';
+    l.billingMonth=l.billingMonth||'';
   });
   if(!Array.isArray(s.monthlyBillings))s.monthlyBillings=[];
   s.monthlyBillings=s.monthlyBillings.map(b=>({
@@ -1682,6 +1683,22 @@ async function gasLoadRaw(){
   }
 }
 
+// GASの応答に含まれていない項目は、手元の値をそのまま残す。
+// （シートを追加していない古いデプロイでデータが消えるのを防ぐ）
+function keepLocalWhenMissing(remote){
+  const d=Object.assign({},remote||{});
+  ['monthlyBillings','fiscalYears','fixedCosts','projects','quotes','ledger'].forEach(k=>{
+    if(d[k]===undefined&&Array.isArray(S[k])&&S[k].length>0)d[k]=S[k];
+  });
+  ['nextBillingId','nextFiscalYearId','nextFixedCostId','bankBalance'].forEach(k=>{
+    if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
+  });
+  ['travel','finance'].forEach(k=>{
+    if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
+  });
+  return d;
+}
+
 function isRemoteEmpty(d){
   if(!d)return true;
   const n=(d.projects||[]).length+(d.quotes||[]).length+(d.ledger||[]).length;
@@ -1707,7 +1724,8 @@ async function loadFromGAS(){
     refreshAll();
     return;
   }
-  S=mergeState(json.data);
+  // GAS側が古くて新しい項目を返さない場合、手元のデータを消さないように残す
+  S=mergeState(keepLocalWhenMissing(json.data));
   saveLocal();
   setSyncStatus('ok');
   renderFiscalSelects();
@@ -2251,7 +2269,10 @@ function renderProjects(){
   const mi=currentProjectMonth();
   // 失注の案件は一覧にも合計にも含めない
   const inv=currentInvoiceFilter();
-  const list=S.projects.filter(p=>p.status!=='失注'&&projectHasMonth(p,mi)
+  // 選んだ月に売上が無くても、その月の請求レコードがあれば表示する
+  const ymSel=mi===null?null:billingYm(mi);
+  const list=S.projects.filter(p=>p.status!=='失注'
+    &&(projectHasMonth(p,mi)||(ymSel&&findBilling(p.id,ymSel)))
     &&(!inv||invoiceStatusOf(p)===inv));
 
   // 合計カード。確定売上（契約済・進行中・完了）と見込み（商談中）に分ける。
@@ -4127,7 +4148,7 @@ function applyBulkStatus(){
       if(cfg.to==='invoiced'&&planDate)b.expectedPayDate=planDate;
       p.invoiceStatus=cfg.to;
       if(cfg.to==='uninvoiced'){p.paidMonth='';p.paidAmount=0;}
-      if(cfg.to==='invoiced'&&planDate&&addPlannedInForProject(p,planDate,mi))planned++;
+      if(cfg.to==='invoiced'&&addPlannedInForBilling(b))planned++;
     });
     saveState();closeModal('modal-bulk-status');refreshAll();
     alert(targets.length+'件のステータスを変更しました（'+cfg.label+'）'
@@ -4418,7 +4439,7 @@ async function syncInvoices(){
       if(b.invoiceStatus==='uninvoiced'){b.invoiceStatus='invoiced';billed++;}
       b.invoiceId=target.id;
       if(p.due)b.expectedPayDate=p.due;
-      if(p.due&&addPlannedInForProject(proj,p.due,mi))planned++;
+      if(addPlannedInForBilling(b))planned++;
     }
   }
 
@@ -4598,14 +4619,48 @@ function saveBilling(){
   if(!b){alert('対象のレコードが見つかりませんでした');return;}
   const st=document.getElementById('mb-status').value;
   const paid=st==='paid'||st==='paid_manual';
+  const before=b.invoiceStatus;
   b.amount=parseInt(document.getElementById('mb-amount').value)||0;
   b.invoiceStatus=st;
   b.expectedPayDate=document.getElementById('mb-expect').value||null;
   b.paidDate=paid?(document.getElementById('mb-paiddate').value||null):null;
   b.paidAmount=paid?(parseInt(document.getElementById('mb-paidamount').value)||null):null;
   b.note=document.getElementById('mb-note').value.trim();
+
+  // 請求済にしたら、その月の入金予定をCF管理に作る
+  let planned=false;
+  if(st==='invoiced')planned=addPlannedInForBilling(b);
+
   editBillingId=null;
   saveState();closeModal('modal-billing');refreshAll();
+  if(planned){
+    alert(`入金予定を登録しました（${b.expectedPayDate||nextMonthEndOf(b.billingMonth)}／${fmt(grossAmount(b.amount))}）`);
+  }
+}
+
+// 請求レコードから入金予定を作る。同じ案件×同じ請求月があれば作らない。
+function addPlannedInForBilling(b){
+  const p=S.projects.find(x=>x.id===b.projectId);
+  if(!p)return false;
+  if(S.ledger.some(l=>l.projectId===b.projectId&&l.billingMonth===b.billingMonth
+    &&ledgerStatusOf(l)==='planned_in'))return false;
+  const date=b.expectedPayDate||nextMonthEndOf(b.billingMonth);
+  if(!date)return false;
+  const abs=ymToAbs(b.billingMonth);
+  const y=Math.floor(abs/12),m=abs%12;
+  S.ledger.push({
+    id:S.nextLedgerId++,
+    date,
+    expectedDate:date,
+    type:'売上',
+    desc:`${p.client||p.name} ${y}年${m+1}月分 入金予定`,
+    amount:grossAmount(b.amount),
+    memo:'',
+    status:'planned_in',
+    projectId:b.projectId,
+    billingMonth:b.billingMonth
+  });
+  return true;
 }
 
 /* ---- 一括変更・入金確認から使う ---- */
