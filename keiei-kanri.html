@@ -198,6 +198,50 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .login-btn:disabled{opacity:0.5;cursor:not-allowed}
 .login-error{font-size:12px;color:var(--red);min-height:34px;margin-top:10px;line-height:1.6}
 
+/* ===== レポートページのモバイル対応 ===== */
+@media(max-width:768px){
+  /* タブは横スクロール */
+  #page-report .tab-group{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+  #page-report .tab{white-space:nowrap;padding:8px 12px}
+  /* 生成されたレポートの表は枠内でスクロールさせる */
+  .report-card,#loan-body .card,#forecast-body .report-card{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .report-sheet{padding:16px 12px}
+  .report-card table,#loan-body table{min-width:520px}
+  .report-head{margin-bottom:14px}
+}
+@media(max-width:480px){
+  #page-report .tab{font-size:12px;padding:8px 10px}
+  #page-report .section-title{font-size:15px}
+  #page-report .card,.report-card{padding:16px}
+  .report-sheet{padding:12px 10px}
+  /* 操作ボタンは縦並び・フル幅 */
+  #page-report .report-actions{flex-direction:column;align-items:stretch}
+  #page-report .report-actions>*{width:100%}
+  /* 融資力診断・案件予実のカードは1列 */
+  #loan-body .two-col,#loan-body .metric-grid,
+  #forecast-body .metric-grid{grid-template-columns:1fr}
+  #loan-body .card-header{flex-direction:column;align-items:stretch;gap:8px}
+  #loan-body .card-header .btn{width:100%;justify-content:center}
+  /* 月別予実は「月・合計・状態」を優先し、補助列を隠す */
+  .fc-month-table th:nth-child(2),.fc-month-table td:nth-child(2),
+  .fc-month-table th:nth-child(3),.fc-month-table td:nth-child(3),
+  .fc-month-table th:nth-child(5),.fc-month-table td:nth-child(5),
+  .fc-month-table th:nth-child(7),.fc-month-table td:nth-child(7),
+  .fc-month-table th:nth-child(8),.fc-month-table td:nth-child(8){display:none}
+  /* 案件別明細は「顧客名・案件名・金額・状態」を優先 */
+  .fc-project-table th:nth-child(3),.fc-project-table td:nth-child(3),
+  .fc-project-table th:nth-child(4),.fc-project-table td:nth-child(4),
+  .fc-project-table th:nth-child(5),.fc-project-table td:nth-child(5){display:none}
+  .fc-month-table,.fc-project-table{min-width:0!important}
+}
+/* 印刷時はモバイル向けの省略を打ち消す */
+@media print{
+  .fc-month-table th,.fc-month-table td,
+  .fc-project-table th,.fc-project-table td{display:table-cell!important}
+  .report-card,#loan-body .card,#forecast-body .report-card{overflow:visible!important}
+  .report-card table,#loan-body table,.fc-month-table,.fc-project-table{min-width:0!important}
+}
+
 /* 月次決算レポート */
 .report-sheet{background:#fff;color:#111;border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:28px}
 .report-head{text-align:center;border-bottom:2px solid #1a2e4a;padding-bottom:14px;margin-bottom:20px;color:#111}
@@ -599,6 +643,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn primary" onclick="openTravelEntry()">+ 交通費を追加</button>
         <button class="btn" onclick="openSettleModal()">🚃 交通費精算を追加</button>
+        <button class="btn" onclick="exportTravelCsv()">📥 CSV出力</button>
+        <button class="btn" onclick="printTravelLedger()">🖨️ PDF出力</button>
       </div>
     </div>
     <div class="card"><div id="tl-summary"></div></div>
@@ -3195,6 +3241,123 @@ function renderTravelLedger(){
   }).join('');
 }
 
+/* ---- 交通費台帳の出力 ---- */
+
+// 摘要の末尾「（電車・バス）」から移動手段を取り出す
+function travelModeOf(desc){
+  const m=/（([^（）]+)）(?:\s|　)*(?:往復)?\s*$/.exec(String(desc||''));
+  return m?m[1]:'';
+}
+
+function travelPeriodLabel(mi){
+  return mi===null?'全期間':monthYear(mi)+'年'+(mi+1)+'月';
+}
+
+function csvCell(v){
+  const s=String(v==null?'':v);
+  return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+
+function exportTravelCsv(){
+  const mi=currentTravelMonth();
+  const rows=travelLedgerRows(mi);
+  if(rows.length===0){alert('出力できる交通費がありません');return;}
+  const total=rows.reduce((a,l)=>a+l.amount,0);
+  const lines=[['日付','移動手段','出発','到着/摘要','金額','備考']];
+  rows.forEach(l=>{
+    const p=travelParse(l.desc);
+    lines.push([l.date,travelModeOf(l.desc),p.from,p.to,l.amount,l.memo||'']);
+  });
+  lines.push(['合計','','','',total,`${rows.length}件`]);
+
+  const bom='﻿';
+  const csv=lines.map(r=>r.map(csvCell).join(',')).join('\r\n');
+  const blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`交通費台帳_${travelPeriodLabel(mi)}.csv`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
+function printTravelLedger(){
+  const mi=currentTravelMonth();
+  const rows=travelLedgerRows(mi);
+  if(rows.length===0){alert('出力できる交通費がありません');return;}
+  const c=S.company;
+  const total=rows.reduce((a,l)=>a+l.amount,0);
+  const done=mi===null?null:settlementFor(ymOfMonth(mi));
+  const status=mi===null?'—'
+    :(done?`${ledgerDateOf(done)} に精算予定として登録済み`
+          :`未登録（${nextMonth25Of(mi)} に精算予定）`);
+
+  const body=rows.map((l,i)=>{
+    const p=travelParse(l.desc);
+    return`<tr>
+      <td class="num">${i+1}</td>
+      <td>${l.date}</td>
+      <td>${travelModeOf(l.desc)||'-'}</td>
+      <td>${p.from||'-'}</td>
+      <td>${p.to||'-'}</td>
+      <td class="num">${docYen(l.amount)}</td>
+      <td>${l.memo||''}</td>
+    </tr>`;
+  }).join('');
+
+  const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+<title>交通費台帳 ${travelPeriodLabel(mi)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans JP','Hiragino Kaku Gothic ProN',Meiryo,sans-serif;color:#111;font-size:12px;padding:16mm 14mm;background:#fff}
+h1{font-size:18px;font-weight:700;color:#1a2e4a;margin-bottom:4px}
+.head{border-bottom:2px solid #1a2e4a;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px}
+.meta{font-size:11px;color:#555;line-height:1.9;text-align:right;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{background:#1a2e4a;color:#fff;font-weight:700;padding:8px 10px;text-align:left;border:1px solid #1a2e4a}
+td{padding:7px 10px;border:1px solid #d9dee5}
+tbody tr:nth-child(even){background:#f4f6f9}
+.num{text-align:right}
+tfoot td{background:#eef1f5;font-weight:700;border-top:2px solid #1a2e4a}
+.foot{margin-top:14px;font-size:11px;line-height:2;color:#333}
+@page{size:A4 portrait;margin:0}
+</style></head><body>
+<div class="head">
+  <div>
+    <h1>交通費台帳</h1>
+    <div style="font-size:13px;font-weight:500">${travelPeriodLabel(mi)}</div>
+  </div>
+  <div class="meta">
+    ${c.name||''}<br>
+    ${c.rep?'代表取締役 '+c.rep+'<br>':''}
+    作成日：${jpDate(today())}
+  </div>
+</div>
+<table>
+  <thead><tr>
+    <th style="width:36px">No.</th><th style="width:88px">日付</th><th style="width:96px">移動手段</th>
+    <th>出発</th><th>到着</th><th style="width:88px" class="num">金額</th><th>備考</th>
+  </tr></thead>
+  <tbody>${body}</tbody>
+  <tfoot><tr>
+    <td colspan="5">合計（${rows.length}件）</td>
+    <td class="num">${docYen(total)}</td><td></td>
+  </tr></tfoot>
+</table>
+<div class="foot">
+  合計金額：<strong>${docYen(total)}</strong>　／　件数：${rows.length}件<br>
+  精算状況：${status}
+</div>
+</body></html>`;
+
+  const w=window.open('','_blank');
+  if(!w){alert('ポップアップがブロックされました。表示を許可してください。');return;}
+  w.document.write(html);
+  w.document.close();
+  w.onload=()=>{w.focus();w.print();};
+}
+
 /* ---- 入力モーダル ---- */
 
 function openTravelEntry(id){
@@ -5336,6 +5499,7 @@ function generateForecast(){
     <td>${invoiceBadge(p)}</td>
   </tr>`;
 
+  const projectTableClass='fc-project-table';
   const projectHead=`<thead><tr>
     <th>顧客名</th><th>案件名</th><th>種別</th><th style="text-align:right">月額</th>
     <th>期間</th><th style="text-align:right">期間合計</th><th>状態</th><th>入金</th>
@@ -5369,7 +5533,7 @@ function generateForecast(){
 
   <div class="report-card">
     <div class="report-card-title">月別予実</div>
-    <div class="table-wrap"><table>
+    <div class="table-wrap"><table class="fc-month-table">
       <thead><tr>
         <th>月</th><th style="text-align:right">案件売上（実績/予定）</th><th style="text-align:right">収支売上入力</th>
         <th style="text-align:right">合計</th><th style="text-align:right">前月比</th><th>状態</th><th>請求状況</th><th>入金予定日</th>
@@ -5389,7 +5553,7 @@ function generateForecast(){
   <div class="report-card">
     <div class="report-card-title">案件別明細（契約済・進行中・完了）</div>
     ${booked_.length===0?'<div class="empty-state">この期に売上が発生する案件はありません。</div>':
-    `<div class="table-wrap"><table>${projectHead}<tbody>
+    `<div class="table-wrap"><table class="${projectTableClass}">${projectHead}<tbody>
       ${booked_.map(projectRow).join('')}
       <tr style="font-weight:bold;background:var(--bg-secondary)">
         <td colspan="5">合計（${booked_.length}件）</td>
@@ -5402,7 +5566,7 @@ function generateForecast(){
   <div class="report-card">
     <div class="report-card-title">📌 商談中（見込み）</div>
     ${pipeline.length===0?'<div class="empty-state">商談中の案件はありません。</div>':
-    `<div class="table-wrap"><table>${projectHead}<tbody>
+    `<div class="table-wrap"><table class="${projectTableClass}">${projectHead}<tbody>
       ${pipeline.map(projectRow).join('')}
     </tbody></table></div>
     <div style="text-align:right;font-size:14px;font-weight:600;margin-top:10px;color:var(--amber-text)">

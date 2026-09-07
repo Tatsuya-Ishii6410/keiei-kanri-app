@@ -279,3 +279,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   CF管理に入金予定を作る。重複判定は ledger の projectId × billingMonth
 - ★ GASの応答に含まれない項目は keepLocalWhenMissing() で手元の値を残す。
   シート未追加の古いデプロイに読み直されてデータが消えるのを防ぐため
+- 交通費台帳はCSV（BOM付き・合計行あり）とPDF（別ウィンドウでprint）を出力できる
+  移動手段は摘要の末尾「（電車・バス）」から取り出す
+- レポートページのモバイル対応では、予実の表に
+  .fc-month-table / .fc-project-table を付けて列の出し分けをしている
+  印刷時は @media print で display:table-cell に戻す
