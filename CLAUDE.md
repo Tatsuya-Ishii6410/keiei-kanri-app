@@ -291,6 +291,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - レポートのスマホ表示は rpBoth(テーブル, カード) で両方を出力し、
   .rp-table / .rp-cards をCSSで出し分ける（768px以下はカード、印刷はテーブル）
   新しい表を足すときも rpBoth で包むこと
+  ※ スマホで表の min-width を強制しないこと。包み忘れた表が画面からはみ出し、
+    左端の科目名が見切れる。保険として .report-card table{table-layout:fixed} を入れてある
 - ★ 売上の基準は2系統。混ぜないこと
   発生ベース（案件・monthlyBilling）… ダッシュボード／月次レポート／月次PL
     salesByMonth / salesYearTotal / salesSeries / calcProjectSalesByMonth

@@ -203,10 +203,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   /* タブは横スクロール */
   #page-report .tab-group{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
   #page-report .tab{white-space:nowrap;padding:8px 12px}
-  /* 生成されたレポートの表は枠内でスクロールさせる */
-  .report-card,#loan-body .card,#forecast-body .report-card{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .report-sheet{padding:16px 12px}
-  .report-card table,#loan-body table{min-width:520px}
   .report-head{margin-bottom:14px}
 }
 /* ===== スマホ用のカード表示（横スクロールをなくす） =====
@@ -253,10 +250,14 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   .rp-cards{display:block}
   .report-card,#loan-body .card,#forecast-body .report-card{overflow-x:visible}
   #loan-body{word-break:break-word}
+  /* カード化していない表が残っても、はみ出さず折り返して収める */
+  .report-card table,#loan-body table{min-width:0!important;width:100%;table-layout:fixed}
+  .report-card td,.report-card th,#loan-body td,#loan-body th{word-break:break-word}
 }
 @media print{
   .rp-table{display:block!important}
   .rp-cards{display:none!important}
+  .report-card table,#loan-body table{table-layout:auto!important}
 }
 @media(max-width:480px){
   #page-report .tab{font-size:12px;padding:8px 10px}
@@ -6277,15 +6278,26 @@ function generateReport(){
   /* --- 0. 期間累計サマリー（期初からこの月まで） --- */
   const fy=activeFiscalYear();
   const cum=fy?fiscalTotals(fy,mi):null;
-  const fiscalSummary=!fy?repEmpty('期が登録されていません。設定ページの「期の管理」から追加してください。'):
-  `<div style="font-size:12px;color:#555;margin-bottom:8px">${fy.name}（${fiscalLabel(fy)}）／ 経過 ${cum.months.length}ヶ月</div>
-  <table style="width:100%;border-collapse:collapse;font-size:13px">
+  const fiscalTable=!fy?'':
+  `<table style="width:100%;border-collapse:collapse;font-size:13px">
     ${repRow('累計売上',repYen(cum.sales))}
     ${repRow('累計営業利益',repYen(cum.profit))}
     ${repRow('累計利益率',cum.sales>0?(cum.profit/cum.sales*100).toFixed(1)+'%':'-')}
     ${repRow('売上目標に対する進捗',fmt(fy.salesTarget)+' に対して '+rateText(pct(cum.sales,fy.salesTarget)),{bold:true})}
     ${repRow('利益目標に対する進捗',fmt(fy.profitTarget)+' に対して '+rateText(pct(cum.profit,fy.profitTarget)),{bold:true})}
   </table>`;
+  // スマホでは表の代わりに縦並びのリストにする
+  const fiscalCards=!fy?'':
+    rpLine('累計売上',fmt(cum.sales))
+    +rpLine('累計営業利益',fmt(cum.profit),{color:cum.profit<0?'#e53e3e':''})
+    +rpLine('累計利益率',cum.sales>0?(cum.profit/cum.sales*100).toFixed(1)+'%':'-')
+    +rpLine('売上目標',fmt(fy.salesTarget),{top:true})
+    +rpLine('└ 進捗',rateText(pct(cum.sales,fy.salesTarget)),{bold:true,indent:true})
+    +rpLine('利益目標',fmt(fy.profitTarget))
+    +rpLine('└ 進捗',rateText(pct(cum.profit,fy.profitTarget)),{bold:true,indent:true});
+  const fiscalSummary=!fy?repEmpty('期が登録されていません。設定ページの「期の管理」から追加してください。'):
+    `<div style="font-size:12px;color:#555;margin-bottom:8px">${fy.name}（${fiscalLabel(fy)}）／ 経過 ${cum.months.length}ヶ月</div>`
+    +rpBoth(fiscalTable,fiscalCards);
 
   /* --- 1. サマリー --- */
   const planRows=[{k:'売上高',plan:pl.sales,actual:sales},
