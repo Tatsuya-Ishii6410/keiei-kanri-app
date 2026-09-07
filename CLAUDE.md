@@ -287,7 +287,12 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - ★ 月次レポートと月次PLの「売上高」は案件ベース（発生ベース）のみ。
   金額は monthlyBilling があればその値を使う（projectSalesAmount）。
   収支入力の売上は「入金実績」として別枠に出す（合計には入れない）
-  ※ ダッシュボードの売上は案件＋収支入力の合算のままなので数字が異なる
+  ダッシュボードの売上も同じ案件ベースなので、レポートと数字が一致する
 - レポートのスマホ表示は rpBoth(テーブル, カード) で両方を出力し、
   .rp-table / .rp-cards をCSSで出し分ける（768px以下はカード、印刷はテーブル）
   新しい表を足すときも rpBoth で包むこと
+- ★ 売上の基準は2系統。混ぜないこと
+  発生ベース（案件・monthlyBilling）… ダッシュボード／月次レポート／月次PL
+    salesByMonth / salesYearTotal / salesSeries / calcProjectSalesByMonth
+  入金ベース（ledgerの売上区分）… CF管理のみ
+    cfInflow / cfOutflow / cfPlannedIn / cfPlannedOut

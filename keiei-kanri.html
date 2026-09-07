@@ -443,6 +443,9 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <div class="metric-sub" id="d-awaiting-sub">0件（税込）</div></div>
     <div class="metric-card"><div class="metric-label">営業利益率</div><div class="metric-value" id="d-margin-rate">-%</div><div class="metric-sub" id="d-margin-year">年間累計: -%</div></div>
   </div>
+  <div style="font-size:11px;color:var(--text-muted);margin:-12px 0 16px">
+    ※案件発生ベース。入金実績はCF管理で確認
+  </div>
   <div class="two-col">
     <div class="card">
       <div class="card-header">
@@ -2144,16 +2147,16 @@ function calcProjectSalesYear(){
   return t;
 }
 
-/* ダッシュボードで使う売上は、案件ベースの売上と
-   収支ページで区分「売上」として入力した金額の合算とする。 */
+/* 売上は案件の発生ベースのみ（月次請求レコードがあればその金額を使う）。
+   収支に入力した売上＝実際の入金はCF管理で集計する。 */
 
 // monthIndex: 0=1月 … 11=12月
 function salesByMonth(mi){
-  return calcProjectSalesByMonth(mi)+sumLedger(mi).sales;
+  return calcProjectSalesByMonth(mi);
 }
 
 function salesYearTotal(){
-  return calcProjectSalesYear()+sumLedgerYear().sales;
+  return calcProjectSalesYear();
 }
 
 // 12ヶ月分の売上を配列で返す（月次推移グラフ用）
