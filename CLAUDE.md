@@ -296,3 +296,9 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
     salesByMonth / salesYearTotal / salesSeries / calcProjectSalesByMonth
   入金ベース（ledgerの売上区分）… CF管理のみ
     cfInflow / cfOutflow / cfPlannedIn / cfPlannedOut
+- ★ 表を追加するときはスマホ用のカードも用意すること（横スクロール禁止）
+  `<div class="table-wrap mob-table">…</div>` と `<div id="○○-cards" class="mob-cards"></div>`
+  を並べ、描画関数で両方に流し込む。769px以上＝表／768px以下＝カード／印刷＝表。
+  月次レポートは同じ考え方の rp-table / rp-cards（rpBoth）を使う。
+  ※カード側にもチェックボックスや入力欄が入る場合、DOMを querySelectorAll で
+    数えると二重に数える。必ずデータ側（例：bankRows[i].checked）を正とすること。
