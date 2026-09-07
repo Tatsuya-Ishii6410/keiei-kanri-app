@@ -288,3 +288,6 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   金額は monthlyBilling があればその値を使う（projectSalesAmount）。
   収支入力の売上は「入金実績」として別枠に出す（合計には入れない）
   ※ ダッシュボードの売上は案件＋収支入力の合算のままなので数字が異なる
+- レポートのスマホ表示は rpBoth(テーブル, カード) で両方を出力し、
+  .rp-table / .rp-cards をCSSで出し分ける（768px以下はカード、印刷はテーブル）
+  新しい表を足すときも rpBoth で包むこと

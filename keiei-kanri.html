@@ -209,6 +209,18 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   .report-card table,#loan-body table{min-width:520px}
   .report-head{margin-bottom:14px}
 }
+/* スマホではテーブルの代わりにカード表示にする */
+.rp-cards{display:none}
+@media(max-width:768px){
+  .rp-table{display:none}
+  .rp-cards{display:block}
+  .report-card,#loan-body .card,#forecast-body .report-card{overflow-x:visible}
+  #loan-body{word-break:break-word}
+}
+@media print{
+  .rp-table{display:block!important}
+  .rp-cards{display:none!important}
+}
 @media(max-width:480px){
   #page-report .tab{font-size:12px;padding:8px 10px}
   #page-report .section-title{font-size:15px}
@@ -5486,6 +5498,14 @@ function generateForecast(){
       <td style="font-size:11px;white-space:nowrap">${expectedPayDatesOfMonth(r.index)}</td>
     </tr>`;
   }).join('');
+  // スマホ用：月ごとのカード
+  const monthCards=rows.map(r=>rpCard(
+    `<div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-weight:700;font-size:13px">${r.label}</span>${badge(r.state)}</div>`
+    +`<div style="display:flex;justify-content:space-between"><span>案件売上</span><span>${fmt(r.projectSales)}</span></div>`
+    +`<div style="display:flex;justify-content:space-between"><span>収支入力</span><span>${r.ledgerSales===null?'-':fmt(r.ledgerSales)}</span></div>`
+    +`<div style="display:flex;justify-content:space-between;font-weight:700"><span>合計</span><span>${fmt(r.total)}</span></div>`
+  )).join('');
   const sumProject=rows.reduce((a,r)=>a+r.projectSales,0);
   const sumLedgerCol=rows.reduce((a,r)=>a+(r.ledgerSales||0),0);
   const sumTotal=rows.reduce((a,r)=>a+r.total,0);
@@ -5542,7 +5562,7 @@ function generateForecast(){
 
   <div class="report-card">
     <div class="report-card-title">月別予実</div>
-    <div class="table-wrap"><table class="fc-month-table">
+    ${rpBoth(`<div class="table-wrap"><table class="fc-month-table">
       <thead><tr>
         <th>月</th><th style="text-align:right">案件売上（実績/予定）</th><th style="text-align:right">収支売上入力</th>
         <th style="text-align:right">合計</th><th style="text-align:right">前月比</th><th>状態</th><th>請求状況</th><th>入金予定日</th>
@@ -5556,28 +5576,28 @@ function generateForecast(){
           <td colspan="4"></td>
         </tr>
       </tbody>
-    </table></div>
+    </table></div>`,monthCards)}
   </div>
 
   <div class="report-card">
     <div class="report-card-title">案件別明細（契約済・進行中・完了）</div>
     ${booked_.length===0?'<div class="empty-state">この期に売上が発生する案件はありません。</div>':
-    `<div class="table-wrap"><table class="${projectTableClass}">${projectHead}<tbody>
+    rpBoth(`<div class="table-wrap"><table class="${projectTableClass}">${projectHead}<tbody>
       ${booked_.map(projectRow).join('')}
       <tr style="font-weight:bold;background:var(--bg-secondary)">
         <td colspan="5">合計（${booked_.length}件）</td>
         <td style="text-align:right">${fmt(booked_.reduce((a,p)=>a+forecastProjectTotal(p,fy),0))}</td>
         <td colspan="2"></td>
       </tr>
-    </tbody></table></div>`}
+    </tbody></table></div>`,rpProjectCards(booked_,p=>forecastProjectTotal(p,fy),booked_.reduce((a,p)=>a+forecastProjectTotal(p,fy),0)))}
   </div>
 
   <div class="report-card">
     <div class="report-card-title">📌 商談中（見込み）</div>
     ${pipeline.length===0?'<div class="empty-state">商談中の案件はありません。</div>':
-    `<div class="table-wrap"><table class="${projectTableClass}">${projectHead}<tbody>
+    rpBoth(`<div class="table-wrap"><table class="${projectTableClass}">${projectHead}<tbody>
       ${pipeline.map(projectRow).join('')}
-    </tbody></table></div>
+    </tbody></table></div>`,rpProjectCards(pipeline,p=>forecastProjectTotal(p,fy),pipelineTotal))+`
     <div style="text-align:right;font-size:14px;font-weight:600;margin-top:10px;color:var(--amber-text)">
       売上見込み: ${fmt(pipelineTotal)}
     </div>`}
@@ -5922,6 +5942,50 @@ function repSection(title,inner){
   </div>`;
 }
 
+/* ---- スマホ用の表示（テーブルの代わりにカード・リスト） ----
+   PCではテーブル、768px以下ではこちらを出す。印刷時はテーブルに戻す。 */
+
+// 科目と金額を1行ずつ並べる
+function rpLine(label,value,opt){
+  const o=opt||{};
+  const border=o.top?'border-top:2px solid #1a2e4a;':'border-bottom:1px solid #e0e0e0;';
+  return`<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 2px;${border}${o.bold?'font-weight:700;':''}">
+    <span style="${o.indent?'padding-left:14px;color:#555;':''}">${label}</span>
+    <span style="white-space:nowrap;${o.color?'color:'+o.color+';':''}">${value}</span>
+  </div>`;
+}
+
+// 勘定科目ごとの金額を縦に並べる
+function accountCards(map,keys,total,label){
+  if(!keys.length)return'';
+  return keys.map(k=>rpLine(k,fmt(map[k]))).join('')+rpLine(label,fmt(total),{bold:true,top:true});
+}
+
+function rpCard(inner){
+  return`<div style="background:#f5f7fa;border-radius:8px;padding:12px;margin-bottom:8px;font-size:12px;line-height:1.8">${inner}</div>`;
+}
+
+function rpTotalLine(label,value){
+  return`<div style="text-align:right;font-weight:700;font-size:13px;margin-top:6px">${label}：${value}</div>`;
+}
+
+// 表とカードを並べて出す（CSSで片方だけ表示する）
+function rpBoth(tableHtml,cardsHtml){
+  return`<div class="rp-table">${tableHtml}</div><div class="rp-cards">${cardsHtml}</div>`;
+}
+
+// 案件を1枚ずつのカードに
+function rpProjectCards(list,amountOf,total){
+  if(list.length===0)return'';
+  const kinds={single:'単発',monthly:'月次継続',annual:'年次継続'};
+  return list.map(p=>rpCard(
+    `<div style="font-weight:600">${p.client||'-'}</div>`
+    +`<div>${p.name}</div>`
+    +`<div style="color:#555">${kinds[p.contract]||p.contract} ／ ${p.status}</div>`
+    +`<div style="font-size:15px;font-weight:700;margin-top:4px">${fmt(amountOf(p))}</div>`
+  )).join('')+rpTotalLine(`合計（${list.length}件）`,fmt(total));
+}
+
 function repEmpty(msg){
   return`<div style="padding:14px 12px;color:#888;font-size:12px">${msg}</div>`;
 }
@@ -5978,6 +6042,24 @@ function generateReport(){
   </table>`;
 
   /* --- 1. サマリー --- */
+  const planRows=[{k:'売上高',plan:pl.sales,actual:sales},
+    {k:'経費合計',plan:pl.expense,actual:exp},
+    {k:'役員報酬',plan:pl.labor,actual:lab},
+    {k:'税金・公課',plan:pl.tax||0,actual:tax},
+    {k:'営業利益',plan:planProfit,actual:profit}];
+  const summaryCards=
+    rpLine('売上高（案件ベース）',fmt(sales),{bold:true})
+    +rpLine('├ うち請求済',fmt(salesBilled),{indent:true})
+    +rpLine('└ うち未請求',fmt(salesUnbilled),{indent:true})
+    +rpLine('入金実績（CF）',fmt(ledgerSales))
+    +rpLine('経費合計',fmt(exp),{top:true})
+    +rpLine('役員報酬',fmt(lab))
+    +rpLine('税金・公課',fmt(tax))
+    +rpLine('営業利益',fmt(profit),{bold:true,top:true,color:profit>=0?'#1D9E75':'#e53e3e'})
+    +rpLine('営業利益率',sales>0?(profit/sales*100).toFixed(1)+'%':'-',{bold:true})
+    +'<div style="font-size:12px;font-weight:bold;margin:16px 0 6px">計画比</div>'
+    +planRows.map(r=>rpLine(r.k,`${fmt(r.actual)} <span style="color:#888">/ ${fmt(r.plan)}</span>`)).join('')
+    +planRows.map(()=>'').join('');
   const summary=`<table style="width:100%;border-collapse:collapse;font-size:13px">
     ${repRow('売上高（案件ベース）',repYen(sales),{bold:true,bg:'#f5f5f5'})}
     ${repRow('　うち請求済（入金済を含む）',repYen(salesBilled))}
@@ -6055,6 +6137,11 @@ function generateReport(){
     </tr></tbody>
   </table></div>`;
 
+  const salesCards=salesRows.length===0?'':salesRows.map(l=>rpCard(
+    `<div style="color:#555">${l.date}</div><div>${l.desc}</div>`
+    +`<div style="font-size:15px;font-weight:700;margin-top:4px">${fmt(l.amount)}</div>`
+  )).join('')+rpTotalLine(`合計（${salesRows.length}件）`,fmt(ledgerSales));
+
   const salesNote=`<div style="font-size:11px;color:#555;margin-bottom:8px">
     ※これは実際に口座に入金された実績です。案件の発生売上とは異なります。
   </div>`;
@@ -6115,6 +6202,12 @@ function generateReport(){
     </tr></tbody>
   </table></div>`;
 
+  const invoiceCards=invoices.length===0?'':invoices.map(q=>rpCard(
+    `<div style="color:#555">${q.id}</div><div style="font-weight:600">${q.client||'-'}</div>`
+    +`<div>${q.subject}</div>`
+    +`<div style="font-size:15px;font-weight:700;margin-top:4px">${fmt(q.amount)}（税込）</div>`
+  )).join('')+rpTotalLine(`発行済み合計（${invoices.length}件）`,fmt(invoiceTotal));
+
   document.getElementById('report-body').innerHTML=`
   <div class="report-head">
     <div style="font-size:15px;font-weight:bold">${c.name||''}</div>
@@ -6122,12 +6215,12 @@ function generateReport(){
     <div style="font-size:12px;color:#555">生成日：${jpDate(today())}</div>
   </div>
   ${repSection('【0】期間累計サマリー（期初〜'+(mi+1)+'月）',fiscalSummary)}
-  ${repSection('【1】サマリー（損益計算書形式）',summary)}
-  ${repSection('【2】案件別売上明細',projectTable)}
-  ${repSection('【3】入金実績（収支入力分）',salesNote+salesTable)}
-  ${repSection('【4】経費明細（勘定科目別）',expenseTable)}
-  ${repSection('【5】税金・公課明細（勘定科目別）',taxTable)}
-  ${repSection('【6】請求書発行状況',invoiceTable)}`;
+  ${repSection('【1】サマリー（損益計算書形式）',rpBoth(summary,summaryCards))}
+  ${repSection('【2】案件別売上明細',rpBoth(projectTable,rpProjectCards(projects,p=>projectSalesAmount(p,mi),projectTotal)))}
+  ${repSection('【3】入金実績（収支入力分）',salesNote+rpBoth(salesTable,salesCards))}
+  ${repSection('【4】経費明細（勘定科目別）',rpBoth(expenseTable,accountCards(byAccount,accountKeys,exp,'経費合計')))}
+  ${repSection('【5】税金・公課明細（勘定科目別）',rpBoth(taxTable,accountCards(byTax,taxKeys,tax,'税金・公課 合計')))}
+  ${repSection('【6】請求書発行状況',rpBoth(invoiceTable,invoiceCards))}`;
 }
 
 function printReport(){
