@@ -5254,10 +5254,10 @@ function buildMonthlyPL(mi){
 
   const projects=S.projects.filter(p=>
     (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,mi));
-  const projectSales=projects.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
+  const projectSales=projects.reduce((a,p)=>a+projectSalesAmount(p,mi),0);
   const t=sumLedger(mi);
   const otherSales=t.sales;
-  const salesTotal=projectSales+otherSales;
+  const salesTotal=projectSales;   // 売上高は案件ベースのみ
 
   // 販売管理費（役員報酬・税金公課も含めた支出すべて）
   const accounts=LEDGER_TYPES.filter(x=>x!=='売上');
@@ -5294,10 +5294,9 @@ function buildMonthlyPL(mi){
   rows.push([plCell('科目',{bold:true}),plCell('金額',{bold:true,right:true}),plCell('備考',{bold:true})]);
   projects.forEach(p=>rows.push(plRow(
     ((p.client||'')+' '+p.name).trim(),
-    projectMonthAmount(p,mi),
+    projectSalesAmount(p,mi),
     (kinds[p.contract]||p.contract)+'／'+p.status)));
-  rows.push(plRow('その他・新規受注分',otherSales,'収支入力の「売上」区分'));
-  rows.push(plRow('売上高合計',salesTotal,'',{total:true}));
+  rows.push(plRow('売上高合計',salesTotal,'案件ベース（発生ベース）',{total:true}));
   rows.push(['','','']);
 
   rows.push([plCell('【販売管理費】',{head:true}),plCell('',{head:true}),plCell('',{head:true})]);
@@ -5312,6 +5311,10 @@ function buildMonthlyPL(mi){
   rows.push([plCell('営業利益率',{total:true}),
     plCell(margin===null?'-':margin.toFixed(1)+'%',{total:true,right:true,color:profit>=0?PL_GREEN:PL_RED}),
     plCell('',{total:true})]);
+  rows.push(['','','']);
+
+  rows.push([plCell('【参考】入金実績',{head:true}),plCell('',{head:true}),plCell('',{head:true})]);
+  rows.push(plRow('収支入力の「売上」区分',otherSales,'実際に口座に入金された分'));
   rows.push(['','','']);
 
   rows.push([plCell('【参考】期初からの累計',{head:true}),plCell('',{head:true}),plCell('',{head:true})]);
@@ -5360,6 +5363,12 @@ function expectedPayDatesOfMonth(mi){
     .map(b=>b.expectedPayDate);
   const uniq=dates.filter((d,i)=>dates.indexOf(d)===i).sort();
   return uniq.length?uniq.join('<br>'):'<span style="color:var(--text-muted)">-</span>';
+}
+
+// その月の案件売上（請求レコードがあればその金額を使う）
+function projectSalesAmount(p,mi){
+  const b=findBilling(p.id,billingYm(mi));
+  return b?(parseInt(b.amount)||0):projectMonthAmount(p,mi);
 }
 
 // その月の請求レコードの状況を短くまとめる
@@ -5937,11 +5946,18 @@ function generateReport(){
   const kinds={single:'単発',monthly:'月次継続',annual:'年次継続'};
   const projects=S.projects.filter(p=>
     (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,mi));
-  const projectTotal=projects.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
+  const projectTotal=projects.reduce((a,p)=>a+projectSalesAmount(p,mi),0);
+  // 売上高は案件ベース（発生ベース）のみ。収支の売上入力は入金実績として別に見る。
   const projectSales=projectTotal;
   const t=sumLedger(mi);
   const ledgerSales=t.sales;
-  const sales=projectSales+ledgerSales;
+  const sales=projectSales;
+  // 請求済（入金済を含む）と未請求の内訳
+  const ymRep=billingYm(mi);
+  const billedRows=projects.map(p=>({p,b:findBilling(p.id,ymRep)}));
+  const salesBilled=billedRows.filter(x=>x.b&&x.b.invoiceStatus!=='uninvoiced')
+    .reduce((a,x)=>a+projectSalesAmount(x.p,mi),0);
+  const salesUnbilled=sales-salesBilled;
   const exp=t.expense, lab=t.labor, tax=t.tax;
   const profit=sales-exp-lab;
   const margin=sales>0?Math.round(profit/sales*100):0;
@@ -5963,9 +5979,10 @@ function generateReport(){
 
   /* --- 1. サマリー --- */
   const summary=`<table style="width:100%;border-collapse:collapse;font-size:13px">
-    ${repRow('売上高（案件ベース）',repYen(projectSales))}
-    ${repRow('売上高（収支入力分）',repYen(ledgerSales))}
-    ${repRow('売上高 合計',repYen(sales),{bold:true,bg:'#f5f5f5'})}
+    ${repRow('売上高（案件ベース）',repYen(sales),{bold:true,bg:'#f5f5f5'})}
+    ${repRow('　うち請求済（入金済を含む）',repYen(salesBilled))}
+    ${repRow('　うち未請求',repYen(salesUnbilled))}
+    ${repRow('入金実績（CF・収支入力分）',repYen(ledgerSales))}
     ${repRow('経費合計',repYen(exp))}
     ${repRow('役員報酬',repYen(lab))}
     ${repRow('営業利益',repYen(profit),{bold:true,bg:'#f5f5f5'})}
@@ -6006,7 +6023,7 @@ function generateReport(){
     <tbody>${projects.map(p=>`<tr>
       <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${p.client||'-'}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${p.name}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${fmt(projectMonthAmount(p,mi))}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${fmt(projectSalesAmount(p,mi))}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${kinds[p.contract]||p.contract}</td>
     </tr>`).join('')}
     <tr style="background:#f5f5f5;font-weight:bold">
@@ -6037,6 +6054,10 @@ function generateReport(){
       <td style="padding:9px 12px;text-align:right">${fmt(ledgerSales)}</td>
     </tr></tbody>
   </table></div>`;
+
+  const salesNote=`<div style="font-size:11px;color:#555;margin-bottom:8px">
+    ※これは実際に口座に入金された実績です。案件の発生売上とは異なります。
+  </div>`;
 
   /* --- 4. 経費明細（勘定科目別） --- */
   const byAccount={};
@@ -6103,7 +6124,7 @@ function generateReport(){
   ${repSection('【0】期間累計サマリー（期初〜'+(mi+1)+'月）',fiscalSummary)}
   ${repSection('【1】サマリー（損益計算書形式）',summary)}
   ${repSection('【2】案件別売上明細',projectTable)}
-  ${repSection('【3】収支入力明細（売上区分のみ）',salesTable)}
+  ${repSection('【3】入金実績（収支入力分）',salesNote+salesTable)}
   ${repSection('【4】経費明細（勘定科目別）',expenseTable)}
   ${repSection('【5】税金・公課明細（勘定科目別）',taxTable)}
   ${repSection('【6】請求書発行状況',invoiceTable)}`;

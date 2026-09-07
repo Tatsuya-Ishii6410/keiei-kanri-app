@@ -284,3 +284,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - レポートページのモバイル対応では、予実の表に
   .fc-month-table / .fc-project-table を付けて列の出し分けをしている
   印刷時は @media print で display:table-cell に戻す
+- ★ 月次レポートと月次PLの「売上高」は案件ベース（発生ベース）のみ。
+  金額は monthlyBilling があればその値を使う（projectSalesAmount）。
+  収支入力の売上は「入金実績」として別枠に出す（合計には入れない）
+  ※ ダッシュボードの売上は案件＋収支入力の合算のままなので数字が異なる
