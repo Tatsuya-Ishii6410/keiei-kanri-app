@@ -71,6 +71,22 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 使用モデル：claude-sonnet-4-6（PDFは type:'document'、画像は type:'image'）
 - GASのaction：driveList / driveExtract / driveProcessed
 
+## 案件予実（レポート）
+- レポートページの「📋 案件予実」タブ。期を選ぶと月別予実・案件別明細・商談中を表示する
+- ★ 集計はすべて絶対月（年*12＋月）で行う。fiscalAbsMonths() が期の絶対月を返し、
+  projectSalesAtAbs() / ledgerSalesAbs() / billingSummaryOfAbs() / expectedPayDatesOfAbs()
+  がそれを受け取る。月インデックス（0=1月）だけで集計すると、
+  選択した期と違う年の請求レコードやledgerまで拾うため使わないこと
+- 金額は monthlyBillings が正。レコードが無い月だけ案件の月額（projectDefaultMonthly）を使う
+- ★ 「合計」も各サマリーカードも案件ベース（発生ベース）のみ。
+  「収支売上入力」列は入金実績なので合計に混ぜない（売上の基準2系統の原則）
+- サマリーの受注済み合計と、案件別明細の合計は必ず一致する（同じ projectSalesAtAbs を使う）
+- タブを開くと initForecastPage() が syncMonthlyBillings() を実行するので、
+  案件ページを開かなくても請求レコードが揃う
+- 期が未登録なら FORECAST_DEFAULT_FY（2026-03〜2027-02）で表示する。
+  案件が0件なら「案件がありません」。生成失敗は console.error＋画面にエラー表示
+- スマホは rpBoth（rp-table / rp-cards）で表とカードを出し分ける
+
 ## 融資力診断
 - レポートページの「💰 融資力診断」タブ。5項目×20点＝100点で採点
   （売上の継続性／現預金水準／収益性／借入状況／事業計画の精度）

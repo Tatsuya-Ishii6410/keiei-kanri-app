@@ -5438,11 +5438,68 @@ async function downloadMonthlyPL(){
 /* ===== 案件予実レポート =============================================
    期の各月について、案件から見込まれる売上と収支に入力済みの売上を並べ、
    当月までを実績、翌月以降を予定として表示する。
+
+   ★ 集計はすべて絶対月（年*12＋月）で行う。月インデックス（0=1月）だけで
+     集計すると、選択した期と違う年の請求レコードまで拾ってしまうため。
+   ★ 金額は月次請求レコード（monthlyBillings）が正。レコードが無い月だけ
+     案件の月額を既定値として使う（syncMonthlyBillings と同じ考え方）。
+   ★ 合計は案件ベース（発生ベース）のみ。収支入力の売上は入金実績として
+     参考列に出すだけで、合計には混ぜない。
    =================================================================== */
 
+// 期が1件も登録されていないときに使う既定の期
+const FORECAST_DEFAULT_FY={
+  id:0,name:'2026年度（既定）',startMonth:'2026-03',endMonth:'2027-02',
+  salesTarget:0,profitTarget:0,active:true
+};
+
+// 期に含まれる絶対月（年*12＋月）を、期の並び順で返す
+function fiscalAbsMonths(fy){
+  const s=ymToAbs(fy&&fy.startMonth),e=ymToAbs(fy&&fy.endMonth);
+  const out=[];
+  if(s===null||e===null||e<s){
+    // 期の設定が壊れているときは今年の1〜12月で代用する
+    const base=new Date().getFullYear()*12;
+    for(let i=0;i<12;i++)out.push(base+i);
+    return out;
+  }
+  for(let a=s;a<=Math.min(e,s+23);a++)out.push(a);
+  return out;
+}
+
+// その絶対月に、その案件が売上を生むか
+function projectCoversAbs(p,abs){
+  const r=projectMonthRange(p);
+  return !!r&&abs>=r[0]&&abs<=r[1];
+}
+
+// その絶対月の案件売上（請求レコードがあればその金額、無ければ案件の月額）
+function projectSalesAtAbs(p,abs){
+  if(!projectCoversAbs(p,abs))return 0;
+  return billingAmountAt(p,abs,projectDefaultMonthly(p));
+}
+
+// 受注済み（契約済・進行中・完了）の案件
+function forecastBookedProjects(){
+  return S.projects.filter(billableProject);
+}
+
+// その絶対月の収支入力の売上（実績のみ・年まで見る）
+function ledgerSalesAbs(abs){
+  let t=0;
+  S.ledger.forEach(l=>{
+    if(!isActual(l)||!l.date)return;
+    if(ledgerGroup(l.type)!=='sales')return;
+    const d=new Date(l.date);
+    if(isNaN(d.getTime()))return;
+    if(d.getFullYear()*12+d.getMonth()===abs)t+=l.amount||0;
+  });
+  return t;
+}
+
 // その月の入金予定日をまとめる（複数あれば並べる）
-function expectedPayDatesOfMonth(mi){
-  const ym=monthYear(mi)+'-'+String(mi+1).padStart(2,'0');
+function expectedPayDatesOfAbs(abs){
+  const ym=absToYm(abs);
   const dates=billingList()
     .filter(b=>b.billingMonth===ym&&b.expectedPayDate)
     .map(b=>b.expectedPayDate);
@@ -5457,8 +5514,8 @@ function projectSalesAmount(p,mi){
 }
 
 // その月の請求レコードの状況を短くまとめる
-function billingSummaryOfMonth(fy,mi){
-  const ym=monthYear(mi)+'-'+String(mi+1).padStart(2,'0');
+function billingSummaryOfAbs(abs){
+  const ym=absToYm(abs);
   const rows=billingList().filter(b=>b.billingMonth===ym);
   if(rows.length===0)return'<span style="color:var(--text-muted)">-</span>';
   const n=st=>rows.filter(b=>b.invoiceStatus===st).length;
@@ -5470,48 +5527,54 @@ function billingSummaryOfMonth(fy,mi){
   return parts.join(' / ')+`（計${rows.length}）`;
 }
 
-// 予実レポートで選択中の期
+// 予実レポートで選択中の期。期が1件も無ければ既定の期を使う。
 function forecastFiscalYear(){
   const el=document.getElementById('forecast-fiscal');
-  if(el&&el.value)return fiscalById(parseInt(el.value))||activeFiscalYear();
-  return activeFiscalYear();
+  if(el&&el.value){
+    const f=fiscalById(parseInt(el.value));
+    if(f)return f;
+  }
+  return activeFiscalYear()||FORECAST_DEFAULT_FY;
 }
 
 // 期の各月の状態を作る。実績/当月/予定の判定は暦の月ではなく絶対月で行う。
 function forecastRows(fy){
-  const months=fiscalMonths(fy);
-  const startAbs=ymToAbs(fy.startMonth);
+  const booked=forecastBookedProjects();
   const now=new Date();
   const nowAbs=now.getFullYear()*12+now.getMonth();
-  const rows=[];
-  months.forEach((m,i)=>{
-    const abs=startAbs===null?nowAbs:startAbs+i;
+  return fiscalAbsMonths(fy).map(abs=>{
     const state=abs<nowAbs?'past':abs===nowAbs?'now':'future';
-    const projectSales=calcProjectSalesByMonth(m);
-    const ledgerSales=state==='future'?null:sumLedger(m).sales;
-    rows.push({
-      index:m,label:(m+1)+'月',state,
-      projectSales,ledgerSales,
-      total:projectSales+(ledgerSales||0)
-    });
+    const projectSales=booked.reduce((a,p)=>a+projectSalesAtAbs(p,abs),0);
+    return{
+      abs,
+      label:(abs%12+1)+'月',
+      year:Math.floor(abs/12),
+      state,
+      projectSales,
+      // 収支入力の売上は入金実績。予定月には存在しないので null
+      ledgerSales:state==='future'?null:ledgerSalesAbs(abs),
+      // ★ 合計は案件ベースのみ（収支入力は混ぜない）
+      total:projectSales
+    };
   });
-  return rows;
 }
 
-// その案件が期の中で売上を生む月（期の並び順）
-function projectMonthsInFiscal(p,fy){
-  return fiscalMonths(fy).filter(m=>projectHasMonth(p,m));
+// その案件が期の中で売上を生む絶対月
+function projectAbsMonthsInFiscal(p,fy){
+  return fiscalAbsMonths(fy).filter(abs=>projectCoversAbs(p,abs));
 }
 
 function forecastPeriodLabel(p,fy){
-  const ms=projectMonthsInFiscal(p,fy);
+  const ms=projectAbsMonthsInFiscal(p,fy);
   if(ms.length===0)return'-';
-  if(ms.length===1)return(ms[0]+1)+'月';
-  return`${ms[0]+1}月〜${ms[ms.length-1]+1}月（${ms.length}ヶ月）`;
+  const nm=a=>(a%12+1)+'月';
+  if(ms.length===1)return nm(ms[0]);
+  return`${nm(ms[0])}〜${nm(ms[ms.length-1])}（${ms.length}ヶ月）`;
 }
 
+// 期間合計。請求レコードがあればその金額、無ければ案件の月額×月数。
 function forecastProjectTotal(p,fy){
-  return projectMonthsInFiscal(p,fy).reduce((a,m)=>a+projectMonthAmount(p,m),0);
+  return projectAbsMonthsInFiscal(p,fy).reduce((a,abs)=>a+projectSalesAtAbs(p,abs),0);
 }
 
 // 月額の表示（単発は「-」）
@@ -5522,28 +5585,58 @@ function forecastMonthlyAmount(p){
 }
 
 function initForecastPage(){
+  // 案件ページを開かなくても請求レコードが揃うように、ここでも生成しておく
+  try{
+    syncMonthlyBillings();
+  }catch(e){
+    console.error('案件予実: 月次請求レコードの生成に失敗しました',e);
+  }
   const sel=document.getElementById('forecast-fiscal');
+  if(!sel)return;
   const list=fiscalList();
-  const keep=sel.value;
-  sel.innerHTML=list.map(f=>`<option value="${f.id}">${f.name}</option>`).join('');
-  const act=activeFiscalYear();
-  sel.value=list.some(f=>String(f.id)===keep)?keep:(act?String(act.id):'');
+  if(list.length===0){
+    const d=FORECAST_DEFAULT_FY;
+    sel.innerHTML=`<option value="${d.id}">${d.name}</option>`;
+    sel.value=String(d.id);
+  }else{
+    const keep=sel.value;
+    sel.innerHTML=list.map(f=>`<option value="${f.id}">${f.name}</option>`).join('');
+    const act=activeFiscalYear();
+    sel.value=list.some(f=>String(f.id)===keep)?keep:(act?String(act.id):String(list[0].id));
+  }
   generateForecast();
 }
 
 function generateForecast(){
-  const fy=forecastFiscalYear();
   const body=document.getElementById('forecast-body');
-  if(!fy){
-    body.innerHTML='<div class="empty-state">期が登録されていません。設定ページの「期の管理」から追加してください。</div>';
-    return;
+  if(!body)return;
+  try{
+    body.innerHTML=buildForecastHtml(forecastFiscalYear());
+  }catch(e){
+    console.error('案件予実レポートの生成に失敗しました',e);
+    body.innerHTML=`<div class="alert alert-error">❌ 案件予実レポートを生成できませんでした<br>
+      <small>${e&&e.message?e.message:e}</small></div>`;
   }
+}
+
+function buildForecastHtml(fy){
   const rows=forecastRows(fy);
   const kinds={single:'単発',monthly:'月次',annual:'年次'};
 
-  /* --- サマリー --- */
+  const head=`
+  <div class="report-head">
+    <div style="font-size:15px;font-weight:bold">${S.company.name||''}</div>
+    <div style="font-size:20px;font-weight:bold;margin:6px 0">${fy.name} 案件予実レポート</div>
+    <div style="font-size:12px;color:#555">${fiscalLabel(fy)}　生成日：${jpDate(today())}</div>
+  </div>`;
+
+  if(!Array.isArray(S.projects)||S.projects.length===0){
+    return head+'<div class="report-card"><div class="empty-state">案件がありません。案件ページから登録してください。</div></div>';
+  }
+
+  /* --- サマリー（すべて案件ベース＝発生ベース） --- */
   const booked=rows.reduce((a,r)=>a+r.projectSales,0);
-  const done=rows.filter(r=>r.state!=='future').reduce((a,r)=>a+r.total,0);
+  const done=rows.filter(r=>r.state!=='future').reduce((a,r)=>a+r.projectSales,0);
   const planned=rows.filter(r=>r.state==='future').reduce((a,r)=>a+r.projectSales,0);
   const rate=pct(booked,fy.salesTarget);
 
@@ -5552,41 +5645,44 @@ function generateForecast(){
   const badge=st=>st==='now'?'<span class="badge badge-blue">✅ 実績（当月）</span>'
     :st==='future'?'<span class="badge badge-gray">📅 予定</span>'
     :'<span class="badge badge-green">✅ 実績</span>';
+  // 期が年をまたぐので、月名の横に小さく年を添える
+  const monthLabel=r=>`${r.label}<span style="font-size:10px;color:var(--text-muted);margin-left:4px">${r.year}</span>`;
   let prev=null;
-  const monthRows=rows.map(r=>{
+  const momOf=r=>{
     let mom='-';
-    if(r.state!=='future'&&prev!==null&&prev>0){
+    if(prev!==null&&prev>0){
       const d=Math.round((r.total-prev)/prev*1000)/10;
       mom=`<span style="color:${d>=0?'#1D9E75':'#E24B4A'}">${d>=0?'+':''}${d}%</span>`;
     }
-    if(r.state!=='future')prev=r.total;
-    return`<tr style="${cellBg(r.state)}">
-      <td style="font-weight:500;white-space:nowrap">${r.label}</td>
-      <td style="text-align:right">${fmt(r.projectSales)}</td>
-      <td style="text-align:right">${r.ledgerSales===null?'-':fmt(r.ledgerSales)}</td>
+    prev=r.total;
+    return mom;
+  };
+  const monthRows=rows.map(r=>`<tr style="${cellBg(r.state)}">
+      <td style="font-weight:500;white-space:nowrap">${monthLabel(r)}</td>
+      <td style="text-align:right;font-weight:600">${fmt(r.projectSales)}</td>
+      <td style="text-align:right;color:var(--text-secondary)">${r.ledgerSales===null?'-':fmt(r.ledgerSales)}</td>
       <td style="text-align:right;font-weight:600">${fmt(r.total)}</td>
-      <td style="text-align:right">${mom}</td>
+      <td style="text-align:right">${momOf(r)}</td>
       <td>${badge(r.state)}</td>
-      <td style="font-size:11px">${billingSummaryOfMonth(fy,r.index)}</td>
-      <td style="font-size:11px;white-space:nowrap">${expectedPayDatesOfMonth(r.index)}</td>
-    </tr>`;
-  }).join('');
+      <td style="font-size:11px">${billingSummaryOfAbs(r.abs)}</td>
+      <td style="font-size:11px;white-space:nowrap">${expectedPayDatesOfAbs(r.abs)}</td>
+    </tr>`).join('');
   // スマホ用：月ごとのカード
   const monthCards=rows.map(r=>rpCard(
     `<div style="display:flex;justify-content:space-between;align-items:center">
-      <span style="font-weight:700;font-size:13px">${r.label}</span>${badge(r.state)}</div>`
+      <span style="font-weight:700;font-size:13px">${monthLabel(r)}</span>${badge(r.state)}</div>`
     +`<div style="display:flex;justify-content:space-between"><span>案件売上</span><span>${fmt(r.projectSales)}</span></div>`
-    +`<div style="display:flex;justify-content:space-between"><span>収支入力</span><span>${r.ledgerSales===null?'-':fmt(r.ledgerSales)}</span></div>`
+    +`<div style="display:flex;justify-content:space-between;color:#666"><span>収支入力（入金）</span><span>${r.ledgerSales===null?'-':fmt(r.ledgerSales)}</span></div>`
     +`<div style="display:flex;justify-content:space-between;font-weight:700"><span>合計</span><span>${fmt(r.total)}</span></div>`
+    +`<div style="color:#666">請求状況：${billingSummaryOfAbs(r.abs)}</div>`
   )).join('');
   const sumProject=rows.reduce((a,r)=>a+r.projectSales,0);
   const sumLedgerCol=rows.reduce((a,r)=>a+(r.ledgerSales||0),0);
-  const sumTotal=rows.reduce((a,r)=>a+r.total,0);
 
   /* --- 案件別明細 --- */
-  const inFiscal=p=>projectMonthsInFiscal(p,fy).length>0;
-  const booked_=S.projects.filter(p=>
-    (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&inFiscal(p));
+  const inFiscal=p=>projectAbsMonthsInFiscal(p,fy).length>0;
+  const bookedList=forecastBookedProjects().filter(inFiscal);
+  const bookedTotal=bookedList.reduce((a,p)=>a+forecastProjectTotal(p,fy),0);
   const pipeline=S.projects.filter(p=>p.status==='商談中'&&inFiscal(p));
   const pipelineTotal=pipeline.reduce((a,p)=>a+forecastProjectTotal(p,fy),0);
 
@@ -5607,13 +5703,7 @@ function generateForecast(){
     <th>期間</th><th style="text-align:right">期間合計</th><th>状態</th><th>入金</th>
   </tr></thead>`;
 
-  body.innerHTML=`
-  <div class="report-head">
-    <div style="font-size:15px;font-weight:bold">${S.company.name||''}</div>
-    <div style="font-size:20px;font-weight:bold;margin:6px 0">${fy.name} 案件予実レポート</div>
-    <div style="font-size:12px;color:#555">${fiscalLabel(fy)}　生成日：${jpDate(today())}</div>
-  </div>
-
+  return head+`
   <div class="report-card">
     <div class="report-card-title">サマリー</div>
     <div class="metric-grid">
@@ -5622,15 +5712,15 @@ function generateForecast(){
         <div class="metric-sub">契約済・進行中・完了の期間合計</div></div>
       <div class="metric-card"><div class="metric-label">今月までの実績</div>
         <div class="metric-value" style="font-size:20px">${fmt(done)}</div>
-        <div class="metric-sub">案件＋収支入力</div></div>
+        <div class="metric-sub">期初〜当月の案件売上</div></div>
       <div class="metric-card"><div class="metric-label">翌月以降の予定</div>
         <div class="metric-value" style="font-size:20px">${fmt(planned)}</div>
-        <div class="metric-sub">案件ベース</div></div>
+        <div class="metric-sub">翌月〜期末の案件売上</div></div>
       <div class="metric-card"><div class="metric-label">達成率</div>
         <div class="metric-value" style="font-size:20px;color:${rate===null?'':rate>=100?'#1D9E75':rate>=70?'#EF9F27':'#E24B4A'}">${rateText(rate)}</div>
         <div class="metric-sub">売上目標 ${fmt(fy.salesTarget)}</div></div>
     </div>
-    ${rate===null?'':progressBar(rate)}
+    ${rate===null?'<div style="font-size:11px;color:var(--text-muted);margin-top:8px">※ 売上目標が未設定です（設定ページの「期の管理」から入力できます）</div>':progressBar(rate)}
   </div>
 
   <div class="report-card">
@@ -5645,24 +5735,27 @@ function generateForecast(){
           <td>期の合計</td>
           <td style="text-align:right">${fmt(sumProject)}</td>
           <td style="text-align:right">${fmt(sumLedgerCol)}</td>
-          <td style="text-align:right">${fmt(sumTotal)}</td>
+          <td style="text-align:right">${fmt(sumProject)}</td>
           <td colspan="4"></td>
         </tr>
       </tbody>
-    </table></div>`,monthCards)}
+    </table></div>`,monthCards+rpTotalLine('期の合計（案件ベース）',fmt(sumProject)))}
+    <div style="font-size:11px;color:var(--text-muted);margin-top:8px">
+      ※ 合計は案件ベース（発生ベース）のみ。「収支売上入力」は実際の入金なので合計には含めません。
+    </div>
   </div>
 
   <div class="report-card">
     <div class="report-card-title">案件別明細（契約済・進行中・完了）</div>
-    ${booked_.length===0?'<div class="empty-state">この期に売上が発生する案件はありません。</div>':
+    ${bookedList.length===0?'<div class="empty-state">この期に売上が発生する案件はありません。</div>':
     rpBoth(`<div class="table-wrap"><table class="${projectTableClass}">${projectHead}<tbody>
-      ${booked_.map(projectRow).join('')}
+      ${bookedList.map(projectRow).join('')}
       <tr style="font-weight:bold;background:var(--bg-secondary)">
-        <td colspan="5">合計（${booked_.length}件）</td>
-        <td style="text-align:right">${fmt(booked_.reduce((a,p)=>a+forecastProjectTotal(p,fy),0))}</td>
+        <td colspan="5">合計（${bookedList.length}件）</td>
+        <td style="text-align:right">${fmt(bookedTotal)}</td>
         <td colspan="2"></td>
       </tr>
-    </tbody></table></div>`,rpProjectCards(booked_,p=>forecastProjectTotal(p,fy),booked_.reduce((a,p)=>a+forecastProjectTotal(p,fy),0)))}
+    </tbody></table></div>`,rpProjectCards(bookedList,p=>forecastProjectTotal(p,fy),bookedTotal))}
   </div>
 
   <div class="report-card">
