@@ -51,6 +51,32 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   （契約済・進行中・完了）で集計する。明細の合計と必ず一致させること
   ※ ダッシュボードの売上（calcProjectSalesByMonth）も同じ範囲なので、両者の数字は一致する
 - 印刷は @media print で topbar・操作ボタンを隠し、レポート本体のみА4に出力する
+  （詳しくは「印刷・PDF出力」の節を見ること）
+
+## 印刷・PDF出力（レポート3タブ共通）
+- @page は A4縦・余白 15mm/14mm/15mm。CSSは keiei-kanri.html の
+  「===== 印刷・PDF出力 =====」ブロックに集約する
+- セクションは repSection() が付ける .rp-section（＝.report-card）が単位。
+  break-inside:avoid でカードの途中では改ページしない
+- ★ 行数が RP_LONG_ROWS(14) を超える表には repSection() が .rp-long を付け、
+  そのセクションだけ分割を許す。長い表をまるごと次ページに送ると
+  前のページが大きく空くため。分割されても
+  thead{display:table-header-group} で見出し行が毎ページ出て、
+  tr{break-inside:avoid} で行は割れない
+  ※ 14なのは案件予実の月別予実（12ヶ月＋合計＝13行）を割らせないため
+- 案件予実は8列あってA4の幅に窮屈なので、印刷時だけ 9px＋詰めたpadding にし、
+  金額・日付・月は white-space:nowrap で折り返させない
+- .print-header（#print-header）に会社名・レポート名・対象月・作成日を出す。
+  中身は setPrintHeader() が入れる（generateReport / buildForecastHtml /
+  generateLoanReport から呼ぶ）
+- ★ 「毎ページの上部」にヘッダーを出すのはブラウザの印刷では実現できない。
+  試して駄目だった方法（実機のPDFで確認済み）：
+  ・@page の margin-box（@top-center{content:…}）… 各ブラウザ未対応
+  ・position:fixed … Chromeの印刷でページ下端に回り込む
+  ・display:table-header-group … 1ページ目にしか出ない
+  毎ページ入れたいときは Chrome の印刷画面の「ヘッダーとフッター」を使う
+- ★ 印刷CSSを変えたら必ず実際のPDFで確認すること。指定どおりに効かない
+  書き方が多く、画面のプレビューだけでは分からない
 
 ## 固定費（収支管理）
 - 収支管理の「🔁 固定費管理」で登録。fixedCosts に {id,type,desc,amount,startMonth,endMonth,enabled}

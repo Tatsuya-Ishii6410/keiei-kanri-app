@@ -297,18 +297,85 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .report-head{text-align:center;border-bottom:2px solid #1a2e4a;padding-bottom:14px;margin-bottom:20px;color:#111}
 .report-card{border:1px solid #e0e0e0;border-radius:8px;padding:16px 18px;margin-bottom:16px;background:#fff}
 .report-card-title{font-size:13px;font-weight:bold;color:#1a2e4a;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #e0e0e0}
+/* ===== 印刷・PDF出力 =================================================
+   A4縦。セクション（.rp-section＝.report-card）単位で改ページし、
+   表は行の途中で切らない。出力の先頭に会社名・レポート名・対象月・
+   作成日の1行（.print-header）を出す。
+   ※ 変更したら Chrome の印刷プレビューで必ず確認すること。
+     指定どおりに効かない書き方が多く、実際のPDFを見ないと分からない。
+   =================================================================== */
+@page{size:A4 portrait;margin:15mm 14mm 15mm}
+
+/* 画面では出さない。印刷時だけ表示する（中身は setPrintHeader() が入れる） */
+.print-header{display:none}
+
 @media print{
-  body{background:#fff}
-  .topbar,.sidebar,.sidebar-backdrop,.report-actions,.section-header,.tab-group,.no-print{display:none!important}
-  .main{margin-left:0}
-  .app,.content{max-width:none;margin:0;padding:0;background:#fff}
+  body{background:#fff;font-size:11px}
+
+  /* --- 画面用のUIはすべて隠す --- */
+  .topbar,.sidebar,.sidebar-backdrop,.report-actions,.section-header,
+  .tab-group,.no-print,.btn,.mob-cards,.rp-cards{display:none!important}
+  .main{margin-left:0!important}
+  .app,.main,.content{max-width:none!important;margin:0!important;padding:0!important;
+    width:100%!important;background:#fff}
   .page{display:none!important}
-  #page-report{display:block!important}
-  .report-sheet{border:none;border-radius:0;padding:0}
-  .report-card{break-inside:avoid;page-break-inside:avoid}
-  .report-card table{font-size:10px}
-  .table-wrap{overflow:visible}
-  @page{size:A4 portrait;margin:14mm}
+  #page-report{display:block!important;margin:0!important;padding:0!important}
+  .report-sheet{border:none;border-radius:0;padding:0;box-shadow:none}
+
+  /* --- 出力の先頭に出る見出し ---
+     ※ 「毎ページの上部」に出す方法は、ブラウザの印刷では実現できない。
+        @page の margin-box（@top-center{content:…}）は各ブラウザ未対応で、
+        position:fixed は Chrome の印刷でページ下端に回り込み、
+        display:table-header-group も1ページ目にしか出なかった（実機PDFで確認）。
+        毎ページに入れたい場合は、Chromeの印刷画面の
+        「ヘッダーとフッター」をオンにすると日付とページ番号が入る。 */
+  .print-header{display:block!important;font-size:9px;color:#444}
+  .print-header .ph-row{
+    display:flex;justify-content:space-between;align-items:flex-end;gap:12px;
+    padding-bottom:1.5mm;margin-bottom:3mm;border-bottom:0.5px solid #bbb;
+  }
+  .print-header .ph-sub{white-space:nowrap;color:#666}
+
+  /* --- 改ページ制御 --- */
+  /* セクション（カード）は途中で切らない */
+  .rp-section,.report-card,#loan-body .card{
+    break-inside:avoid;page-break-inside:avoid;
+    border:1px solid #ddd!important;box-shadow:none!important;background:#fff!important;
+    overflow:visible!important;margin-bottom:8px;padding:10px 12px;
+  }
+  /* 行数の多いセクションだけは分割を許す。
+     まるごと次ページに送ると前のページが大きく空いてしまうため。
+     行は割らず（tr の break-inside:avoid）、見出し行は毎ページ出る（thead）。 */
+  .rp-section.rp-long,.rp-section.rp-long table{break-inside:auto!important;page-break-inside:auto!important}
+  /* 見出しだけが前のページに取り残されないようにする */
+  h1,h2,h3,.section-title,.card-title,.report-card-title{
+    break-after:avoid;page-break-after:avoid;
+  }
+  /* 表は途中で切らない。やむを得ず分割されても見出し行を毎ページ出す */
+  .report-card table,#loan-body table{break-inside:avoid;page-break-inside:avoid;font-size:10px}
+  thead{display:table-header-group}
+  tfoot{display:table-footer-group}
+  tr,th,td{break-inside:avoid;page-break-inside:avoid}
+  .table-wrap{overflow:visible!important}
+  /* 案件予実は8列あってA4の幅に対して窮屈なので、さらに詰める。
+     金額・日付・月は折り返すと読みにくいので nowrap にする */
+  .fc-month-table,.fc-project-table{font-size:9px!important;table-layout:auto!important}
+  .fc-month-table th,.fc-month-table td,
+  .fc-project-table th,.fc-project-table td{padding:4px 5px!important}
+  .fc-month-table td{white-space:nowrap}
+  .fc-project-table td:nth-child(4),.fc-project-table td:nth-child(5),
+  .fc-project-table td:nth-child(6){white-space:nowrap}
+
+  /* --- 余白・間隔を詰める --- */
+  .report-head{margin-bottom:10px;padding-bottom:8px}
+  .report-card-title{margin-bottom:6px;padding-bottom:4px}
+  .metric-grid{gap:8px!important;margin-bottom:0!important}
+  .metric-card{padding:10px 12px!important}
+  .metric-value{font-size:18px!important}
+  .metric-label,.metric-sub{font-size:9px!important}
+
+  /* --- 背景色（ネイビーの見出し・合計行）を紙にも出す --- */
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 }
 /* ===== レスポンシブ（タブレット 768px / スマホ 480px） ===== */
 @media(max-width:768px){
@@ -856,6 +923,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="section-header">
     <h1 class="section-title">レポート</h1>
   </div>
+  <!-- 印刷時だけ出力の先頭に出る見出し（中身は setPrintHeader() が入れる） -->
+  <div class="print-header" id="print-header"></div>
   <div class="tab-group no-print">
     <button class="tab active" onclick="switchReportTab('monthly',this)">📊 月次レポート</button>
     <button class="tab" onclick="switchReportTab('loan',this)">💰 融資力診断</button>
@@ -5622,6 +5691,7 @@ function generateForecast(){
 function buildForecastHtml(fy){
   const rows=forecastRows(fy);
   const kinds={single:'単発',monthly:'月次',annual:'年次'};
+  setPrintHeader('案件予実レポート',`${fy.name}（${fiscalLabel(fy)}）`);
 
   const head=`
   <div class="report-head">
@@ -5631,7 +5701,7 @@ function buildForecastHtml(fy){
   </div>`;
 
   if(!Array.isArray(S.projects)||S.projects.length===0){
-    return head+'<div class="report-card"><div class="empty-state">案件がありません。案件ページから登録してください。</div></div>';
+    return head+'<div class="report-card rp-section"><div class="empty-state">案件がありません。案件ページから登録してください。</div></div>';
   }
 
   /* --- サマリー（すべて案件ベース＝発生ベース） --- */
@@ -5703,9 +5773,9 @@ function buildForecastHtml(fy){
     <th>期間</th><th style="text-align:right">期間合計</th><th>状態</th><th>入金</th>
   </tr></thead>`;
 
-  return head+`
-  <div class="report-card">
-    <div class="report-card-title">サマリー</div>
+  /* 各セクションは repSection() で組む。行数の多い表には rp-long が付き、
+     印刷のときだけページをまたいで分割されるようになる。 */
+  const summaryInner=`
     <div class="metric-grid">
       <div class="metric-card"><div class="metric-label">受注済み合計</div>
         <div class="metric-value blue" style="font-size:20px">${fmt(booked)}</div>
@@ -5720,11 +5790,9 @@ function buildForecastHtml(fy){
         <div class="metric-value" style="font-size:20px;color:${rate===null?'':rate>=100?'#1D9E75':rate>=70?'#EF9F27':'#E24B4A'}">${rateText(rate)}</div>
         <div class="metric-sub">売上目標 ${fmt(fy.salesTarget)}</div></div>
     </div>
-    ${rate===null?'<div style="font-size:11px;color:var(--text-muted);margin-top:8px">※ 売上目標が未設定です（設定ページの「期の管理」から入力できます）</div>':progressBar(rate)}
-  </div>
+    ${rate===null?'<div style="font-size:11px;color:var(--text-muted);margin-top:8px">※ 売上目標が未設定です（設定ページの「期の管理」から入力できます）</div>':progressBar(rate)}`;
 
-  <div class="report-card">
-    <div class="report-card-title">月別予実</div>
+  const monthInner=`
     ${rpBoth(`<div class="table-wrap"><table class="fc-month-table">
       <thead><tr>
         <th>月</th><th style="text-align:right">案件売上（実績/予定）</th><th style="text-align:right">収支売上入力</th>
@@ -5742,11 +5810,9 @@ function buildForecastHtml(fy){
     </table></div>`,monthCards+rpTotalLine('期の合計（案件ベース）',fmt(sumProject)))}
     <div style="font-size:11px;color:var(--text-muted);margin-top:8px">
       ※ 合計は案件ベース（発生ベース）のみ。「収支売上入力」は実際の入金なので合計には含めません。
-    </div>
-  </div>
+    </div>`;
 
-  <div class="report-card">
-    <div class="report-card-title">案件別明細（契約済・進行中・完了）</div>
+  const bookedInner=`
     ${bookedList.length===0?'<div class="empty-state">この期に売上が発生する案件はありません。</div>':
     rpBoth(`<div class="table-wrap"><table class="${projectTableClass}">${projectHead}<tbody>
       ${bookedList.map(projectRow).join('')}
@@ -5755,19 +5821,22 @@ function buildForecastHtml(fy){
         <td style="text-align:right">${fmt(bookedTotal)}</td>
         <td colspan="2"></td>
       </tr>
-    </tbody></table></div>`,rpProjectCards(bookedList,p=>forecastProjectTotal(p,fy),bookedTotal))}
-  </div>
+    </tbody></table></div>`,rpProjectCards(bookedList,p=>forecastProjectTotal(p,fy),bookedTotal))}`;
 
-  <div class="report-card">
-    <div class="report-card-title">📌 商談中（見込み）</div>
+  const pipelineInner=`
     ${pipeline.length===0?'<div class="empty-state">商談中の案件はありません。</div>':
     rpBoth(`<div class="table-wrap"><table class="${projectTableClass}">${projectHead}<tbody>
       ${pipeline.map(projectRow).join('')}
     </tbody></table></div>`,rpProjectCards(pipeline,p=>forecastProjectTotal(p,fy),pipelineTotal))+`
     <div style="text-align:right;font-size:14px;font-weight:600;margin-top:10px;color:var(--amber-text)">
       売上見込み: ${fmt(pipelineTotal)}
-    </div>`}
-  </div>`;
+    </div>`}`;
+
+  return head
+    +repSection('サマリー',summaryInner)
+    +repSection('月別予実',monthInner)
+    +repSection('案件別明細（契約済・進行中・完了）',bookedInner)
+    +repSection('📌 商談中（見込み）',pipelineInner);
 }
 
 function printForecast(){
@@ -5933,6 +6002,7 @@ function loanStat(label,value,sub,color){
 }
 
 function generateLoanReport(){
+  setPrintHeader('融資力診断',`${new Date().getFullYear()}年${new Date().getMonth()+1}月時点`);
   const m=loanMetrics();
   const items=loanScores(m);
   const total=items.reduce((a,it)=>a+it.score,0);
@@ -6101,11 +6171,31 @@ function repRow(label,value,opt){
   </tr>`;
 }
 
+/* 1ページに収まらないほど行が多い表の目安。
+   これを超えるセクションは印刷時に分割を許す（rp-long）。
+   まるごと次ページに送ると、前のページが大きく空いてしまうため。
+   ※ 14にしているのは、案件予実の月別予実（12ヶ月＋合計＝13行）を
+     分割させないため。この表はA4 1ページに収まることを確認済み。 */
+const RP_LONG_ROWS=14;
+
 function repSection(title,inner){
-  return`<div class="report-card">
+  const rows=(String(inner).match(/<tr/g)||[]).length;
+  const cls='report-card rp-section'+(rows>RP_LONG_ROWS?' rp-long':'');
+  return`<div class="${cls}">
     <div class="report-card-title">${title}</div>
     ${inner}
   </div>`;
+}
+
+/* 印刷時に毎ページ出る見出しを差し替える。
+   例）アスリンク株式会社　月次決算レポート　2026年9月　　作成日：2026年9月14日
+   レポートを生成したタイミングで呼ぶ。 */
+function setPrintHeader(title,period){
+  const el=document.getElementById('print-header');
+  if(!el)return;
+  const parts=[S.company.name||'',title,period].filter(Boolean);
+  el.innerHTML=`<div class="ph-row"><span>${parts.join('　')}</span>`
+    +`<span class="ph-sub">作成日：${jpDate(today())}</span></div>`;
 }
 
 /* ================= スマホ用のカード表示 =================
@@ -6559,6 +6649,7 @@ function generateReport(){
     +`<div style="font-size:15px;font-weight:700;margin-top:4px">${fmt(q.amount)}（税込）</div>`
   )).join('')+rpTotalLine(`発行済み合計（${invoices.length}件）`,fmt(invoiceTotal));
 
+  setPrintHeader('月次決算レポート',`${y}年${mi+1}月`);
   document.getElementById('report-body').innerHTML=`
   <div class="report-head">
     <div style="font-size:15px;font-weight:bold">${c.name||''}</div>
