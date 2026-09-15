@@ -53,6 +53,20 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 印刷は @media print で topbar・操作ボタンを隠し、レポート本体のみА4に出力する
   （詳しくは「印刷・PDF出力」の節を見ること）
 
+## 通年レポート
+- 月次レポートの月セレクトで「通年（期全体）」を選んで「レポートを生成」。既定は前月のまま
+- 対象の期は activeFiscalYear()（無ければ FORECAST_DEFAULT_FY）。月次レポート側に期セレクトは無い
+- ★ 集計は案件予実と同じく絶対月（fiscalAbsMonths / projectSalesAtAbs / ledgerSalesAbs）で行う
+- 当月まで＝実績（ledger の actual）、翌月以降＝予定（planned_out）。annualRows() が月ごとに作る
+- 売上はどの月も案件ベース（発生ベース）。【4】の入金実績（CFの売上区分）と合計には混ぜない
+- 【0】期間サマリーの「合計（売上）」と【2】案件別売上明細の合計は必ず一致する
+  （どちらも projectSalesAtAbs / forecastProjectTotal）
+- 【3】経費明細の「予定」は翌月以降の planned_out だけ。過去月の未変換の予定は実績と二重になるので数えない
+- 見出しの期名は fiscalTitle()。期の名前に「第○期」が入っていればそれを使い、無ければ名前をそのまま出す
+  （fiscalYears に期番号を持たせていないので、並び順から推測はしない）
+- 通年モードでは月次PL（Excel）ボタンを隠す（onReportMonthChange）。1ヶ月ぶんの帳票のため
+- 印刷は月次レポートと同じ @media print。8列の表には .ar-table を付けて印刷時だけ 9px に詰める
+
 ## 印刷・PDF出力（レポート3タブ共通）
 - @page は A4縦・余白 15mm/14mm/15mm。CSSは keiei-kanri.html の
   「===== 印刷・PDF出力 =====」ブロックに集約する

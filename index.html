@@ -340,6 +340,9 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   /* セクション（カード）は途中で切らない */
   .rp-section,.report-card,#loan-body .card{
     break-inside:avoid;page-break-inside:avoid;
+    /* 改ページは成り行き。セクションごとに必ず改ページすると
+       通年レポートのように小さいセクションが続くとき紙が無駄になる */
+    break-before:auto;page-break-before:auto;
     border:1px solid #ddd!important;box-shadow:none!important;background:#fff!important;
     overflow:visible!important;margin-bottom:8px;padding:10px 12px;
   }
@@ -359,10 +362,11 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   .table-wrap{overflow:visible!important}
   /* 案件予実は8列あってA4の幅に対して窮屈なので、さらに詰める。
      金額・日付・月は折り返すと読みにくいので nowrap にする */
-  .fc-month-table,.fc-project-table{font-size:9px!important;table-layout:auto!important}
+  .fc-month-table,.fc-project-table,.ar-table{font-size:9px!important;table-layout:auto!important}
   .fc-month-table th,.fc-month-table td,
-  .fc-project-table th,.fc-project-table td{padding:4px 5px!important}
-  .fc-month-table td{white-space:nowrap}
+  .fc-project-table th,.fc-project-table td,
+  .ar-table th,.ar-table td{padding:4px 5px!important}
+  .fc-month-table td,.ar-table td{white-space:nowrap}
   .fc-project-table td:nth-child(4),.fc-project-table td:nth-child(5),
   .fc-project-table td:nth-child(6){white-space:nowrap}
 
@@ -932,7 +936,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
   <div id="report-pane-monthly">
     <div class="report-actions" style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-bottom:16px">
-      <select id="report-month" style="width:auto;font-size:13px"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option></select>
+      <select id="report-month" onchange="onReportMonthChange()" style="width:auto;font-size:13px"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option><option value="all">通年（期全体）</option></select>
+      <span id="report-mode-note" style="display:none;font-size:11px;color:var(--text-muted)">期全体を実績＋予定で集計します</span>
       <button class="btn primary" onclick="generateReport()">レポートを生成</button>
       <button class="btn" onclick="printReport()">🖨️ 印刷する</button>
       <button class="btn" id="pl-download-btn" onclick="downloadMonthlyPL()">📥 月次PL（Excel）をダウンロード</button>
@@ -5487,6 +5492,11 @@ function buildMonthlyPL(mi){
 
 async function downloadMonthlyPL(){
   const btn=document.getElementById('pl-download-btn');
+  // 月次PLは1ヶ月ぶんの帳票なので、通年モードでは出力しない
+  if(isAnnualMode()){
+    alert('月次PL（Excel）は月を選んでからダウンロードしてください。\n（通年モードでは出力できません）');
+    return;
+  }
   const mi=parseInt(document.getElementById('report-month').value)||0;
   btn.disabled=true;
   const label=btn.textContent;
@@ -6427,10 +6437,27 @@ function initReportPage(){
     const m=new Date().getMonth();
     sel.value=String(m===0?11:m-1);
   }
+  onReportMonthChange();
   if(!document.getElementById('report-body').innerHTML.trim())generateReport();
 }
 
+// レポート月セレクトが「通年（期全体）」かどうか
+function isAnnualMode(){
+  const el=document.getElementById('report-month');
+  return !!el&&el.value==='all';
+}
+
+// 通年モードでは月次PL（Excel）を出せないのでボタンを隠す
+function onReportMonthChange(){
+  const annual=isAnnualMode();
+  const btn=document.getElementById('pl-download-btn');
+  const note=document.getElementById('report-mode-note');
+  if(btn)btn.style.display=annual?'none':'';
+  if(note)note.style.display=annual?'':'none';
+}
+
 function generateReport(){
+  if(isAnnualMode()){generateAnnualReport();return;}
   const mi=parseInt(document.getElementById('report-month').value)||0;
   const y=new Date().getFullYear();
   const c=S.company;
@@ -6670,6 +6697,358 @@ function printReport(){
     alert('先にレポートを生成してください');return;
   }
   window.print();
+}
+
+/* ===== 通年レポート ===================================================
+   月次レポートの月セレクトで「通年（期全体）」を選ぶと出る。
+   期の開始月〜終了月を、当月までは実績・翌月以降は予定として並べる。
+
+   ★ 集計は案件予実と同じく絶対月（年*12＋月）で行う。月インデックス
+     （0=1月）だけで集計すると、期が年をまたぐときに別の年のデータを拾う。
+   ★ 売上は案件ベース（発生ベース）。収支入力の売上は入金実績なので
+     【4】の突合表にだけ出し、売上高の合計には混ぜない（売上の基準2系統）。
+   ★ 実績は ledger の actual、予定は planned_out（出金予定）を使う。
+   ===================================================================== */
+
+// 日付文字列 → 絶対月（年*12＋月）。読めなければ null
+function dateToAbs(s){
+  if(!s)return null;
+  const d=new Date(s);
+  if(isNaN(d.getTime()))return null;
+  return d.getFullYear()*12+d.getMonth();
+}
+
+// その絶対月の収支実績をグループごとに集計する（sumLedger の絶対月版）
+function sumLedgerAbs(abs){
+  const t={sales:0,expense:0,labor:0,tax:0};
+  S.ledger.forEach(l=>{
+    if(!isActual(l))return;
+    if(dateToAbs(l.date)!==abs)return;
+    t[ledgerGroup(l.type)]+=l.amount||0;
+  });
+  return t;
+}
+
+// その絶対月の出金予定（planned_out）をグループごとに集計する
+function sumPlannedOutAbs(abs){
+  const t={sales:0,expense:0,labor:0,tax:0};
+  S.ledger.forEach(l=>{
+    if(ledgerStatusOf(l)!=='planned_out')return;
+    if(dateToAbs(l.expectedDate||l.date)!==abs)return;
+    t[ledgerGroup(l.type)]+=l.amount||0;
+  });
+  return t;
+}
+
+// 通年レポートで使う期。月次レポート側に期セレクトは無いのでアクティブな期を使う。
+function annualFiscalYear(){
+  return activeFiscalYear()||FORECAST_DEFAULT_FY;
+}
+
+/* 見出しに出す期の呼び名。
+   期の名前に「第○期」が入っていればそれを使い、無ければ名前をそのまま出す。
+   （fiscalYears に期番号を持たせていないので、並び順から推測はしない） */
+function fiscalTitle(fy){
+  const m=String((fy&&fy.name)||'').match(/第\s*(\d+)\s*期/);
+  return m?`第${m[1]}期`:((fy&&fy.name)||'');
+}
+
+/* 期の各月の数字。当月まで＝実績（ledgerのactual）、
+   翌月以降＝予定（planned_out）。売上はどちらも案件ベース。 */
+function annualRows(fy){
+  const booked=forecastBookedProjects();
+  const now=new Date();
+  const nowAbs=now.getFullYear()*12+now.getMonth();
+  return fiscalAbsMonths(fy).map(abs=>{
+    const state=abs<nowAbs?'past':abs===nowAbs?'now':'future';
+    const future=state==='future';
+    const sales=booked.reduce((a,p)=>a+projectSalesAtAbs(p,abs),0);
+    const t=future?sumPlannedOutAbs(abs):sumLedgerAbs(abs);
+    const profit=sales-t.expense-t.labor;
+    return{
+      abs,state,future,
+      year:Math.floor(abs/12),
+      label:(abs%12+1)+'月',
+      sales,expense:t.expense,labor:t.labor,tax:t.tax,profit,
+      margin:sales>0?profit/sales*100:null,
+      // 入金実績は予定月には存在しないので null
+      cashIn:future?null:ledgerSalesAbs(abs)
+    };
+  });
+}
+
+// 行の合計（キーを指定して足す）
+function annualSum(rows,key){return rows.reduce((a,r)=>a+(r[key]||0),0)}
+
+// 【0】期間サマリーの1行（項目／実績／予定／合計）
+function arKpiRow(label,a,b,c,opt){
+  const o=opt||{};
+  const bg=o.bg?`background:${o.bg};`:'';
+  const w=o.bold?'font-weight:bold;':'';
+  const cell=v=>`<td style="padding:9px 12px;border-bottom:1px solid #e0e0e0;text-align:right;${w}">${v}</td>`;
+  return`<tr style="${bg}">
+    <td style="padding:9px 12px;border-bottom:1px solid #e0e0e0;${w}">${label}</td>
+    ${cell(a)}${cell(b)}${cell(c)}
+  </tr>`;
+}
+
+function arPctText(profit,sales){
+  return sales>0?(profit/sales*100).toFixed(1)+'%':'-';
+}
+
+function generateAnnualReport(){
+  const body=document.getElementById('report-body');
+  if(!body)return;
+  try{
+    // 案件ページを開かなくても請求レコードが揃うようにしておく
+    try{syncMonthlyBillings();}catch(e){console.error('通年レポート: 月次請求レコードの生成に失敗しました',e);}
+    body.innerHTML=buildAnnualReportHtml(annualFiscalYear());
+  }catch(e){
+    console.error('通年レポートの生成に失敗しました',e);
+    body.innerHTML=`<div class="alert alert-error">❌ 通年レポートを生成できませんでした<br>
+      <small>${e&&e.message?e.message:e}</small></div>`;
+  }
+}
+
+function buildAnnualReportHtml(fy){
+  const rows=annualRows(fy);
+  const title=fiscalTitle(fy);
+  const c=S.company;
+  setPrintHeader('通年レポート',`${title}（${fiscalLabel(fy)}）`);
+
+  const head=`
+  <div class="report-head">
+    <div style="font-size:15px;font-weight:bold">${c.name||''}</div>
+    <div style="font-size:20px;font-weight:bold;margin:6px 0">${title?title+' ':''}通年レポート</div>
+    <div style="font-size:12px;color:#555">対象期間：${fiscalLabel(fy)}　／　作成日：${jpDate(today())}</div>
+  </div>`;
+
+  /* --- 0. 期間サマリー（実績／予定／合計） --- */
+  const act=rows.filter(r=>!r.future);
+  const fut=rows.filter(r=>r.future);
+  const col=list=>{
+    const sales=annualSum(list,'sales'),expense=annualSum(list,'expense'),
+      labor=annualSum(list,'labor'),tax=annualSum(list,'tax');
+    return{sales,expense,labor,tax,profit:sales-expense-labor};
+  };
+  const A=col(act),P=col(fut),T=col(rows);
+  const actLabel=act.length?`実績（${act[0].label}〜${act[act.length-1].label}）`:'実績';
+  const futLabel=fut.length?`予定（${fut[0].label}〜${fut[fut.length-1].label}）`:'予定';
+  const rate=pct(T.sales,fy.salesTarget);
+
+  const kpiTable=`<table class="ar-table" style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="background:#1a2e4a;color:#fff">
+      <th style="padding:8px 12px;text-align:left">項目</th>
+      <th style="padding:8px 12px;text-align:right">${actLabel}</th>
+      <th style="padding:8px 12px;text-align:right">${futLabel}</th>
+      <th style="padding:8px 12px;text-align:right">合計</th>
+    </tr></thead>
+    <tbody>
+      ${arKpiRow('売上高（案件ベース）',repYen(A.sales),repYen(P.sales),repYen(T.sales),{bold:true,bg:'#f5f5f5'})}
+      ${arKpiRow('経費合計',repYen(A.expense),repYen(P.expense),repYen(T.expense))}
+      ${arKpiRow('役員報酬',repYen(A.labor),repYen(P.labor),repYen(T.labor))}
+      ${arKpiRow('税金・公課',repYen(A.tax),repYen(P.tax),repYen(T.tax))}
+      ${arKpiRow('営業利益',repYen(A.profit),repYen(P.profit),repYen(T.profit),{bold:true,bg:'#f5f5f5'})}
+      ${arKpiRow('営業利益率',arPctText(A.profit,A.sales),arPctText(P.profit,P.sales),arPctText(T.profit,T.sales),{bold:true})}
+      ${arKpiRow('期目標（売上）','','',fmt(fy.salesTarget))}
+      ${arKpiRow('目標達成率','','',rateText(rate),{bold:true,bg:'#f5f5f5'})}
+    </tbody>
+  </table>
+  <div style="font-size:11px;color:#555;margin-top:8px">
+    ※ 売上高は案件ベース（発生ベース）。予定の経費・役員報酬・税金はCF管理の「出金予定」の合計です。
+    ※ 税金・公課は経費合計に含めず、営業利益の計算にも入れていません。
+  </div>`;
+
+  const kpiCards=
+    rpLine('売上高（案件ベース）',fmt(T.sales),{bold:true})
+    +rpLine(`├ ${actLabel}`,fmt(A.sales),{indent:true})
+    +rpLine(`└ ${futLabel}`,fmt(P.sales),{indent:true})
+    +rpLine('経費合計',fmt(T.expense),{top:true})
+    +rpLine('役員報酬',fmt(T.labor))
+    +rpLine('税金・公課',fmt(T.tax))
+    +rpLine('営業利益',fmt(T.profit),{bold:true,top:true,color:T.profit>=0?'#1D9E75':'#e53e3e'})
+    +rpLine('営業利益率',arPctText(T.profit,T.sales),{bold:true})
+    +rpLine('期目標（売上）',fmt(fy.salesTarget),{top:true})
+    +rpLine('└ 目標達成率',rateText(rate),{bold:true,indent:true});
+
+  /* --- 1. 月次推移 --- */
+  const stBadge=r=>r.state==='now'?'<span class="badge badge-blue">✅ 実績（当月）</span>'
+    :r.future?'<span class="badge badge-gray">📅 予定</span>'
+    :'<span class="badge badge-green">✅ 実績</span>';
+  // 期が年をまたぐので月名の横に年を小さく添える
+  const mLabel=r=>`${r.label}<span style="font-size:10px;color:#888;margin-left:4px">${r.year}</span>`;
+  const td=(v,align)=>`<td style="padding:7px 8px;border-bottom:1px solid #e0e0e0;${align?'text-align:'+align+';':''}">${v}</td>`;
+  const monthTable=`<div class="table-wrap"><table class="ar-table" style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#1a2e4a;color:#fff">
+      <th style="padding:8px">月</th>
+      <th style="padding:8px;text-align:right">売上</th>
+      <th style="padding:8px;text-align:right">経費</th>
+      <th style="padding:8px;text-align:right">役員報酬</th>
+      <th style="padding:8px;text-align:right">税金・公課</th>
+      <th style="padding:8px;text-align:right">営業利益</th>
+      <th style="padding:8px;text-align:right">利益率</th>
+      <th style="padding:8px">ステータス</th>
+    </tr></thead>
+    <tbody>${rows.map(r=>`<tr style="${r.future?'background:#f7f8fa;':''}">
+      ${td(mLabel(r))}
+      ${td(fmt(r.sales),'right')}
+      ${td(fmt(r.expense),'right')}
+      ${td(fmt(r.labor),'right')}
+      ${td(fmt(r.tax),'right')}
+      ${td(repYen(r.profit),'right')}
+      ${td(r.margin===null?'-':r.margin.toFixed(1)+'%','right')}
+      ${td(stBadge(r))}
+    </tr>`).join('')}
+    <tr style="background:#1a2e4a;color:#fff;font-weight:bold">
+      <td style="padding:9px 8px">合計</td>
+      <td style="padding:9px 8px;text-align:right">${fmt(T.sales)}</td>
+      <td style="padding:9px 8px;text-align:right">${fmt(T.expense)}</td>
+      <td style="padding:9px 8px;text-align:right">${fmt(T.labor)}</td>
+      <td style="padding:9px 8px;text-align:right">${fmt(T.tax)}</td>
+      <td style="padding:9px 8px;text-align:right">${fmt(T.profit)}</td>
+      <td style="padding:9px 8px;text-align:right">${arPctText(T.profit,T.sales)}</td>
+      <td style="padding:9px 8px"></td>
+    </tr></tbody>
+  </table></div>
+  <div style="font-size:11px;color:#555;margin-top:8px">
+    ※ 白背景＝実績、薄いグレー＝翌月以降の予定です。
+  </div>`;
+
+  const monthCards=rows.map(r=>rpCard(
+    `<div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-weight:700;font-size:13px">${mLabel(r)}</span>${stBadge(r)}</div>`
+    +`<div style="display:flex;justify-content:space-between"><span>売上</span><span>${fmt(r.sales)}</span></div>`
+    +`<div style="display:flex;justify-content:space-between;color:#666"><span>経費</span><span>${fmt(r.expense)}</span></div>`
+    +`<div style="display:flex;justify-content:space-between;color:#666"><span>役員報酬</span><span>${fmt(r.labor)}</span></div>`
+    +`<div style="display:flex;justify-content:space-between;color:#666"><span>税金・公課</span><span>${fmt(r.tax)}</span></div>`
+    +`<div style="display:flex;justify-content:space-between;font-weight:700"><span>営業利益</span><span>${fmt(r.profit)}</span></div>`
+    +`<div style="display:flex;justify-content:space-between;color:#666"><span>利益率</span><span>${r.margin===null?'-':r.margin.toFixed(1)+'%'}</span></div>`
+  )).join('')+rpTotalLine('期の合計（売上）',fmt(T.sales));
+
+  /* --- 2. 案件別売上明細（通年） --- */
+  const kinds={single:'単発',monthly:'月次継続',annual:'年次継続'};
+  const inFiscal=p=>projectAbsMonthsInFiscal(p,fy).length>0;
+  const projects=forecastBookedProjects().filter(inFiscal);
+  const projectTotal=projects.reduce((a,p)=>a+forecastProjectTotal(p,fy),0);
+  const projectTable=projects.length===0?repEmpty('この期に売上が発生する案件はありません。'):
+  `<div class="table-wrap"><table class="ar-table" style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#1a2e4a;color:#fff">
+      <th style="padding:8px;text-align:left">顧客名</th>
+      <th style="padding:8px;text-align:left">案件名</th>
+      <th style="padding:8px;text-align:left">種別</th>
+      <th style="padding:8px;text-align:right">期内売上合計</th>
+      <th style="padding:8px;text-align:left">ステータス</th>
+    </tr></thead>
+    <tbody>${projects.map(p=>`<tr>
+      ${td(p.client||'-')}
+      ${td(p.name)}
+      ${td(kinds[p.contract]||p.contract)}
+      ${td(fmt(forecastProjectTotal(p,fy)),'right')}
+      ${td(statusBadge(p.status))}
+    </tr>`).join('')}
+    <tr style="background:#1a2e4a;color:#fff;font-weight:bold">
+      <td colspan="3" style="padding:9px 8px">合計（${projects.length}件）</td>
+      <td style="padding:9px 8px;text-align:right">${fmt(projectTotal)}</td>
+      <td style="padding:9px 8px"></td>
+    </tr></tbody>
+  </table></div>`;
+
+  /* --- 3. 経費明細（勘定科目別・通年） --- */
+  const absList=fiscalAbsMonths(fy);
+  const futureAbs={};
+  rows.forEach(r=>{if(r.future)futureAbs[r.abs]=true});
+  const expActual={},expPlan={};
+  EXPENSE_ACCOUNTS.forEach(k=>{expActual[k]=0;expPlan[k]=0});
+  S.ledger.forEach(l=>{
+    if(ledgerGroup(l.type)!=='expense')return;
+    if(expActual[l.type]===undefined){expActual[l.type]=0;expPlan[l.type]=0} // 旧区分「経費」など
+    if(isActual(l)){
+      const a=dateToAbs(l.date);
+      if(a!==null&&absList.indexOf(a)>=0)expActual[l.type]+=l.amount||0;
+    }else if(ledgerStatusOf(l)==='planned_out'){
+      // 予定は翌月以降ぶんだけ（当月までは実績で見るので二重計上しない）
+      const a=dateToAbs(l.expectedDate||l.date);
+      if(a!==null&&futureAbs[a])expPlan[l.type]+=l.amount||0;
+    }
+  });
+  const expKeys=Object.keys(expActual).filter(k=>expActual[k]!==0||expPlan[k]!==0);
+  const expActualTotal=expKeys.reduce((a,k)=>a+expActual[k],0);
+  const expPlanTotal=expKeys.reduce((a,k)=>a+expPlan[k],0);
+  const expenseTable=expKeys.length===0?repEmpty('この期の経費入力はありません。'):
+  `<table class="ar-table" style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#1a2e4a;color:#fff">
+      <th style="padding:8px;text-align:left">勘定科目</th>
+      <th style="padding:8px;text-align:right">実績合計</th>
+      <th style="padding:8px;text-align:right">予定（概算）</th>
+      <th style="padding:8px;text-align:right">通年合計</th>
+    </tr></thead>
+    <tbody>${expKeys.map(k=>`<tr>
+      ${td(k)}
+      ${td(fmt(expActual[k]),'right')}
+      ${td(fmt(expPlan[k]),'right')}
+      ${td(fmt(expActual[k]+expPlan[k]),'right')}
+    </tr>`).join('')}
+    <tr style="background:#1a2e4a;color:#fff;font-weight:bold">
+      <td style="padding:9px 8px">経費合計</td>
+      <td style="padding:9px 8px;text-align:right">${fmt(expActualTotal)}</td>
+      <td style="padding:9px 8px;text-align:right">${fmt(expPlanTotal)}</td>
+      <td style="padding:9px 8px;text-align:right">${fmt(expActualTotal+expPlanTotal)}</td>
+    </tr></tbody>
+  </table>
+  <div style="font-size:11px;color:#555;margin-top:8px">
+    ※ 実績は収支の入力（実績）、予定は翌月以降の「出金予定」の合計です。役員報酬・税金・公課は含みません。
+  </div>`;
+
+  const expenseCards=expKeys.length===0?'':
+    expKeys.map(k=>rpCard(
+      `<div style="font-weight:600">${k}</div>`
+      +`<div style="display:flex;justify-content:space-between"><span>実績</span><span>${fmt(expActual[k])}</span></div>`
+      +`<div style="display:flex;justify-content:space-between;color:#666"><span>予定</span><span>${fmt(expPlan[k])}</span></div>`
+      +`<div style="display:flex;justify-content:space-between;font-weight:700"><span>通年</span><span>${fmt(expActual[k]+expPlan[k])}</span></div>`
+    )).join('')+rpTotalLine('経費合計（通年）',fmt(expActualTotal+expPlanTotal));
+
+  /* --- 4. 入金実績（CF） vs 売上発生（通年） --- */
+  const cashTotal=rows.reduce((a,r)=>a+(r.cashIn||0),0);
+  const salesToDate=annualSum(act,'sales');
+  const cashTable=`<div class="table-wrap"><table class="ar-table" style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#1a2e4a;color:#fff">
+      <th style="padding:8px;text-align:left">月</th>
+      <th style="padding:8px;text-align:right">売上発生（案件）</th>
+      <th style="padding:8px;text-align:right">入金実績（CF）</th>
+      <th style="padding:8px;text-align:right">差異</th>
+    </tr></thead>
+    <tbody>${rows.map(r=>`<tr style="${r.future?'background:#f7f8fa;':''}">
+      ${td(mLabel(r))}
+      ${td(fmt(r.sales),'right')}
+      ${td(r.cashIn===null?'-':fmt(r.cashIn),'right')}
+      ${td(r.cashIn===null?'-':repYen(r.cashIn-r.sales),'right')}
+    </tr>`).join('')}
+    <tr style="background:#1a2e4a;color:#fff;font-weight:bold">
+      <td style="padding:9px 8px">合計</td>
+      <td style="padding:9px 8px;text-align:right">${fmt(T.sales)}</td>
+      <td style="padding:9px 8px;text-align:right">${fmt(cashTotal)}</td>
+      <td style="padding:9px 8px;text-align:right">${fmt(cashTotal-salesToDate)}</td>
+    </tr></tbody>
+  </table></div>
+  <div style="font-size:11px;color:#555;margin-top:8px">
+    ※ 売上発生は案件ベース、入金実績は収支の「売上」区分（実績）です。基準が違うので一致しません。
+    合計の差異は、入金実績と「実績月ぶんの売上発生（${fmt(salesToDate)}）」の差です。
+  </div>`;
+
+  const cashCards=rows.map(r=>rpCard(
+    `<div style="font-weight:700;font-size:13px">${mLabel(r)}</div>`
+    +`<div style="display:flex;justify-content:space-between"><span>売上発生</span><span>${fmt(r.sales)}</span></div>`
+    +`<div style="display:flex;justify-content:space-between;color:#666"><span>入金実績</span><span>${r.cashIn===null?'-':fmt(r.cashIn)}</span></div>`
+    +`<div style="display:flex;justify-content:space-between;font-weight:700"><span>差異</span><span>${r.cashIn===null?'-':fmt(r.cashIn-r.sales)}</span></div>`
+  )).join('')+rpTotalLine('入金実績の合計',fmt(cashTotal));
+
+  return head
+    +repSection('【0】期間サマリー',rpBoth(kpiTable,kpiCards))
+    +repSection('【1】月次推移',rpBoth(monthTable,monthCards))
+    +repSection('【2】案件別売上明細（通年）',
+      rpBoth(projectTable,rpProjectCards(projects,p=>forecastProjectTotal(p,fy),projectTotal)))
+    +repSection('【3】経費明細（勘定科目別・通年）',rpBoth(expenseTable,expenseCards))
+    +repSection('【4】入金実績（CF） vs 売上発生（通年）',rpBoth(cashTable,cashCards));
 }
 
 /* ===== 一括請求書作成 ===============================================
