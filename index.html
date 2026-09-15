@@ -542,18 +542,18 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
   <div class="metric-grid two-by">
     <div class="metric-card"><div class="metric-label">売上</div><div class="metric-value blue" id="d-sales">¥0</div><div class="metric-sub" id="d-sales-year">年間累計: ¥0</div><div class="metric-sub" id="d-sales-diff">計画比: -</div></div>
-    <div class="metric-card"><div class="metric-label">経費合計</div><div class="metric-value" id="d-expense">¥0</div><div class="metric-sub" id="d-expense-year">年間累計: ¥0</div><div class="metric-sub" id="d-expense-diff">計画比: -</div></div>
-    <div class="metric-card"><div class="metric-label">役員報酬</div><div class="metric-value" id="d-labor">¥0</div><div class="metric-sub" id="d-labor-year">年間累計: ¥0</div><div class="metric-sub" id="d-labor-diff">計画比: -</div></div>
-    <div class="metric-card"><div class="metric-label">税金・公課</div><div class="metric-value" id="d-tax">¥0</div><div class="metric-sub" id="d-tax-year">年間累計: ¥0</div><div class="metric-sub" id="d-tax-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">経費合計<span style="font-size:10px;font-weight:400;color:var(--text-muted)">（CF管理）</span></div><div class="metric-value" id="d-expense">¥0</div><div class="metric-sub" id="d-expense-year">年間累計: ¥0</div><div class="metric-sub" id="d-expense-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">役員報酬<span style="font-size:10px;font-weight:400;color:var(--text-muted)">（CF管理）</span></div><div class="metric-value" id="d-labor">¥0</div><div class="metric-sub" id="d-labor-year">年間累計: ¥0</div><div class="metric-sub" id="d-labor-diff">計画比: -</div></div>
+    <div class="metric-card"><div class="metric-label">税金・公課<span style="font-size:10px;font-weight:400;color:var(--text-muted)">（CF管理）</span></div><div class="metric-value" id="d-tax">¥0</div><div class="metric-sub" id="d-tax-year">年間累計: ¥0</div><div class="metric-sub" id="d-tax-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">営業利益</div><div class="metric-value green" id="d-profit">¥0</div><div class="metric-sub" id="d-profit-year">年間累計: ¥0</div><div class="metric-sub" id="d-margin">利益率: -%</div></div>
-    <div class="metric-card accent" id="d-awaiting-card" onclick="goToInvoiced()" style="cursor:pointer" title="クリックすると案件ページの「請求済」を表示します">
+    <div class="metric-card accent" id="d-awaiting-card" onclick="goToPlannedIn()" style="cursor:pointer" title="クリックするとCF管理の入金予定を表示します">
       <div class="metric-label">💰 入金待ち</div>
       <div class="metric-value" id="d-awaiting">¥0</div>
       <div class="metric-sub" id="d-awaiting-sub">0件（税込）</div></div>
     <div class="metric-card"><div class="metric-label">営業利益率</div><div class="metric-value" id="d-margin-rate">-%</div><div class="metric-sub" id="d-margin-year">年間累計: -%</div></div>
   </div>
   <div style="font-size:11px;color:var(--text-muted);margin:-12px 0 16px">
-    ※案件発生ベース。入金実績はCF管理で確認
+    ※売上は案件発生ベース。経費・役員報酬・税金・公課はCF管理の実績値。入金待ちはCF管理の入金予定
   </div>
   <div class="two-col">
     <div class="card">
@@ -2011,7 +2011,8 @@ document.querySelectorAll('.modal-overlay').forEach(m=>{
 const LEDGER_TYPES=['売上','家賃（レンタルオフィス利用料）','通信料','システム利用料','交通費','交際費','役員報酬','その他経費',
   '社会保険料','住民税（特別徴収）','消費税（納付）','源泉所得税（納付）','法人税・住民税・事業税（納付）','その他税金・公課'];
 const LABOR_TYPES=['役員報酬','人件費'];
-// 税金・社会保険料。経費とは分けて集計し、営業利益の計算には含めない。
+// 税金・社会保険料。経費合計とは分けて集計するが、営業利益では差し引く
+// （operatingProfit を見ること）。
 const TAX_TYPES=['社会保険料','住民税（特別徴収）','消費税（納付）','源泉所得税（納付）','法人税・住民税・事業税（納付）','その他税金・公課'];
 
 // 区分を集計グループ（sales / expense / labor）に振り分ける
@@ -2034,6 +2035,88 @@ function sumLedger(mi){
   return t;
 }
 
+// 日付文字列 → 絶対月（年*12＋月）。読めなければ null
+function dateToAbs(s){
+  if(!s)return null;
+  const d=new Date(s);
+  if(isNaN(d.getTime()))return null;
+  return d.getFullYear()*12+d.getMonth();
+}
+
+// その絶対月の収支実績をグループごとに集計する（sumLedger の絶対月版）
+function sumLedgerAbs(abs){
+  const t={sales:0,expense:0,labor:0,tax:0};
+  S.ledger.forEach(l=>{
+    if(!isActual(l))return;
+    if(dateToAbs(l.date)!==abs)return;
+    t[ledgerGroup(l.type)]+=l.amount||0;
+  });
+  return t;
+}
+
+// グループごとの集計を足し合わせる
+function addGroups(a,b){
+  return{sales:a.sales+b.sales,expense:a.expense+b.expense,
+    labor:a.labor+b.labor,tax:a.tax+b.tax};
+}
+
+// その絶対月の出金予定（planned_out）をグループごとに集計する
+function sumPlannedOutAbs(abs){
+  const t={sales:0,expense:0,labor:0,tax:0};
+  S.ledger.forEach(l=>{
+    if(ledgerStatusOf(l)!=='planned_out')return;
+    if(dateToAbs(l.expectedDate||l.date)!==abs)return;
+    t[ledgerGroup(l.type)]+=l.amount||0;
+  });
+  return t;
+}
+
+/* ===== CF管理（ledger）ベースの月次集計 ==============================
+   経費・役員報酬・税金・公課は、すべてCF管理に入力した実績
+   （status=actual）から集計する。売上だけは案件ベース（発生ベース）。
+
+   ★ 期が年をまたぐ（例 2026-03〜2027-02）ので、月インデックスだけで
+     絞ると別の年のデータまで拾う。必ず年と組にして絶対月で集計すること。
+     年を省略したときは monthYear() が期の並びから正しい年を導く。
+   ★ 交通費も経費合計に含める。会計上は当月の経費だが、口座の出金は
+     翌月まとめて精算する（CF管理の残高予測では isCashRelevant で除外）。
+   =================================================================== */
+
+// 月インデックス（0=1月）＋年 → 絶対月。年を省略すると期から導く
+function absOfMonth(mi,year){
+  const y=(year===undefined||year===null)?monthYear(mi):year;
+  return y*12+mi;
+}
+
+// CF管理の実績から、その月の経費合計（交通費を含む・役員報酬と税金は別枠）
+function cfExpenseByMonth(mi,year){return sumLedgerAbs(absOfMonth(mi,year)).expense}
+
+// CF管理の実績から、その月の役員報酬
+function cfLaborByMonth(mi,year){return sumLedgerAbs(absOfMonth(mi,year)).labor}
+
+// CF管理の実績から、その月の税金・公課
+function cfTaxByMonth(mi,year){return sumLedgerAbs(absOfMonth(mi,year)).tax}
+
+// CF管理の実績から、その月の入金（売上区分）。発生ベースの売上とは別物
+function cfSalesByMonth(mi,year){return sumLedgerAbs(absOfMonth(mi,year)).sales}
+
+// その絶対月の案件売上（発生ベース）。受注済みの案件だけを合計する
+function projectSalesAtAbsTotal(abs){
+  let t=0;
+  S.projects.forEach(p=>{if(billableProject(p))t+=projectSalesAtAbs(p,abs)});
+  return t;
+}
+
+// その月の案件売上（発生ベース）。年を省略すると期から導く
+function salesAtMonth(mi,year){return projectSalesAtAbsTotal(absOfMonth(mi,year))}
+
+/* 営業利益 ＝ 売上 −（経費合計 ＋ 役員報酬 ＋ 税金・公課）。
+   税金・公課も差し引くので、月次PL（Excel）の「当月損益」と一致する。
+   ダッシュボード・月次レポート・通年レポート・融資力診断はすべてこれを使う。 */
+function operatingProfit(sales,expense,labor,tax){
+  return (sales||0)-(expense||0)-(labor||0)-(tax||0);
+}
+
 // 営業利益率の色分け（20%以上=緑 / 10〜19%=アンバー / 9%以下=赤）
 function marginClass(rate){return rate>=20?'green':rate>=10?'amber':'red'}
 function marginColor(rate){return rate>=20?'#1D9E75':rate>=10?'#EF9F27':'#E24B4A'}
@@ -2049,14 +2132,17 @@ let chartPoints=null;   // 月ごとのX座標
 
 // 月ごとの売上・営業利益・利益率・有効案件数
 function monthlySeries(){
+  const fy=dashboardFiscalYear();
   const rows=[];
-  fiscalMonths(dashboardFiscalYear()).forEach(i=>{
-    const t=sumLedger(i);
-    const sales=salesByMonth(i);
-    const profit=sales-t.expense-t.labor;
-    const projects=S.projects.filter(p=>
-      (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,i)).length;
-    rows.push({index:i,month:i+1,sales,profit,rate:sales>0?profit/sales*100:0,projects});
+  // ★ 期の並び順に絶対月で回す。月インデックスだけだと年をまたぐ期で数字が混ざる
+  fiscalAbsMonths(fy).forEach(abs=>{
+    const i=abs%12;
+    const t=sumLedgerAbs(abs);
+    const sales=projectSalesAtAbsTotal(abs);
+    const profit=operatingProfit(sales,t.expense,t.labor,t.tax);
+    const projects=S.projects.filter(p=>billableProject(p)&&projectCoversAbs(p,abs)).length;
+    rows.push({index:i,month:i+1,year:Math.floor(abs/12),sales,profit,
+      rate:sales>0?profit/sales*100:0,projects});
   });
   return rows;
 }
@@ -2189,35 +2275,6 @@ window.addEventListener('resize',()=>{
    開始から終了まで1ヶ月ずつ進めながら、該当する月に加算していく。
    =================================================================== */
 
-// monthIndex: 0=1月, 1=2月 … 11=12月
-function calcProjectSalesByMonth(monthIndex){
-  let total=0;
-  S.projects.forEach(p=>{
-    if(p.status!=='契約済'&&p.status!=='進行中'&&p.status!=='完了')return;
-    if(!p.start)return;
-    const start=new Date(p.start);
-    if(isNaN(start.getTime()))return;
-    const amount=p.amount||0;
-    const startAbs=start.getFullYear()*12+start.getMonth();
-
-    // 単発、または終了日が無い案件は開始月だけ計上する
-    const end=p.end?new Date(p.end):null;
-    if(p.contract==='single'||!end||isNaN(end.getTime())){
-      if(start.getMonth()===monthIndex)total+=billingAmountAt(p,startAbs,amount);
-      return;
-    }
-
-    const endAbs=end.getFullYear()*12+end.getMonth();
-    if(endAbs<startAbs)return;
-    const per=p.contract==='annual'?Math.round(amount/12):amount;
-    const last=startAbs+Math.min(endAbs-startAbs,119); // 念のための上限
-    for(let a=startAbs;a<=last;a++){
-      if(a%12===monthIndex)total+=billingAmountAt(p,a,per);
-    }
-  });
-  return total;
-}
-
 /* ===== 案件ページの月フィルター =====================================
    mi は 0=1月 … 11=12月。null は「全期間」。
    =================================================================== */
@@ -2260,31 +2317,11 @@ function projectMonthAmount(p,mi){
   return p.contract==='annual'?Math.round(amount/12):amount;
 }
 
-// 1〜12月の案件売上を合計する（年間累計）
-function calcProjectSalesYear(){
-  let t=0;
-  for(let i=0;i<12;i++)t+=calcProjectSalesByMonth(i);
-  return t;
-}
-
 /* 売上は案件の発生ベースのみ（月次請求レコードがあればその金額を使う）。
-   収支に入力した売上＝実際の入金はCF管理で集計する。 */
-
-// monthIndex: 0=1月 … 11=12月
-function salesByMonth(mi){
-  return calcProjectSalesByMonth(mi);
-}
-
-function salesYearTotal(){
-  return calcProjectSalesYear();
-}
-
-// 12ヶ月分の売上を配列で返す（月次推移グラフ用）
-function salesSeries(){
-  const a=[];
-  for(let i=0;i<12;i++)a.push(salesByMonth(i));
-  return a;
-}
+   収支に入力した売上＝実際の入金はCF管理で集計する。
+   ★ 集計は salesAtMonth(mi,year) / projectSalesAtAbsTotal(abs) を使うこと。
+     月インデックスだけで足す関数は、年をまたぐ期で別の年のデータを
+     拾ってしまうため廃止した。 */
 
 // 1〜12月すべての実績をグループごとに集計する（年間累計）
 function sumLedgerYear(){
@@ -2295,6 +2332,11 @@ function sumLedgerYear(){
   });
   return t;
 }
+
+/* 期の全月を合計する（ダッシュボードの「年間累計」）。
+   中身は期間サマリーと同じ fiscalTotals（売上は案件ベース、
+   経費・役員報酬・税金はCF管理の実績、期の月を絶対月で回す）。 */
+function cfFiscalTotals(fy){return fiscalTotals(fy)}
 
 // 1〜12月の計画を合計する（年間計画）
 function planYearTotal(){
@@ -2328,12 +2370,18 @@ function statusBadge(s){
   return`<span class="badge ${m[s]||'badge-gray'}">${s}</span>`;
 }
 
+/* ダッシュボードの集計
+   売上 …… 案件ベース（monthlyBillings ＝ 発生ベース）
+   経費・役員報酬・税金 …… CF管理の実績（ledger の status=actual）
+   入金待ち …… CF管理の入金予定（planned_in）の合計
+   ★ 選択中の期から正しい年を導いて（dashMonthYear）年と月の両方で絞る。 */
 function updateDashboard(){
   const mi=getMonth();
-  const t=sumLedger(mi);
-  // 売上は「案件ベース + 収支の売上入力」、経費・役員報酬は収支の入力から集計する
-  const sales=salesByMonth(mi),exp=t.expense,lab=t.labor,tax=t.tax;
-  const profit=sales-exp-lab;
+  const fy=dashboardFiscalYear();
+  const yr=dashMonthYear(mi);
+  const sales=salesAtMonth(mi,yr);
+  const exp=cfExpenseByMonth(mi,yr),lab=cfLaborByMonth(mi,yr),tax=cfTaxByMonth(mi,yr);
+  const profit=operatingProfit(sales,exp,lab,tax);
   const margin=sales>0?Math.round(profit/sales*100):0;
   document.getElementById('d-sales').textContent=fmt(sales);
   document.getElementById('d-expense').textContent=fmt(exp);
@@ -2349,14 +2397,15 @@ function updateDashboard(){
   rateEl.textContent=rate===null?'-%':rate.toFixed(1)+'%';
   rateEl.className='metric-value '+(rate===null?'':marginClass(rate));
 
-  // 年間累計（1〜12月の合計）
-  const y=sumLedgerYear();
-  const ySales=salesYearTotal();
-  const yProfit=ySales-y.expense-y.labor;
+  // 年間累計（選択中の期の全月）
+  const y=cfFiscalTotals(fy);
+  const ySales=y.sales;
+  const yProfit=y.profit;
   document.getElementById('d-sales-year').textContent='年間累計: '+fmt(ySales);
   document.getElementById('d-expense-year').textContent='年間累計: '+fmt(y.expense);
   document.getElementById('d-labor-year').textContent='年間累計: '+fmt(y.labor);
   document.getElementById('d-tax-year').textContent='年間累計: '+fmt(y.tax);
+  // 入金待ちはCF管理の入金予定（planned_in）から
   const aw=awaitingPayment();
   document.getElementById('d-awaiting').textContent=fmt(aw.total);
   document.getElementById('d-awaiting-sub').textContent=aw.count+'件（税込）の入金待ち';
@@ -2372,7 +2421,7 @@ function updateDashboard(){
     const d=({sales:sales,expense:exp,labor:lab,tax:tax})[k]-(pl[k]||0);
     document.getElementById('d-'+k+'-diff').textContent='計画比: '+(d>=0?'+':'')+fmt(d);
   });
-  renderDiffList(mi);
+  renderDiffList(mi,yr,fy);
   renderFiscalSummary();
   drawMonthlyChart();
   const dp=document.getElementById('dash-projects');
@@ -2402,12 +2451,16 @@ function setDiffMode(mode){
   updateDashboard();
 }
 
-// mi = 選択中の月（0=1月）。年間モードでは1〜12月の合計で比較する。
-function renderDiffList(mi){
+// mi = 選択中の月（0=1月）。年間モードでは期の全月の合計で比較する。
+// 実績はCF管理（actual）、売上だけ案件ベース。
+function renderDiffList(mi,yr,fy){
   const isYear=diffMode==='year';
-  const actual=isYear?sumLedgerYear():sumLedger(mi);
-  const actualSales=isYear?salesYearTotal():salesByMonth(mi);
-  const plan=isYear?planYearTotal():planOf(mi);
+  const year=yr===undefined?dashMonthYear(mi):yr;
+  const f=fy||dashboardFiscalYear();
+  const yearTotals=isYear?fiscalTotals(f):null;
+  const actual=isYear?yearTotals:sumLedgerAbs(absOfMonth(mi,year));
+  const actualSales=isYear?yearTotals.sales:salesAtMonth(mi,year);
+  const plan=isYear?fiscalPlanTotals(f):planOf(mi);
   const diffs=[
     {label:'売上',actual:actualSales,plan:plan.sales,invert:false},
     {label:'経費合計',actual:actual.expense,plan:plan.expense,invert:true},
@@ -4064,6 +4117,21 @@ function fiscalMonths(fy){
   return out;
 }
 
+/* 月インデックス（0=1月）が、その期の中で何年になるかを返す。
+   例）期が2026-03〜2027-02 のとき 2（3月）→2026 ／ 0（1月）→2027
+   期が無い・その月が期に含まれないときは今年を返す。 */
+function monthYearOf(mi,fy){
+  const start=fy?ymToAbs(fy.startMonth):null;
+  if(start!==null){
+    const at=fiscalMonths(fy).indexOf(mi);
+    if(at>=0)return Math.floor((start+at)/12);
+  }
+  return new Date().getFullYear();
+}
+
+// ダッシュボードで選択中の期に合わせた年
+function dashMonthYear(mi){return monthYearOf(mi,dashboardFiscalYear())}
+
 function fiscalLabel(fy){
   if(!fy)return'';
   const s=ymToAbs(fy.startMonth),e=ymToAbs(fy.endMonth);
@@ -4079,20 +4147,23 @@ function fiscalRemaining(fy){
   return Math.max(0,e-(now.getFullYear()*12+now.getMonth())+1);
 }
 
-// 期の実績。uptoIndex を渡すと期初からその月までの累計になる。
+/* 期の実績。uptoIndex（月インデックス）を渡すと期初からその月までの累計になる。
+   売上は案件ベース、経費・役員報酬・税金はCF管理の実績。
+   ★ 絶対月で回すので、年をまたぐ期でも別の年のデータを拾わない。 */
 function fiscalTotals(fy,uptoIndex){
-  const months=fiscalMonths(fy);
-  let list=months;
+  const all=fiscalAbsMonths(fy);
+  let list=all;
   if(uptoIndex!==undefined&&uptoIndex!==null){
-    const at=months.indexOf(uptoIndex);
-    list=at>=0?months.slice(0,at+1):months;
+    const at=all.findIndex(a=>a%12===uptoIndex);
+    list=at>=0?all.slice(0,at+1):all;
   }
   let sales=0,expense=0,labor=0,tax=0;
-  list.forEach(m=>{
-    const t=sumLedger(m);
-    sales+=salesByMonth(m);expense+=t.expense;labor+=t.labor;tax+=t.tax;
+  list.forEach(abs=>{
+    const t=sumLedgerAbs(abs);
+    sales+=projectSalesAtAbsTotal(abs);expense+=t.expense;labor+=t.labor;tax+=t.tax;
   });
-  return{months:list,sales,expense,labor,tax,profit:sales-expense-labor};
+  return{months:list.map(a=>a%12),absMonths:list,sales,expense,labor,tax,
+    profit:operatingProfit(sales,expense,labor,tax)};
 }
 
 // 期の月次計画の合計
@@ -4108,7 +4179,7 @@ function fiscalPlanTotals(fy,uptoIndex){
     const p=planOf(m);
     sales+=p.sales;expense+=p.expense;labor+=p.labor;tax+=p.tax||0;
   });
-  return{sales,expense,labor,tax,profit:sales-expense-labor};
+  return{sales,expense,labor,tax,profit:operatingProfit(sales,expense,labor,tax)};
 }
 
 function pct(actual,target){
@@ -5014,21 +5085,6 @@ function billingYm(mi){
   return monthYear(mi)+'-'+String(mi+1).padStart(2,'0');
 }
 
-// 入金待ち（請求済のレコードの税込合計）
-function awaitingPayment(){
-  const rows=billingList().filter(b=>{
-    if(b.invoiceStatus!=='invoiced')return false;
-    const p=S.projects.find(x=>x.id===b.projectId);
-    return p&&p.status!=='失注';
-  });
-  if(rows.length>0){
-    return{count:rows.length,total:rows.reduce((a,b)=>a+grossAmount(b.amount),0),list:rows};
-  }
-  // レコードが無い場合は従来どおり案件ベースで見る
-  const list=S.projects.filter(p=>invoiceStatusOf(p)==='invoiced'&&p.status!=='失注');
-  return{count:list.length,total:list.reduce((a,p)=>a+grossAmount(p.amount),0),list};
-}
-
 /* ===== 売上入金の突合 ================================================
    案件に請求・入金の状態を持たせ、前月分の売上が翌月に税込で入金される
    運用に合わせて、入金確認と収支への登録をまとめて行う。
@@ -5126,14 +5182,22 @@ function markProjectPaid(p,date,amount,status){
   p.paidAmount=amount;
 }
 
-/* ---- 入金待ちの集計 ---- */
+/* ---- 入金待ちの集計 ----
+   CF管理の入金予定（status=planned_in）の合計。
+   金額は addPlannedInForBilling() が grossAmount() で入れるので税込。
+   請求済にしても入金予定を作らなかった案件は、ここには出てこない。 */
 
 function awaitingPayment(){
-  const list=S.projects.filter(p=>invoiceStatusOf(p)==='invoiced'&&p.status!=='失注');
-  return{count:list.length,total:list.reduce((a,p)=>a+grossAmount(p.amount),0),list};
+  const list=S.ledger.filter(l=>ledgerStatusOf(l)==='planned_in');
+  return{count:list.length,total:list.reduce((a,l)=>a+(l.amount||0),0),list};
 }
 
-// ダッシュボードのカードから案件ページの「請求済」へ移動する
+// ダッシュボードの入金待ちカードからCF管理へ移動する
+function goToPlannedIn(){
+  showPage('ledger',document.querySelectorAll('.nav-btn')[3]);
+}
+
+// 案件ページの「請求済」へ移動する
 function goToInvoiced(){
   showPage('projects',document.querySelectorAll('.nav-btn')[1]);
   const el=document.getElementById('project-invoice-filter');
@@ -5367,16 +5431,7 @@ function loadXlsx(){
 }
 
 // 月インデックスから実際の年を求める（期の並びを使う。期が無ければ今年）
-function monthYear(mi){
-  const fy=activeFiscalYear();
-  const start=fy?ymToAbs(fy.startMonth):null;
-  if(start!==null){
-    const months=fiscalMonths(fy);
-    const at=months.indexOf(mi);
-    if(at>=0)return Math.floor((start+at)/12);
-  }
-  return new Date().getFullYear();
-}
+function monthYear(mi){return monthYearOf(mi,activeFiscalYear())}
 
 /* ---- 1行分のセルを作る ---- */
 function plCell(v,opt){
@@ -5411,10 +5466,10 @@ function buildMonthlyPL(mi){
   const c=S.company;
   const kinds={single:'単発',monthly:'月次継続',annual:'年次継続'};
 
-  const projects=S.projects.filter(p=>
-    (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,mi));
-  const projectSales=projects.reduce((a,p)=>a+projectSalesAmount(p,mi),0);
-  const t=sumLedger(mi);
+  const abs=absOfMonth(mi,y);
+  const projects=S.projects.filter(p=>billableProject(p)&&projectCoversAbs(p,abs));
+  const projectSales=projects.reduce((a,p)=>a+projectSalesAtAbs(p,abs),0);
+  const t=sumLedgerAbs(abs);
   const otherSales=t.sales;
   const salesTotal=projectSales;   // 売上高は案件ベースのみ
 
@@ -5424,7 +5479,7 @@ function buildMonthlyPL(mi){
   const memoByAccount={};
   accounts.forEach(k=>{byAccount[k]=0});
   S.ledger.forEach(l=>{
-    if(!isActual(l)||!l.date||new Date(l.date).getMonth()!==mi)return;
+    if(!isActual(l)||dateToAbs(l.date)!==abs)return;
     if(l.type==='売上')return;
     if(byAccount[l.type]===undefined)byAccount[l.type]=0; // 旧区分もそのまま出す
     byAccount[l.type]+=l.amount;
@@ -5440,7 +5495,7 @@ function buildMonthlyPL(mi){
   const fy=activeFiscalYear();
   const cum=fy?fiscalTotals(fy,mi):null;
   const cumSales=cum?cum.sales:null;
-  const cumProfit=cum?cum.sales-cum.expense-cum.labor-cum.tax:null;
+  const cumProfit=cum?cum.profit:null;
 
   const rows=[];
   rows.push([plCell((c.name||'')+'　月次P/L（損益計算書）',{head:true}),plCell('',{head:true}),plCell('',{head:true})]);
@@ -5453,7 +5508,7 @@ function buildMonthlyPL(mi){
   rows.push([plCell('科目',{bold:true}),plCell('金額',{bold:true,right:true}),plCell('備考',{bold:true})]);
   projects.forEach(p=>rows.push(plRow(
     ((p.client||'')+' '+p.name).trim(),
-    projectSalesAmount(p,mi),
+    projectSalesAtAbs(p,abs),
     (kinds[p.contract]||p.contract)+'／'+p.status)));
   rows.push(plRow('売上高合計',salesTotal,'案件ベース（発生ベース）',{total:true}));
   rows.push(['','','']);
@@ -5584,12 +5639,6 @@ function expectedPayDatesOfAbs(abs){
     .map(b=>b.expectedPayDate);
   const uniq=dates.filter((d,i)=>dates.indexOf(d)===i).sort();
   return uniq.length?uniq.join('<br>'):'<span style="color:var(--text-muted)">-</span>';
-}
-
-// その月の案件売上（請求レコードがあればその金額を使う）
-function projectSalesAmount(p,mi){
-  const b=findBilling(p.id,billingYm(mi));
-  return b?(parseInt(b.amount)||0):projectMonthAmount(p,mi);
 }
 
 // その月の請求レコードの状況を短くまとめる
@@ -5861,18 +5910,22 @@ function printForecast(){
    AIによるアドバイスはGAS経由で取得する（APIキーをブラウザに置かないため）。
    ===================================================================== */
 
-// 直近nヶ月の月インデックス（0=1月）。年をまたぐ場合は12で折り返す。
-function recentMonths(n){
-  const c=new Date().getMonth();
+// 直近nヶ月の絶対月（年*12＋月）。年をまたいでも正しく並ぶ。
+function recentAbsMonths(n){
+  const d=new Date();
+  const c=d.getFullYear()*12+d.getMonth();
   const a=[];
-  for(let i=n-1;i>=0;i--)a.push((c-i+12)%12);
+  for(let i=n-1;i>=0;i--)a.push(c-i);
   return a;
 }
 
-// その月の営業利益
-function profitOfMonth(mi){
-  const t=sumLedger(mi);
-  return salesByMonth(mi)-t.expense-t.labor;
+// 直近nヶ月の月インデックス（0=1月）。表示用
+function recentMonths(n){return recentAbsMonths(n).map(a=>a%12)}
+
+// その絶対月の営業利益（売上は案件ベース、経費系はCF管理の実績）
+function profitOfAbs(abs){
+  const t=sumLedgerAbs(abs);
+  return operatingProfit(projectSalesAtAbsTotal(abs),t.expense,t.labor,t.tax);
 }
 
 // その月の「安定売上」＝継続契約（月次・年次）から生まれる金額
@@ -5889,14 +5942,17 @@ function recurringSalesOfMonth(mi){
 
 // 診断に使う数字をまとめて作る
 function loanMetrics(){
-  const mi=new Date().getMonth();
-  const months=recentMonths(3);
-  const sales3=months.map(m=>salesByMonth(m));
-  const profit3=months.map(m=>profitOfMonth(m));
-  const avgSales=Math.round(sales3.reduce((a,b)=>a+b,0)/months.length);
-  const avgProfit=Math.round(profit3.reduce((a,b)=>a+b,0)/months.length);
+  const now=new Date();
+  const mi=now.getMonth();
+  const nowAbs=now.getFullYear()*12+mi;
+  const absList=recentAbsMonths(3);
+  const months=absList.map(a=>a%12);
+  const sales3=absList.map(a=>projectSalesAtAbsTotal(a));
+  const profit3=absList.map(a=>profitOfAbs(a));
+  const avgSales=Math.round(sales3.reduce((a,b)=>a+b,0)/absList.length);
+  const avgProfit=Math.round(profit3.reduce((a,b)=>a+b,0)/absList.length);
   const recurring=recurringSalesOfMonth(mi);
-  const monthSales=salesByMonth(mi);
+  const monthSales=projectSalesAtAbsTotal(nowAbs);
 
   // 計画の入力状況と、計画に対する売上の乖離率
   let plannedMonths=0;
@@ -5905,9 +5961,9 @@ function loanMetrics(){
     if(p.sales||p.expense||p.labor)plannedMonths++;
   }
   const gaps=[];
-  months.forEach(m=>{
-    const p=planOf(m);
-    if(p.sales>0)gaps.push(Math.abs(salesByMonth(m)-p.sales)/p.sales);
+  absList.forEach(a=>{
+    const p=planOf(a%12);
+    if(p.sales>0)gaps.push(Math.abs(projectSalesAtAbsTotal(a)-p.sales)/p.sales);
   });
   const gapRate=gaps.length?gaps.reduce((a,b)=>a+b,0)/gaps.length:null;
 
@@ -5922,7 +5978,7 @@ function loanMetrics(){
     monthSales,
     recurring,
     recurringRate:monthSales>0?Math.round(recurring/monthSales*100):0,
-    yearSales:salesYearTotal(),
+    yearSales:cfFiscalTotals(activeFiscalYear()||FORECAST_DEFAULT_FY).sales,
     cash,
     loan:fin.loan||0,
     cashMonths:avgSales>0?Math.round(cash/avgSales*10)/10:0,
@@ -6456,34 +6512,38 @@ function onReportMonthChange(){
   if(note)note.style.display=annual?'':'none';
 }
 
+/* 月次レポートの集計はダッシュボードと同じ関数を使う（数字を必ず一致させる）。
+   売上 …… 案件ベース（発生ベース）
+   経費・役員報酬・税金 …… CF管理の実績（ledger の status=actual）
+   ★ 年と月の両方で絞る。monthYear(mi) が期の並びから正しい年を導く。 */
 function generateReport(){
   if(isAnnualMode()){generateAnnualReport();return;}
   const mi=parseInt(document.getElementById('report-month').value)||0;
-  const y=new Date().getFullYear();
+  const y=monthYear(mi);
+  const abs=absOfMonth(mi,y);
   const c=S.company;
 
   // 案件ベースの売上は【2】の明細と同じ範囲（契約済・進行中・完了）で集計し、
   // サマリーと明細の合計が必ず一致するようにする。
   const kinds={single:'単発',monthly:'月次継続',annual:'年次継続'};
-  const projects=S.projects.filter(p=>
-    (p.status==='契約済'||p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,mi));
-  const projectTotal=projects.reduce((a,p)=>a+projectSalesAmount(p,mi),0);
+  const projects=S.projects.filter(p=>billableProject(p)&&projectCoversAbs(p,abs));
+  const projectTotal=projects.reduce((a,p)=>a+projectSalesAtAbs(p,abs),0);
   // 売上高は案件ベース（発生ベース）のみ。収支の売上入力は入金実績として別に見る。
   const projectSales=projectTotal;
-  const t=sumLedger(mi);
+  const t=sumLedgerAbs(abs);
   const ledgerSales=t.sales;
   const sales=projectSales;
   // 請求済（入金済を含む）と未請求の内訳
-  const ymRep=billingYm(mi);
+  const ymRep=absToYm(abs);
   const billedRows=projects.map(p=>({p,b:findBilling(p.id,ymRep)}));
   const salesBilled=billedRows.filter(x=>x.b&&x.b.invoiceStatus!=='uninvoiced')
-    .reduce((a,x)=>a+projectSalesAmount(x.p,mi),0);
+    .reduce((a,x)=>a+projectSalesAtAbs(x.p,abs),0);
   const salesUnbilled=sales-salesBilled;
   const exp=t.expense, lab=t.labor, tax=t.tax;
-  const profit=sales-exp-lab;
+  const profit=operatingProfit(sales,exp,lab,tax);
   const margin=sales>0?Math.round(profit/sales*100):0;
   const pl=planOf(mi);
-  const planProfit=pl.sales-pl.expense-pl.labor;
+  const planProfit=operatingProfit(pl.sales,pl.expense,pl.labor,pl.tax||0);
 
   /* --- 0. 期間累計サマリー（期初からこの月まで） --- */
   const fy=activeFiscalYear();
@@ -6520,9 +6580,9 @@ function generateReport(){
     +rpLine('├ うち請求済',fmt(salesBilled),{indent:true})
     +rpLine('└ うち未請求',fmt(salesUnbilled),{indent:true})
     +rpLine('入金実績（CF）',fmt(ledgerSales))
-    +rpLine('経費合計',fmt(exp),{top:true})
-    +rpLine('役員報酬',fmt(lab))
-    +rpLine('税金・公課',fmt(tax))
+    +rpLine('経費合計（CF管理）',fmt(exp),{top:true})
+    +rpLine('役員報酬（CF管理）',fmt(lab))
+    +rpLine('税金・公課（CF管理）',fmt(tax))
     +rpLine('営業利益',fmt(profit),{bold:true,top:true,color:profit>=0?'#1D9E75':'#e53e3e'})
     +rpLine('営業利益率',sales>0?(profit/sales*100).toFixed(1)+'%':'-',{bold:true})
     +'<div style="font-size:12px;font-weight:bold;margin:16px 0 6px">計画比</div>'
@@ -6533,10 +6593,10 @@ function generateReport(){
     ${repRow('　うち請求済（入金済を含む）',repYen(salesBilled))}
     ${repRow('　うち未請求',repYen(salesUnbilled))}
     ${repRow('入金実績（CF・収支入力分）',repYen(ledgerSales))}
-    ${repRow('経費合計',repYen(exp))}
-    ${repRow('役員報酬',repYen(lab))}
+    ${repRow('経費合計（CF管理の実績・交通費を含む）',repYen(exp))}
+    ${repRow('役員報酬（CF管理の実績）',repYen(lab))}
+    ${repRow('税金・公課（CF管理の実績）',repYen(tax))}
     ${repRow('営業利益',repYen(profit),{bold:true,bg:'#f5f5f5'})}
-    ${repRow('税金・公課（営業利益には含めない）',repYen(tax))}
     ${repRow('営業利益率',(sales>0?(profit/sales*100).toFixed(1)+'%':'-'),{bold:true,color:sales>0?marginColor(profit/sales*100):''})}
   </table>
   <div style="font-size:12px;font-weight:bold;margin:18px 0 6px">計画比</div>
@@ -6573,7 +6633,7 @@ function generateReport(){
     <tbody>${projects.map(p=>`<tr>
       <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${p.client||'-'}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${p.name}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${fmt(projectSalesAmount(p,mi))}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:right">${fmt(projectSalesAtAbs(p,abs))}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0">${kinds[p.contract]||p.contract}</td>
     </tr>`).join('')}
     <tr style="background:#f5f5f5;font-weight:bold">
@@ -6585,7 +6645,7 @@ function generateReport(){
 
   /* --- 3. 収支入力明細（売上区分のみ） --- */
   const salesRows=S.ledger
-    .filter(l=>isActual(l)&&l.type==='売上'&&l.date&&new Date(l.date).getMonth()===mi)
+    .filter(l=>isActual(l)&&l.type==='売上'&&dateToAbs(l.date)===abs)
     .sort((a,b)=>a.date.localeCompare(b.date));
   const salesTable=salesRows.length===0?repEmpty('この月の「売上」区分の入力はありません。'):
   `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -6618,7 +6678,7 @@ function generateReport(){
   const byAccount={};
   EXPENSE_ACCOUNTS.forEach(k=>{byAccount[k]=0});
   S.ledger.forEach(l=>{
-    if(!isActual(l)||!l.date||new Date(l.date).getMonth()!==mi)return;
+    if(!isActual(l)||dateToAbs(l.date)!==abs)return;
     if(ledgerGroup(l.type)!=='expense')return;
     if(byAccount[l.type]===undefined)byAccount[l.type]=0; // 旧区分「経費」など
     byAccount[l.type]+=l.amount;
@@ -6634,7 +6694,7 @@ function generateReport(){
   const byTax={};
   TAX_TYPES.forEach(k=>{byTax[k]=0});
   S.ledger.forEach(l=>{
-    if(!isActual(l)||!l.date||new Date(l.date).getMonth()!==mi)return;
+    if(!isActual(l)||dateToAbs(l.date)!==abs)return;
     if(ledgerGroup(l.type)!=='tax')return;
     if(byTax[l.type]===undefined)byTax[l.type]=0;
     byTax[l.type]+=l.amount;
@@ -6648,7 +6708,7 @@ function generateReport(){
 
   /* --- 6. 請求書発行状況 --- */
   const invoices=S.quotes.filter(q=>
-    q.type==='請求書'&&q.date&&new Date(q.date).getMonth()===mi);
+    q.type==='請求書'&&dateToAbs(q.date)===abs);
   const invoiceTotal=invoices.reduce((a,q)=>a+(q.amount||0),0);
   const invoiceTable=invoices.length===0?repEmpty('この月に発行した請求書はありません。'):
   `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -6685,7 +6745,7 @@ function generateReport(){
   </div>
   ${repSection('【0】期間累計サマリー（期初〜'+(mi+1)+'月）',fiscalSummary)}
   ${repSection('【1】サマリー（損益計算書形式）',rpBoth(summary,summaryCards))}
-  ${repSection('【2】案件別売上明細',rpBoth(projectTable,rpProjectCards(projects,p=>projectSalesAmount(p,mi),projectTotal)))}
+  ${repSection('【2】案件別売上明細',rpBoth(projectTable,rpProjectCards(projects,p=>projectSalesAtAbs(p,abs),projectTotal)))}
   ${repSection('【3】入金実績（収支入力分）',salesNote+rpBoth(salesTable,salesCards))}
   ${repSection('【4】経費明細（勘定科目別）',rpBoth(expenseTable,accountCards(byAccount,accountKeys,exp,'経費合計')))}
   ${repSection('【5】税金・公課明細（勘定科目別）',rpBoth(taxTable,accountCards(byTax,taxKeys,tax,'税金・公課 合計')))}
@@ -6708,37 +6768,9 @@ function printReport(){
    ★ 売上は案件ベース（発生ベース）。収支入力の売上は入金実績なので
      【4】の突合表にだけ出し、売上高の合計には混ぜない（売上の基準2系統）。
    ★ 実績は ledger の actual、予定は planned_out（出金予定）を使う。
+   ★ 営業利益は operatingProfit()＝売上 −(経費＋役員報酬＋税金)。
+     ダッシュボード・月次レポート・月次PLと同じ計算にそろえている。
    ===================================================================== */
-
-// 日付文字列 → 絶対月（年*12＋月）。読めなければ null
-function dateToAbs(s){
-  if(!s)return null;
-  const d=new Date(s);
-  if(isNaN(d.getTime()))return null;
-  return d.getFullYear()*12+d.getMonth();
-}
-
-// その絶対月の収支実績をグループごとに集計する（sumLedger の絶対月版）
-function sumLedgerAbs(abs){
-  const t={sales:0,expense:0,labor:0,tax:0};
-  S.ledger.forEach(l=>{
-    if(!isActual(l))return;
-    if(dateToAbs(l.date)!==abs)return;
-    t[ledgerGroup(l.type)]+=l.amount||0;
-  });
-  return t;
-}
-
-// その絶対月の出金予定（planned_out）をグループごとに集計する
-function sumPlannedOutAbs(abs){
-  const t={sales:0,expense:0,labor:0,tax:0};
-  S.ledger.forEach(l=>{
-    if(ledgerStatusOf(l)!=='planned_out')return;
-    if(dateToAbs(l.expectedDate||l.date)!==abs)return;
-    t[ledgerGroup(l.type)]+=l.amount||0;
-  });
-  return t;
-}
 
 // 通年レポートで使う期。月次レポート側に期セレクトは無いのでアクティブな期を使う。
 function annualFiscalYear(){
@@ -6763,8 +6795,11 @@ function annualRows(fy){
     const state=abs<nowAbs?'past':abs===nowAbs?'now':'future';
     const future=state==='future';
     const sales=booked.reduce((a,p)=>a+projectSalesAtAbs(p,abs),0);
-    const t=future?sumPlannedOutAbs(abs):sumLedgerAbs(abs);
-    const profit=sales-t.expense-t.labor;
+    /* 翌月以降は出金予定。ただし先に実績が入っていればそれも足す
+       （落とすとダッシュボードの年間累計と合計がずれるため）。 */
+    const act=sumLedgerAbs(abs);
+    const t=future?addGroups(act,sumPlannedOutAbs(abs)):act;
+    const profit=operatingProfit(sales,t.expense,t.labor,t.tax);
     return{
       abs,state,future,
       year:Math.floor(abs/12),
@@ -6829,7 +6864,7 @@ function buildAnnualReportHtml(fy){
   const col=list=>{
     const sales=annualSum(list,'sales'),expense=annualSum(list,'expense'),
       labor=annualSum(list,'labor'),tax=annualSum(list,'tax');
-    return{sales,expense,labor,tax,profit:sales-expense-labor};
+    return{sales,expense,labor,tax,profit:operatingProfit(sales,expense,labor,tax)};
   };
   const A=col(act),P=col(fut),T=col(rows);
   const actLabel=act.length?`実績（${act[0].label}〜${act[act.length-1].label}）`:'実績';
@@ -6855,8 +6890,8 @@ function buildAnnualReportHtml(fy){
     </tbody>
   </table>
   <div style="font-size:11px;color:#555;margin-top:8px">
-    ※ 売上高は案件ベース（発生ベース）。予定の経費・役員報酬・税金はCF管理の「出金予定」の合計です。
-    ※ 税金・公課は経費合計に含めず、営業利益の計算にも入れていません。
+    ※ 売上高は案件ベース（発生ベース）。実績はCF管理の入力（actual）、予定は「出金予定」の合計です。
+    ※ 営業利益 ＝ 売上高 −（経費合計 ＋ 役員報酬 ＋ 税金・公課）。
   </div>`;
 
   const kpiCards=
@@ -6967,6 +7002,7 @@ function buildAnnualReportHtml(fy){
       if(a!==null&&absList.indexOf(a)>=0)expActual[l.type]+=l.amount||0;
     }else if(ledgerStatusOf(l)==='planned_out'){
       // 予定は翌月以降ぶんだけ（当月までは実績で見るので二重計上しない）
+      // ※ 翌月以降に実績が入っていれば、それは上の実績側で数えている
       const a=dateToAbs(l.expectedDate||l.date);
       if(a!==null&&futureAbs[a])expPlan[l.type]+=l.amount||0;
     }

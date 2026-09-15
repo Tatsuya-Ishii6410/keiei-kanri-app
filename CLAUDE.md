@@ -6,6 +6,27 @@
 GitHub Pages（https://tatsuya-ishii6410.github.io/keiei-kanri-app/）で公開。
 GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 
+## ダッシュボード・レポートの集計
+- 売上 …… 案件ベース（発生ベース）。monthlyBillings があればその金額、無ければ案件の月額
+  `projectSalesAtAbsTotal(abs)` / `salesAtMonth(mi,year)`
+- 経費合計・役員報酬・税金・公課 …… CF管理（ledger）の実績（status=actual）
+  `cfExpenseByMonth(mi,year)` / `cfLaborByMonth(mi,year)` / `cfTaxByMonth(mi,year)`
+  中身はすべて `sumLedgerAbs(abs)`。交通費も経費合計に含める（会計上は当月の経費）
+- 入金待ち …… CF管理の入金予定（status=planned_in）の合計。`awaitingPayment()`
+  金額は addPlannedInForBilling() が grossAmount() で入れるので税込
+  カードをクリックするとCF管理へ（goToPlannedIn／nav-btn[3]）
+- ★ 営業利益 ＝ 売上 −（経費合計 ＋ 役員報酬 ＋ 税金・公課）。`operatingProfit()` を必ず使う
+  税金・公課も差し引くので、月次PL（Excel）の「当月損益」と一致する
+- 年間累計・期間サマリー …… `fiscalTotals(fy)`（＝cfFiscalTotals）。期の全月を絶対月で回す
+- ★ 集計は必ず「年＋月」＝絶対月で行う。月インデックス（0=1月）だけで足すと、
+  年をまたぐ期（例 2026-03〜2027-02）で別の年のデータを拾う。
+  `monthYearOf(mi,fy)` が月インデックスから正しい年を返す
+  （`monthYear`＝アクティブな期／`dashMonthYear`＝ダッシュボードで選択中の期）
+- ※ salesByMonth / salesYearTotal / salesSeries / calcProjectSalesByMonth /
+  projectSalesAmount は、この年またぎの問題があるため廃止した。復活させないこと
+- ダッシュボード・月次レポート・通年レポート・月次PL・融資力診断は
+  すべて同じ関数を使うので、同じ月なら数字が一致する
+
 ## 修正後の作業
 コードを修正したら必ず以下を実行：
 1. git add .
@@ -49,7 +70,10 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   収支入力明細（売上区分のみ）／経費明細（勘定科目別）／請求書発行状況
 - サマリーの「売上高（案件ベース）」は案件別売上明細と同じ範囲
   （契約済・進行中・完了）で集計する。明細の合計と必ず一致させること
-  ※ ダッシュボードの売上（calcProjectSalesByMonth）も同じ範囲なので、両者の数字は一致する
+  ※ ダッシュボードの売上も同じ projectSalesAtAbs なので、両者の数字は一致する
+- 経費合計・役員報酬・税金・公課はCF管理の実績（cfExpenseByMonth など）。
+  営業利益は operatingProfit()＝売上 −(経費＋役員報酬＋税金)
+  （詳しくは「ダッシュボード・レポートの集計」の節を見ること）
 - 印刷は @media print で topbar・操作ボタンを隠し、レポート本体のみА4に出力する
   （詳しくは「印刷・PDF出力」の節を見ること）
 
@@ -57,7 +81,9 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 月次レポートの月セレクトで「通年（期全体）」を選んで「レポートを生成」。既定は前月のまま
 - 対象の期は activeFiscalYear()（無ければ FORECAST_DEFAULT_FY）。月次レポート側に期セレクトは無い
 - ★ 集計は案件予実と同じく絶対月（fiscalAbsMonths / projectSalesAtAbs / ledgerSalesAbs）で行う
-- 当月まで＝実績（ledger の actual）、翌月以降＝予定（planned_out）。annualRows() が月ごとに作る
+- 当月まで＝実績（ledger の actual）、翌月以降＝予定（planned_out ＋ すでに入っている実績）。
+  annualRows() が月ごとに作る。翌月以降の実績を落とすと
+  ダッシュボードの年間累計と合計がずれるため足している
 - 売上はどの月も案件ベース（発生ベース）。【4】の入金実績（CFの売上区分）と合計には混ぜない
 - 【0】期間サマリーの「合計（売上）」と【2】案件別売上明細の合計は必ず一致する
   （どちらも projectSalesAtAbs / forecastProjectTotal）
@@ -137,7 +163,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 
 ## 収支の区分グループ
 - sales（売上）／ expense（経費系）／ labor（役員報酬・旧人件費）／ tax（税金・社会保険料）
-- 税金・公課は経費合計に含めず、営業利益の計算にも入れない
+- 税金・公課は経費合計には含めない（別枠で表示する）が、営業利益では差し引く
+  （operatingProfit）。月次PLの「当月損益」と一致させるため
 - バッジ色：売上=緑／役員報酬=アンバー／経費=赤／税金・公課=紫
 - 区分を増やすときは LEDGER_TYPES と、税金なら TAX_TYPES にも追加する
 
@@ -156,8 +183,11 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   例: 2026-03〜2027-02 → [2,3,…,11,0,1]。fiscalMonths() が期の並び順で返す
 - ダッシュボードの期セレクト・期間サマリー・月次推移グラフ、
   月次計画の入力月の並び、月次レポートの【0】期間累計サマリーがこれに連動する
-- 注意: 集計は「何月か」だけで行うため、同じ月を持つ複数の期は数字を区別できない
-  （年をまたぐ複数期のデータを同時に持つ場合は要拡張）
+- ダッシュボード・レポート・PLの集計は絶対月（年*12＋月）で行うので、
+  年をまたぐ期でも別の年のデータは拾わない（monthYearOf で月→年を導く）
+- 注意: 案件ページ・見積請求ページの月フィルター（projectHasMonth /
+  projectMonthAmount）はいまも月インデックスだけで絞るため、
+  同じ月を持つ複数の期は区別できない
 
 ## 見積書の契約期間
 - quotes に contractStart / contractEnd（YYYY-MM）/ paymentMethod / isMonthly を保持
@@ -172,8 +202,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 書式（色・太字）が必要なため xlsx-js-style を使う
   （公式の xlsx.full.min.js はセル書式に非対応。読めなかった場合の予備として残している）
   ライブラリはボタンを押したときに初めて読み込む
-- 販売管理費には役員報酬と税金・公課も含める。したがって
-  PLの「当月損益」はアプリの「営業利益」（税金を含まない）とは一致しない
+- 販売管理費には役員報酬と税金・公課も含める。
+  アプリの「営業利益」も税金・公課を差し引くので、PLの「当月損益」と一致する
 - 「共有先」は設定ページの company.shareWith から取得する
 
 ## ログイン認証
@@ -198,7 +228,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   同時に収支へ「売上」として登録する（ledgerに projectId を持たせる）
 - 銀行明細CSVの入金行は、税込金額の±1%以内の未入金案件を突合候補として提示する。
   チェックを入れて登録すると案件も入金済みになる
-- ダッシュボードの「💰 入金待ち」は invoiced の税込合計。クリックで案件ページへ
+- ダッシュボードの「💰 入金待ち」はCF管理の入金予定（planned_in）の合計。
+  クリックでCF管理ページへ（請求済にしても入金予定を作らなかった案件は出てこない）
 
 ## 入金ステータスの自動更新・一括変更
 - 請求書を作ると案件が uninvoiced → invoiced になる
@@ -218,7 +249,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 構造：.app > (.sidebar[fixed] + .main) 、.main > .topbar + .content
   サイドバー幅220px。.main は margin-left:220px で逃がす
 - ナビは .nav-btn。DOM順は ダッシュボード/案件/見積請求/収支/CSV/レポート/設定。
-  goToInvoiced() が querySelectorAll('.nav-btn')[1] を使うので順番を変えないこと
+  goToInvoiced() が querySelectorAll('.nav-btn')[1]、goToPlannedIn() が [3] を
+  使うので順番を変えないこと
 - ページ名は PAGE_TITLES を見て topbar-title に出す
 - 768px以下はサイドバーを隠し、トップバーの「☰ メニュー」で toggleSidebar()
 - 同期表示はトップバーとサイドバー下部の2箇所（save-indicator / save-indicator-side）
@@ -292,7 +324,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 ## CF管理は口座ベース
 - CF管理の集計は cfInflow / cfOutflow / cfPlannedIn / cfPlannedOut のみを使う
   （すべて ledger 由来。交通費の実績は除外）
-- ★ CF管理で calcProjectSalesByMonth / salesByMonth / salesYearTotal を使わないこと
+- ★ CF管理で projectSalesAtAbsTotal / salesAtMonth（案件ベースの売上）を使わないこと
   案件ベースの発生売上はダッシュボード・レポート・PL側の話
 - 「計画 vs 実績」カードもCF管理内では口座ベース（ledgerの売上のみ）で比較する
 
@@ -302,7 +334,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
    paidDate,paidAmount,expectedPayDate,note}
 - syncMonthlyBillings() が不足分だけ自動生成する（既存レコードは絶対に上書きしない）
   対象は契約済・進行中・完了。案件ページを開いたときと案件を保存したときに実行
-- calcProjectSalesByMonth はレコードがあればその金額、無ければ案件の月額を使う
+- projectSalesAtAbs / projectSalesAtAbsTotal はレコードがあればその金額、
+  無ければ案件の月額（projectDefaultMonthly）を使う
 - invoiceStatusOf(p) はレコードがあればそこから導く（全月入金済→paid、
   1件でも請求済→invoiced）。レコードが無い案件は従来どおり p.invoiceStatus
 - 一括ステータス変更・入金確認は対象月のレコードだけを更新する
@@ -341,7 +374,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   .fc-month-table / .fc-project-table を付けて列の出し分けをしている
   印刷時は @media print で display:table-cell に戻す
 - ★ 月次レポートと月次PLの「売上高」は案件ベース（発生ベース）のみ。
-  金額は monthlyBilling があればその値を使う（projectSalesAmount）。
+  金額は monthlyBilling があればその値を使う（projectSalesAtAbs）。
   収支入力の売上は「入金実績」として別枠に出す（合計には入れない）
   ダッシュボードの売上も同じ案件ベースなので、レポートと数字が一致する
 - レポートのスマホ表示は rpBoth(テーブル, カード) で両方を出力し、
@@ -350,10 +383,11 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   ※ スマホで表の min-width を強制しないこと。包み忘れた表が画面からはみ出し、
     左端の科目名が見切れる。保険として .report-card table{table-layout:fixed} を入れてある
 - ★ 売上の基準は2系統。混ぜないこと
-  発生ベース（案件・monthlyBilling）… ダッシュボード／月次レポート／月次PL
-    salesByMonth / salesYearTotal / salesSeries / calcProjectSalesByMonth
+  発生ベース（案件・monthlyBilling）… ダッシュボード／月次レポート／通年レポート／月次PL
+    projectSalesAtAbsTotal / salesAtMonth / projectSalesAtAbs
   入金ベース（ledgerの売上区分）… CF管理のみ
     cfInflow / cfOutflow / cfPlannedIn / cfPlannedOut
+  ※ 経費・役員報酬・税金はどちらのページでもCF管理（ledger の actual）が正
 - ★ 表を追加するときはスマホ用のカードも用意すること（横スクロール禁止）
   `<div class="table-wrap mob-table">…</div>` と `<div id="○○-cards" class="mob-cards"></div>`
   を並べ、描画関数で両方に流し込む。769px以上＝表／768px以下＝カード／印刷＝表。
