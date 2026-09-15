@@ -941,6 +941,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <button class="btn primary" onclick="generateReport()">レポートを生成</button>
       <button class="btn" onclick="printReport()">🖨️ 印刷する</button>
       <button class="btn" id="pl-download-btn" onclick="downloadMonthlyPL()">📥 月次PL（Excel）をダウンロード</button>
+      <button class="btn" onclick="openTaxEstimate()">🧮 税金を試算する</button>
     </div>
     <div class="report-sheet"><div id="report-body"></div></div>
   </div>
@@ -983,6 +984,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">インボイス登録番号</label><input id="s-invoice" type="text" placeholder="T1234567890123"></div>
+      <div class="form-group"><label class="form-label">資本金（円）※法人税の試算に使います</label><input id="s-capital" type="number" placeholder="1000000"></div>
       <div class="form-group"><label class="form-label">支払条件</label><input id="s-payment" type="text" placeholder="発行日から30日以内"></div>
     </div>
     <div class="form-row single">
@@ -1048,6 +1050,108 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <button class="btn primary" onclick="saveFinance()">✓ 保存する</button>
     </div>
     <div id="finance-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">税金・社会保険 計算設定</span>
+      <button class="btn primary" onclick="openTaxEstimate()">🧮 税金を試算する</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+      料率は毎年変わります。年度が替わったら協会けんぽ・国税庁の最新の率に直してください。
+    </div>
+
+    <div style="font-size:13px;font-weight:700;color:var(--navy-text);margin:4px 0 10px">■ 消費税</div>
+    <div class="form-row three">
+      <div class="form-group"><label class="form-label">消費税率（%）</label>
+        <input id="tx-ct-rate" type="number" step="0.1" placeholder="10"></div>
+      <div class="form-group"><label class="form-label">課税売上割合（%）</label>
+        <input id="tx-ct-ratio" type="number" step="0.1" placeholder="100"></div>
+      <div class="form-group"><label class="form-label">申告・納付の回数（年）</label>
+        <select id="tx-ct-filings">
+          <option value="1">年1回（確定申告と同時）</option>
+          <option value="2">年2回（中間1回）</option>
+          <option value="4">年4回（中間3回）</option>
+          <option value="12">年12回（中間11回）</option>
+        </select></div>
+    </div>
+    <div class="form-row three">
+      <div class="form-group"><label class="form-label">仕入税額控除の方式</label>
+        <select id="tx-ct-method" onchange="onTaxMethodChange()">
+          <option value="simple">簡易課税（みなし仕入率）</option>
+          <option value="general">原則課税（実際の課税仕入から概算）</option>
+        </select></div>
+      <div class="form-group" id="tx-ct-type-group"><label class="form-label">事業区分</label>
+        <select id="tx-ct-type" onchange="onBusinessTypeChange()">
+          <option value="1">第1種（卸売業）</option>
+          <option value="2">第2種（小売業）</option>
+          <option value="3">第3種（製造業等）</option>
+          <option value="4">第4種（その他）</option>
+          <option value="5">第5種（サービス業）</option>
+          <option value="6">第6種（不動産業）</option>
+        </select></div>
+      <div class="form-group" id="tx-ct-deemed-group"><label class="form-label">みなし仕入率（%）</label>
+        <input id="tx-ct-deemed" type="number" step="1" placeholder="50"></div>
+    </div>
+
+    <div style="font-size:13px;font-weight:700;color:var(--navy-text);margin:18px 0 10px">■ 社会保険</div>
+    <div class="form-row three">
+      <div class="form-group"><label class="form-label">役員報酬 月額（円）※空欄なら収支の実績から推定</label>
+        <input id="tx-si-pay" type="number" placeholder="500000" oninput="renderStandardPayHint()"></div>
+      <div class="form-group"><label class="form-label">標準報酬月額</label>
+        <select id="tx-si-auto" onchange="onStandardModeChange()">
+          <option value="1">等級表から自動判定</option>
+          <option value="0">手動で入力する</option>
+        </select></div>
+      <div class="form-group" id="tx-si-std-group"><label class="form-label">標準報酬月額（円）</label>
+        <input id="tx-si-std" type="number" placeholder="500000"></div>
+    </div>
+    <div class="form-row three">
+      <div class="form-group"><label class="form-label">健康保険料率（%）兵庫県協会けんぽ</label>
+        <input id="tx-si-health" type="number" step="0.01" placeholder="10.34"></div>
+      <div class="form-group"><label class="form-label">厚生年金保険料率（%）</label>
+        <input id="tx-si-pension" type="number" step="0.001" placeholder="18.300"></div>
+      <div class="form-group"><label class="form-label">介護保険料率（%）40歳以上</label>
+        <input id="tx-si-care" type="number" step="0.01" placeholder="1.60"></div>
+    </div>
+    <div class="form-row single">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+        <input id="tx-si-over40" type="checkbox" style="width:auto;margin:0">
+        40歳以上（介護保険第2号被保険者）として介護保険料も計算する
+      </label>
+    </div>
+    <div id="tx-std-hint" style="font-size:12px;color:var(--text-muted);margin-top:6px"></div>
+
+    <div style="font-size:13px;font-weight:700;color:var(--navy-text);margin:18px 0 10px">■ 法人税等</div>
+    <div class="form-row three">
+      <div class="form-group"><label class="form-label">資本金（円）※会社情報から</label>
+        <input id="tx-co-capital" type="number" placeholder="1000000" readonly
+          style="background:var(--bg-secondary)"></div>
+      <div class="form-group"><label class="form-label">法人税率（所得800万円以下・%）</label>
+        <input id="tx-co-low" type="number" step="0.1" placeholder="15"></div>
+      <div class="form-group"><label class="form-label">法人税率（800万円超・%）</label>
+        <input id="tx-co-high" type="number" step="0.1" placeholder="23.2"></div>
+    </div>
+    <div class="form-row three">
+      <div class="form-group"><label class="form-label">法人住民税 法人税割（%）</label>
+        <input id="tx-co-resident" type="number" step="0.1" placeholder="10.4"></div>
+      <div class="form-group"><label class="form-label">法人住民税 均等割（円/年）</label>
+        <input id="tx-co-percapita" type="number" placeholder="70000"></div>
+      <div class="form-group"><label class="form-label">軽減税率の上限（円）</label>
+        <input id="tx-co-threshold" type="number" placeholder="8000000"></div>
+    </div>
+    <div class="form-row three">
+      <div class="form-group"><label class="form-label">事業税（所得400万円以下・%）</label>
+        <input id="tx-co-bizlow" type="number" step="0.1" placeholder="3.5"></div>
+      <div class="form-group"><label class="form-label">事業税（400万〜800万・%）</label>
+        <input id="tx-co-bizmid" type="number" step="0.1" placeholder="5.3"></div>
+      <div class="form-group"><label class="form-label">事業税（800万円超・%）</label>
+        <input id="tx-co-bizhigh" type="number" step="0.1" placeholder="7.0"></div>
+    </div>
+
+    <div class="actions-row">
+      <button class="btn primary" onclick="saveTaxSettings()">✓ 保存する</button>
+    </div>
+    <div id="tax-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
   </div>
   <div class="card">
     <div class="card-header"><span class="card-title">データ保存先（Google Sheets）</span></div>
@@ -1583,6 +1687,22 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </div>
 </div>
 
+<div class="modal-overlay" id="modal-tax-estimate">
+<div class="modal wide">
+  <div class="modal-header"><span class="modal-title">🧮 税金・社会保険の試算</span><button class="btn sm" onclick="closeModal('modal-tax-estimate')">✕</button></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">対象の期</label>
+      <select id="tax-fiscal" onchange="renderTaxEstimate()"></select></div>
+  </div>
+  <div id="tax-estimate-body"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-tax-estimate')">閉じる</button>
+    <button class="btn primary" onclick="registerTaxPlans()">💾 CF管理に出金予定として登録</button>
+  </div>
+  <div id="tax-register-msg" style="margin-top:8px;font-size:13px;text-align:right;min-height:20px"></div>
+</div>
+</div>
+
 <div class="modal-overlay" id="modal-edit-plan">
 <div class="modal">
   <div class="modal-header"><span class="modal-title">月次計画を編集</span><button class="btn sm" onclick="closeModal('modal-edit-plan')">✕</button></div>
@@ -1637,6 +1757,7 @@ const defaultState={
     accountNumber:'2428016',
     accountHolder:'アスリンク株式会社',
     invoice:'',
+    capital:'',
     payment:'発行日から30日以内',
     shareWith:'',
     note:''
@@ -1682,6 +1803,38 @@ const defaultState={
   travel:{googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15},
   // 財務情報（融資力診断で使う）
   finance:{loan:0},
+  /* 税金・社会保険の計算設定。
+     料率は毎年変わるので、設定ページから直せるようにしてある。
+     既定値は令和7年度・兵庫県（協会けんぽ）を入れている。 */
+  taxSettings:{
+    consumptionTax:{
+      rate:10,            // 消費税率（%）
+      taxableRatio:100,   // 課税売上割合（%）
+      method:'simple',    // simple=簡易課税 / general=原則課税
+      businessType:5,     // 事業区分（第1種〜第6種）
+      deemedRate:50,      // みなし仕入率（%）。第5種サービス業=50%
+      filingsPerYear:1    // 申告・納付の回数（年1回/2回/4回/12回）
+    },
+    socialInsurance:{
+      monthlyPay:0,       // 役員報酬月額（0なら固定費・収支から推定）
+      autoStandard:true,  // 標準報酬月額を等級表から自動判定するか
+      standardPay:0,      // 手動指定の標準報酬月額
+      healthRate:10.34,   // 健康保険料率（%）兵庫県協会けんぽ
+      pensionRate:18.300, // 厚生年金保険料率（%）
+      careRate:1.60,      // 介護保険料率（%）40歳以上
+      over40:false        // 40歳以上（介護保険第2号被保険者）か
+    },
+    corporateTax:{
+      lowRate:15,         // 法人税率（所得800万円以下）
+      highRate:23.2,      // 法人税率（800万円超）
+      threshold:8000000,  // 軽減税率の上限
+      residentRate:10.4,  // 法人住民税 法人税割（%）
+      perCapita:70000,    // 法人住民税 均等割（円/年）
+      bizLow:3.5,         // 事業税（所得400万円以下）
+      bizMid:5.3,         // 事業税（400万〜800万）
+      bizHigh:7.0         // 事業税（800万円超）
+    }
+  },
   // 固定費: {id,type,desc,amount,startMonth,endMonth,enabled}
   fixedCosts:[],
   nextProjectId:1,nextQuoteNum:1,nextLedgerId:1,nextFixedCostId:1
@@ -1761,6 +1914,11 @@ function mergeState(parsed){
   })).filter(b=>b.id&&b.projectId&&b.billingMonth);
   if(!s.nextBillingId)s.nextBillingId=Math.max(0,...s.monthlyBillings.map(b=>b.id))+1;
   s.bankBalance=parseInt(s.bankBalance)||0;
+  // 税金設定は、項目が増えても古いデータで欠けないように既定値へ重ねる
+  s.taxSettings=s.taxSettings||{};
+  Object.keys(defaultState.taxSettings).forEach(g=>{
+    s.taxSettings[g]=Object.assign({},defaultState.taxSettings[g],s.taxSettings[g]||{});
+  });
   if(!Array.isArray(s.fixedCosts))s.fixedCosts=[];
   if(!Array.isArray(s.fiscalYears))s.fiscalYears=[];
   s.fiscalYears=s.fiscalYears.map(f=>({
@@ -1874,7 +2032,7 @@ function keepLocalWhenMissing(remote){
   ['nextBillingId','nextFiscalYearId','nextFixedCostId','bankBalance'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
-  ['travel','finance'].forEach(k=>{
+  ['travel','finance','taxSettings'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
   return d;
@@ -3905,6 +4063,496 @@ function saveTravelSettings(){
   refreshTravelMode();
   const msg=document.getElementById('travel-msg');
   msg.textContent='✓ 保存しました';setTimeout(()=>{msg.textContent=''},3000);
+}
+
+/* ===== 税金・社会保険の自動計算 =======================================
+   期の売上・利益・役員報酬から、消費税／社会保険料／法人税等を試算して
+   CF管理の出金予定（planned_out）に登録する。
+
+   ★ あくまで概算。実際の申告額は顧問税理士に確認すること。
+     特に消費税の原則課税は、課税仕入の区分（不課税・非課税・軽減税率）を
+     見ていないので、経費の実績からの概算しか出せない。
+   ★ 料率は毎年変わる。設定ページの「税金・社会保険 計算設定」から直す。
+   ===================================================================== */
+
+// 事業区分ごとのみなし仕入率（簡易課税）
+const DEEMED_RATES={1:90,2:80,3:70,4:60,5:50,6:40};
+
+/* 健康保険の標準報酬月額表（協会けんぽ・全50等級）。
+   [等級, 標準報酬月額, 報酬月額の下限（この額以上）] を下から順に並べる。
+   厚生年金は等級1（88,000円）〜32（650,000円）なので、
+   健康保険の標準報酬月額を 88,000〜650,000 に収めれば同じ値になる。 */
+const STANDARD_PAY_TABLE=[
+  [1,58000,0],[2,68000,63000],[3,78000,73000],[4,88000,83000],[5,98000,93000],
+  [6,104000,101000],[7,110000,107000],[8,118000,114000],[9,126000,122000],[10,134000,130000],
+  [11,142000,138000],[12,150000,146000],[13,160000,155000],[14,170000,165000],[15,180000,175000],
+  [16,190000,185000],[17,200000,195000],[18,220000,210000],[19,240000,230000],[20,260000,250000],
+  [21,280000,270000],[22,300000,290000],[23,320000,310000],[24,340000,330000],[25,360000,350000],
+  [26,380000,370000],[27,410000,395000],[28,440000,425000],[29,470000,455000],[30,500000,485000],
+  [31,530000,515000],[32,560000,545000],[33,590000,575000],[34,620000,605000],[35,650000,635000],
+  [36,680000,665000],[37,710000,695000],[38,750000,730000],[39,790000,770000],[40,830000,810000],
+  [41,880000,855000],[42,930000,905000],[43,980000,955000],[44,1030000,1005000],[45,1090000,1055000],
+  [46,1150000,1115000],[47,1210000,1175000],[48,1270000,1235000],[49,1330000,1295000],[50,1390000,1355000]
+];
+const PENSION_MIN=88000, PENSION_MAX=650000;
+
+// 報酬月額から健康保険の等級と標準報酬月額を求める
+function standardPayOf(pay){
+  const v=Math.max(0,Math.round(pay||0));
+  let row=STANDARD_PAY_TABLE[0];
+  for(let i=0;i<STANDARD_PAY_TABLE.length;i++){
+    if(v>=STANDARD_PAY_TABLE[i][2])row=STANDARD_PAY_TABLE[i];
+  }
+  return{grade:row[0],standard:row[1]};
+}
+
+// 設定を読む（項目が増えても古いデータで欠けないよう既定値に重ねる）
+function taxSettings(){
+  if(!S.taxSettings)S.taxSettings={};
+  Object.keys(defaultState.taxSettings).forEach(g=>{
+    S.taxSettings[g]=Object.assign({},defaultState.taxSettings[g],S.taxSettings[g]||{});
+  });
+  return S.taxSettings;
+}
+
+/* 役員報酬の月額。設定に入力があればそれを使い、
+   無ければ期の役員報酬（CF管理の実績）の1ヶ月平均から推定する。 */
+function directorMonthlyPay(fy){
+  const si=taxSettings().socialInsurance;
+  if(si.monthlyPay>0)return si.monthlyPay;
+  let total=0,paid=0;
+  fiscalAbsMonths(fy).forEach(abs=>{
+    const v=sumLedgerAbs(abs).labor;
+    if(v>0){total+=v;paid++;}
+  });
+  return paid?Math.round(total/paid):0;
+}
+
+/* ---- 消費税（年間） ---- */
+function estimateConsumptionTax(fy){
+  const ct=taxSettings().consumptionTax;
+  const rate=(ct.rate||10)/100;
+  const ratio=(ct.taxableRatio===0?0:(ct.taxableRatio||100))/100;
+  // 期内の売上（案件ベース・税抜）に課税売上割合をかけて課税売上にする
+  let netSales=0;
+  fiscalAbsMonths(fy).forEach(abs=>{netSales+=projectSalesAtAbsTotal(abs)});
+  const taxableNet=Math.floor(netSales*ratio);
+  const grossSales=Math.floor(taxableNet*(1+rate));   // 税込の参考値
+  const received=Math.floor(taxableNet*rate);         // 受け取った消費税
+
+  let paid=0,basis='';
+  if(ct.method==='general'){
+    /* 原則課税：期内の経費（実績＋出金予定）を課税仕入とみなし、
+       税込金額に 10/110 をかけて仕入にかかった消費税を概算する。
+       役員報酬・税金・社会保険料は不課税なので含めない。 */
+    let purchases=0;
+    fiscalAbsMonths(fy).forEach(abs=>{
+      purchases+=sumLedgerAbs(abs).expense+sumPlannedOutAbs(abs).expense;
+    });
+    paid=Math.floor(purchases*rate/(1+rate));
+    basis='原則課税（課税仕入 '+fmt(purchases)+' の税込金額から概算）';
+  }else{
+    const deemed=(ct.deemedRate||DEEMED_RATES[ct.businessType]||50)/100;
+    paid=Math.floor(received*deemed);
+    basis='簡易課税・第'+ct.businessType+'種（みなし仕入率 '+ct.deemedRate+'%）';
+  }
+  const due=Math.max(0,Math.floor((received-paid)/100)*100); // 100円未満切捨て
+  const filings=ct.filingsPerYear||1;
+  return{netSales,taxableNet,grossSales,received,paid,due,basis,
+    ratio:ct.taxableRatio,rate:ct.rate,filings,perFiling:Math.floor(due/filings)};
+}
+
+/* 会社負担の保険料（折半額）。
+   ★ 標準報酬月額×料率 を素直に書くと浮動小数の誤差で1円ずれる
+     （500000*0.1034 が 51699.999… になる）。先に円単位へ丸めてから半分にする。
+   折半額の端数は「50銭以下は切り捨て・50銭超は切り上げ」（協会けんぽの扱い）。 */
+function halfPremium(base,ratePercent){
+  const full=Math.round((base||0)*(ratePercent||0))/100;  // 全額（円）
+  return Math.max(0,Math.ceil(full/2-0.5));
+}
+
+/* ---- 社会保険料（会社負担・月額） ---- */
+function estimateSocialInsurance(fy){
+  const si=taxSettings().socialInsurance;
+  const pay=directorMonthlyPay(fy);
+  const auto=si.autoStandard!==false;
+  const g=standardPayOf(pay);
+  const standard=auto?g.standard:(si.standardPay||g.standard);
+  const grade=auto?g.grade:standardPayOf(standard).grade;
+  const pensionBase=Math.min(Math.max(standard,PENSION_MIN),PENSION_MAX);
+  // 労使折半なので会社負担は半額
+  const health=halfPremium(standard,si.healthRate);
+  const pension=halfPremium(pensionBase,si.pensionRate);
+  const care=si.over40?halfPremium(standard,si.careRate):0;
+  const monthly=health+pension+care;
+  return{pay,grade,standard,pensionBase,health,pension,care,monthly,
+    yearly:monthly*12,over40:!!si.over40,auto};
+}
+
+/* ---- 法人税等（年間） ---- */
+// 段階税率の計算。brackets は [上限, 率] の並び（上限 null は上限なし）
+function bracketTax(income,brackets){
+  let prev=0,total=0;
+  brackets.forEach(b=>{
+    const cap=b[0]===null?Infinity:b[0];
+    const part=Math.max(0,Math.min(income,cap)-prev);
+    total+=part*b[1]/100;
+    prev=cap;
+  });
+  return Math.floor(total);
+}
+
+function estimateCorporateTax(fy){
+  const co=taxSettings().corporateTax;
+  const t=fiscalTotals(fy);
+  /* 課税所得は「売上 −（経費 ＋ 役員報酬）」の概算。
+     アプリの営業利益は税金・公課も引いているので、ここでは引かない。
+     ※ 実際の所得は交際費の損金不算入・減価償却・繰越欠損金などで変わる。 */
+  const income=Math.max(0,t.sales-t.expense-t.labor);
+  const th=co.threshold||8000000;
+  const corporate=bracketTax(income,[[th,co.lowRate],[null,co.highRate]]);
+  const residentRate=Math.floor(corporate*(co.residentRate/100));
+  const perCapita=co.perCapita||0;
+  const resident=residentRate+perCapita;
+  const business=bracketTax(income,[[4000000,co.bizLow],[8000000,co.bizMid],[null,co.bizHigh]]);
+  const total=corporate+resident+business;
+  return{income,corporate,residentRate,perCapita,resident,business,total,
+    effective:income>0?total/income*100:null,
+    sales:t.sales,expense:t.expense,labor:t.labor,tax:t.tax,profit:t.profit};
+}
+
+/* ---- 納付期限の既定値 ----
+   法人税・消費税とも、原則は期末の翌日から2ヶ月以内。
+   モーダルで日付を直せるので、実際の期限に合わせて変えること。 */
+function filingDueDate(fy,monthsAfter){
+  const end=ymToAbs(fy&&fy.endMonth);
+  if(end===null)return'';
+  return absToLastDate(end+(monthsAfter||2));
+}
+
+/* ===== 試算モーダル ================================================= */
+
+let taxEstimateCache=null;
+
+function taxFiscalYear(){
+  const el=document.getElementById('tax-fiscal');
+  if(el&&el.value){
+    const f=fiscalById(parseInt(el.value));
+    if(f)return f;
+  }
+  return activeFiscalYear()||FORECAST_DEFAULT_FY;
+}
+
+function openTaxEstimate(){
+  const sel=document.getElementById('tax-fiscal');
+  const list=fiscalList();
+  if(list.length===0){
+    const d=FORECAST_DEFAULT_FY;
+    sel.innerHTML='<option value="'+d.id+'">'+d.name+'</option>';
+  }else{
+    const act=activeFiscalYear();
+    sel.innerHTML=list.map(f=>'<option value="'+f.id+'">'+f.name+'（'+fiscalLabel(f)+'）</option>').join('');
+    sel.value=act?String(act.id):String(list[0].id);
+  }
+  document.getElementById('tax-register-msg').textContent='';
+  renderTaxEstimate();
+  openModal('modal-tax-estimate');
+}
+
+// 試算の1行
+function taxRow(label,value,opt){
+  const o=opt||{};
+  const w=o.bold?'font-weight:700;':'';
+  const border=o.top?'border-top:2px solid var(--navy);':'border-bottom:0.5px solid var(--border);';
+  return'<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 2px;'+border+w+'">'
+    +'<span style="'+(o.indent?'padding-left:14px;color:var(--text-secondary);':'')+'">'+label+'</span>'
+    +'<span style="white-space:nowrap;'+(o.color?'color:'+o.color+';':'')+'">'+value+'</span>'
+    +'</div>';
+}
+
+function taxBlock(title,inner,note){
+  return'<div class="card" style="margin-bottom:14px;padding:14px 16px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--navy-text);margin-bottom:8px">'+title+'</div>'
+    +inner
+    +(note?'<div style="font-size:11px;color:var(--text-muted);margin-top:8px">'+note+'</div>':'')
+    +'</div>';
+}
+
+// 「納付予定日 ＋ 登録するか」の2列
+function taxDateRow(dateId,onId,label,date,enabled){
+  return'<div class="form-row" style="margin-top:12px">'
+    +'<div class="form-group"><label class="form-label">'+label+'</label>'
+    +'<input id="'+dateId+'" type="date" value="'+date+'"></div>'
+    +'<div class="form-group"><label class="form-label">CF管理への登録</label>'
+    +'<select id="'+onId+'">'
+    +'<option value="'+(enabled?1:0)+'">'+(enabled?'登録する':'登録しない')+'</option>'
+    +'<option value="0">登録しない</option>'
+    +'</select></div></div>';
+}
+
+function renderTaxEstimate(){
+  const body=document.getElementById('tax-estimate-body');
+  if(!body)return;
+  const fy=taxFiscalYear();
+  let ct,si,co;
+  try{
+    ct=estimateConsumptionTax(fy);
+    si=estimateSocialInsurance(fy);
+    co=estimateCorporateTax(fy);
+  }catch(e){
+    console.error('税金の試算に失敗しました',e);
+    body.innerHTML='<div class="alert alert-error">❌ 試算できませんでした<br><small>'
+      +(e&&e.message?e.message:e)+'</small></div>';
+    taxEstimateCache=null;
+    return;
+  }
+
+  // 社会保険を登録する月（翌月〜期末）
+  const now=new Date();
+  const nowAbs=now.getFullYear()*12+now.getMonth();
+  const siMonths=fiscalAbsMonths(fy).filter(a=>a>nowAbs);
+  const due=filingDueDate(fy,2);
+
+  taxEstimateCache={fy,ct,si,co,siMonths};
+
+  const siRange=siMonths.length
+    ?'翌月〜期末の '+siMonths.length+'ヶ月（各月末に登録）'
+    :'なし（期末まで残りがありません）';
+
+  body.innerHTML=
+  '<div class="alert alert-info" style="margin-bottom:14px">'
+  +fy.name+'（'+fiscalLabel(fy)+'）の数字をもとにした<strong>概算</strong>です。'
+  +'実際の申告額は顧問税理士に確認してください。</div>'
+
+  +taxBlock('① 消費税（年間）',
+    taxRow('売上高（案件ベース・税抜）',fmt(ct.netSales))
+    +taxRow('課税売上（課税売上割合 '+ct.ratio+'%）',fmt(ct.taxableNet),{indent:true})
+    +taxRow('課税売上（税込換算・参考）',fmt(ct.grossSales),{indent:true})
+    +taxRow('受け取り消費税（課税売上 × '+ct.rate+'%）',fmt(ct.received))
+    +taxRow('支払消費税（仕入税額控除）','▲ '+fmt(ct.paid))
+    +taxRow('納付消費税',fmt(ct.due),{bold:true,top:true,color:'#E24B4A'})
+    +(ct.filings>1?taxRow('1回あたり（年'+ct.filings+'回）',fmt(ct.perFiling),{indent:true}):'')
+    +taxDateRow('tax-ct-date','tax-ct-on','納付予定日',due,ct.due>0),
+    ct.basis+'<br>納付予定日の既定は「期末の2ヶ月後の末日」（原則の申告期限）です。実際の期限に合わせて直してください。'
+    +'<br>受け取り消費税は税抜の課税売上に税率をかけて計算しています（税込金額に税率をかけると過大になるため）。')
+
+  +taxBlock('② 社会保険料（会社負担・月額）',
+    taxRow('役員報酬 月額',fmt(si.pay)
+      +(taxSettings().socialInsurance.monthlyPay>0?'':'<span style="font-size:11px;color:var(--text-muted)">（実績から推定）</span>'))
+    +taxRow('標準報酬月額（第'+si.grade+'等級）',fmt(si.standard)+(si.auto?'':'（手動）'))
+    +taxRow('健康保険料（折半後）',fmt(si.health),{indent:true})
+    +taxRow('厚生年金保険料（折半後）',fmt(si.pension),{indent:true})
+    +taxRow('介護保険料（折半後）',si.over40?fmt(si.care):'－（40歳未満）',{indent:true})
+    +taxRow('月額合計',fmt(si.monthly),{bold:true,top:true,color:'#E24B4A'})
+    +taxRow('年額合計（12ヶ月）',fmt(si.yearly),{bold:true})
+    +'<div class="form-row" style="margin-top:12px">'
+    +'<div class="form-group"><label class="form-label">登録する月</label>'
+    +'<input type="text" value="'+siRange+'" readonly style="background:var(--bg-secondary)"></div>'
+    +'<div class="form-group"><label class="form-label">CF管理への登録</label>'
+    +'<select id="tax-si-on">'
+    +'<option value="'+(siMonths.length&&si.monthly>0?1:0)+'">'+(siMonths.length&&si.monthly>0?'登録する':'登録しない')+'</option>'
+    +'<option value="0">登録しない</option></select></div></div>',
+    '厚生年金の標準報酬月額は '+fmt(PENSION_MIN)+'〜'+fmt(PENSION_MAX)+' が上下限のため、計算には '+fmt(si.pensionBase)+' を使っています。'
+    +'<br>会社負担のみです（本人負担分は役員報酬から天引きされるので、口座からは二重に出ていきません）。')
+
+  +taxBlock('③ 法人税等（年間）',
+    taxRow('売上高（案件ベース）',fmt(co.sales))
+    +taxRow('経費合計','▲ '+fmt(co.expense),{indent:true})
+    +taxRow('役員報酬','▲ '+fmt(co.labor),{indent:true})
+    +taxRow('課税所得（概算）',fmt(co.income),{bold:true})
+    +taxRow('法人税',fmt(co.corporate))
+    +taxRow('法人住民税 法人税割',fmt(co.residentRate),{indent:true})
+    +taxRow('法人住民税 均等割',fmt(co.perCapita),{indent:true})
+    +taxRow('事業税',fmt(co.business))
+    +taxRow('法人税等 合計',fmt(co.total),{bold:true,top:true,color:'#E24B4A'})
+    +taxRow('実効税率（対 課税所得）',co.effective===null?'-':co.effective.toFixed(1)+'%',{bold:true})
+    +taxDateRow('tax-co-date','tax-co-on','納付予定日',due,co.total>0),
+    '課税所得は「売上 −（経費 ＋ 役員報酬）」の概算です。交際費の損金不算入・減価償却・繰越欠損金などは見ていません。'
+    +'<br>赤字でも法人住民税の均等割 '+fmt(co.perCapita)+' は納める必要があります。');
+}
+
+/* ---- CF管理への登録 ---- */
+
+// 同じ摘要・同じ月の出金予定がすでにあるか
+function hasPlannedOutLike(desc,ym){
+  return S.ledger.some(l=>ledgerStatusOf(l)==='planned_out'
+    &&l.desc===desc
+    &&String(ledgerDateOf(l)||'').slice(0,7)===ym);
+}
+
+function addTaxPlannedOut(x){
+  S.ledger.push({
+    id:S.nextLedgerId++,
+    date:x.date,
+    expectedDate:x.date,
+    type:x.type,
+    desc:x.desc,
+    amount:Math.round(x.amount||0),
+    memo:x.memo||'',
+    status:'planned_out'
+  });
+}
+
+function registerTaxPlans(){
+  const c=taxEstimateCache;
+  const msg=document.getElementById('tax-register-msg');
+  if(!c){msg.style.color='#E24B4A';msg.textContent='先に試算を表示してください';return;}
+  const name=fiscalTitle(c.fy)||c.fy.name||'';
+  const on=id=>{const el=document.getElementById(id);return !!el&&el.value==='1'};
+  const dateOf=id=>{const el=document.getElementById(id);return el?el.value:''};
+
+  const plans=[];
+  if(on('tax-ct-on')&&c.ct.due>0){
+    const d=dateOf('tax-ct-date');
+    if(!d){msg.style.color='#E24B4A';msg.textContent='消費税の納付予定日を入れてください';return;}
+    plans.push({date:d,type:'消費税（納付）',desc:'消費税確定申告 '+name+'分',
+      amount:c.ct.due,memo:'試算（'+c.ct.basis+'）'});
+  }
+  if(on('tax-si-on')&&c.si.monthly>0){
+    c.siMonths.forEach(abs=>{
+      const y=Math.floor(abs/12),m=abs%12+1;
+      plans.push({date:absToLastDate(abs),type:'社会保険料',
+        desc:'社会保険料 '+y+'年'+m+'月分',amount:c.si.monthly,
+        memo:'健康保険・厚生年金の会社負担（試算）'});
+    });
+  }
+  if(on('tax-co-on')&&c.co.total>0){
+    const d=dateOf('tax-co-date');
+    if(!d){msg.style.color='#E24B4A';msg.textContent='法人税等の納付予定日を入れてください';return;}
+    plans.push({date:d,type:'法人税・住民税・事業税（納付）',desc:'法人税等 '+name+'分',
+      amount:c.co.total,memo:'法人税・法人住民税・事業税の試算'});
+  }
+
+  if(plans.length===0){
+    msg.style.color='#E24B4A';msg.textContent='登録する項目がありません';return;
+  }
+
+  // 重複チェック（同じ摘要・同じ月の出金予定）
+  const dup=plans.filter(x=>hasPlannedOutLike(x.desc,String(x.date).slice(0,7)));
+  const fresh=plans.filter(x=>!hasPlannedOutLike(x.desc,String(x.date).slice(0,7)));
+  if(dup.length>0){
+    const list=dup.slice(0,5).map(x=>'・'+x.desc+'（'+x.date+'）').join('\n')
+      +(dup.length>5?'\nほか'+(dup.length-5)+'件':'');
+    if(fresh.length===0){
+      alert('次の出金予定はすでに登録されています。\n\n'+list+'\n\n登録するものがないので中止しました。');
+      msg.style.color='#EF9F27';msg.textContent='すでに登録済みでした';
+      return;
+    }
+    if(!confirm('次の出金予定はすでに登録されています。\n\n'+list
+      +'\n\nこれらは飛ばして、残り'+fresh.length+'件だけ登録しますか？'))return;
+  }
+
+  fresh.forEach(addTaxPlannedOut);
+  saveState();
+  refreshAll();
+  msg.style.color='var(--green)';
+  msg.textContent='✓ '+fresh.length+'件をCF管理の出金予定に登録しました'
+    +(dup.length?'（'+dup.length+'件は登録済みのため飛ばしました）':'');
+}
+
+/* ===== 設定フォーム ================================================= */
+
+function onTaxMethodChange(){
+  const el=document.getElementById('tx-ct-method');
+  if(!el)return;
+  const simple=el.value==='simple';
+  document.getElementById('tx-ct-type-group').style.display=simple?'':'none';
+  document.getElementById('tx-ct-deemed-group').style.display=simple?'':'none';
+}
+
+function onBusinessTypeChange(){
+  const t=parseInt(document.getElementById('tx-ct-type').value)||5;
+  document.getElementById('tx-ct-deemed').value=DEEMED_RATES[t]||50;
+}
+
+function onStandardModeChange(){
+  const el=document.getElementById('tx-si-auto');
+  if(!el)return;
+  const auto=el.value==='1';
+  document.getElementById('tx-si-std-group').style.display=auto?'none':'';
+  renderStandardPayHint();
+}
+
+// 入力した役員報酬から等級を出して添える
+function renderStandardPayHint(){
+  const el=document.getElementById('tx-std-hint');
+  if(!el)return;
+  const pay=parseInt(document.getElementById('tx-si-pay').value)||0;
+  if(!pay){
+    el.textContent='役員報酬を空欄にすると、CF管理に入力済みの役員報酬（実績）の平均から推定します。';
+    return;
+  }
+  const g=standardPayOf(pay);
+  el.textContent='報酬月額 '+fmt(pay)+' → 第'+g.grade+'等級・標準報酬月額 '+fmt(g.standard);
+}
+
+function loadTaxForm(){
+  const t=taxSettings();
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v;};
+  set('tx-ct-rate',t.consumptionTax.rate);
+  set('tx-ct-ratio',t.consumptionTax.taxableRatio);
+  set('tx-ct-filings',String(t.consumptionTax.filingsPerYear||1));
+  set('tx-ct-method',t.consumptionTax.method);
+  set('tx-ct-type',String(t.consumptionTax.businessType||5));
+  set('tx-ct-deemed',t.consumptionTax.deemedRate);
+  set('tx-si-pay',t.socialInsurance.monthlyPay||'');
+  set('tx-si-auto',t.socialInsurance.autoStandard===false?'0':'1');
+  set('tx-si-std',t.socialInsurance.standardPay||'');
+  set('tx-si-health',t.socialInsurance.healthRate);
+  set('tx-si-pension',t.socialInsurance.pensionRate);
+  set('tx-si-care',t.socialInsurance.careRate);
+  const o40=document.getElementById('tx-si-over40');
+  if(o40)o40.checked=!!t.socialInsurance.over40;
+  set('tx-co-capital',S.company.capital||'');
+  set('tx-co-low',t.corporateTax.lowRate);
+  set('tx-co-high',t.corporateTax.highRate);
+  set('tx-co-resident',t.corporateTax.residentRate);
+  set('tx-co-percapita',t.corporateTax.perCapita);
+  set('tx-co-threshold',t.corporateTax.threshold);
+  set('tx-co-bizlow',t.corporateTax.bizLow);
+  set('tx-co-bizmid',t.corporateTax.bizMid);
+  set('tx-co-bizhigh',t.corporateTax.bizHigh);
+  onTaxMethodChange();
+  onStandardModeChange();
+}
+
+function saveTaxSettings(){
+  const t=taxSettings();
+  const num=(id,fallback)=>{
+    const el=document.getElementById(id);
+    const v=el?parseFloat(el.value):NaN;
+    return isNaN(v)?fallback:v;
+  };
+  const int=(id,fallback)=>{
+    const el=document.getElementById(id);
+    const v=el?parseInt(el.value):NaN;
+    return isNaN(v)?fallback:v;
+  };
+  t.consumptionTax.rate=num('tx-ct-rate',10);
+  t.consumptionTax.taxableRatio=num('tx-ct-ratio',100);
+  t.consumptionTax.filingsPerYear=int('tx-ct-filings',1);
+  t.consumptionTax.method=document.getElementById('tx-ct-method').value==='general'?'general':'simple';
+  t.consumptionTax.businessType=int('tx-ct-type',5);
+  t.consumptionTax.deemedRate=num('tx-ct-deemed',DEEMED_RATES[t.consumptionTax.businessType]||50);
+  t.socialInsurance.monthlyPay=int('tx-si-pay',0);
+  t.socialInsurance.autoStandard=document.getElementById('tx-si-auto').value==='1';
+  t.socialInsurance.standardPay=int('tx-si-std',0);
+  t.socialInsurance.healthRate=num('tx-si-health',10.34);
+  t.socialInsurance.pensionRate=num('tx-si-pension',18.3);
+  t.socialInsurance.careRate=num('tx-si-care',1.6);
+  t.socialInsurance.over40=!!document.getElementById('tx-si-over40').checked;
+  t.corporateTax.lowRate=num('tx-co-low',15);
+  t.corporateTax.highRate=num('tx-co-high',23.2);
+  t.corporateTax.residentRate=num('tx-co-resident',10.4);
+  t.corporateTax.perCapita=int('tx-co-percapita',70000);
+  t.corporateTax.threshold=int('tx-co-threshold',8000000);
+  t.corporateTax.bizLow=num('tx-co-bizlow',3.5);
+  t.corporateTax.bizMid=num('tx-co-bizmid',5.3);
+  t.corporateTax.bizHigh=num('tx-co-bizhigh',7.0);
+  saveState();
+  const msg=document.getElementById('tax-msg');
+  msg.textContent='✓ 保存しました';setTimeout(()=>{msg.textContent=''},3000);
+  renderStandardPayHint();
 }
 
 /* ===== 固定費 =========================================================
@@ -7534,7 +8182,7 @@ function applyPlanToAllMonths(){
 }
 
 // 設定ページで編集できる会社情報の項目（入力欄のidは s-<項目名>）
-const COMPANY_FIELDS=['name','rep','zip','addr','tel','email','bankName','bankBranch','accountType','accountNumber','accountHolder','invoice','payment','shareWith','note'];
+const COMPANY_FIELDS=['name','rep','zip','addr','tel','email','bankName','bankBranch','accountType','accountNumber','accountHolder','invoice','capital','payment','shareWith','note'];
 
 function loadSettingsForm(){
   const c=S.company;
@@ -7545,6 +8193,7 @@ function loadSettingsForm(){
   document.getElementById('f-cash').value=bankBalance();
   document.getElementById('f-loan').value=S.finance.loan||0;
   loadTravelForm();
+  loadTaxForm();
   renderFiscalList();
 }
 

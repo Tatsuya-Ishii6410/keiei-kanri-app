@@ -54,7 +54,18 @@ var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'val
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
   'bankName', 'bankBranch', 'accountType', 'accountNumber', 'accountHolder',
-  'invoice', 'payment', 'shareWith', 'note'];
+  'invoice', 'capital', 'payment', 'shareWith', 'note'];
+/* settings シートに保存する税金・社会保険の計算設定。
+   キーは taxSettings.<グループ>.<項目>（例: taxSettings.consumptionTax.rate）。
+   数値以外の項目（method）だけ TAX_TEXT_KEYS に入れて文字列で読み書きする。 */
+var TAX_SETTING_FIELDS = {
+  consumptionTax: ['rate', 'taxableRatio', 'method', 'businessType', 'deemedRate', 'filingsPerYear'],
+  socialInsurance: ['monthlyPay', 'autoStandard', 'standardPay', 'healthRate', 'pensionRate', 'careRate', 'over40'],
+  corporateTax: ['lowRate', 'highRate', 'threshold', 'residentRate', 'perCapita', 'bizLow', 'bizMid', 'bizHigh']
+};
+var TAX_TEXT_KEYS = ['consumptionTax.method'];
+var TAX_BOOL_KEYS = ['socialInsurance.autoStandard', 'socialInsurance.over40'];
+
 // settings シートに保存する計画の項目
 // 月次計画は plan.<月>.<項目> というキーで保存する（例: plan.4.sales）
 var PLAN_FIELDS = ['sales', 'expense', 'labor', 'tax'];
@@ -162,6 +173,7 @@ function readAll_() {
     nextBillingId: settings.nextBillingId,
     finance: settings.finance,
     travel: settings.travel,
+    taxSettings: settings.taxSettings,
     bankBalance: settings.bankBalance,
     currentFiscalYearId: settings.currentFiscalYearId,
     nextFiscalYearId: settings.nextFiscalYearId
@@ -288,6 +300,8 @@ function readSettings_(sh) {
   var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1, nextFixedCostId = 1, nextBillingId = 1;
   var finance = { loan: 0 };
   var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15 };
+  // 税金設定は、シートに無い項目はキーごと返さない（アプリ側の初期値を潰さないため）
+  var taxSettings = {};
   var bankBalance = 0;
   var currentFiscalYearId = 0, nextFiscalYearId = 1;
 
@@ -326,6 +340,22 @@ function readSettings_(sh) {
       travel.gasolinePrice = num_(value) || 175;
     } else if (key === 'travel.fuelEfficiency') {
       travel.fuelEfficiency = parseFloat(str_(value)) || 15;
+    } else if (key.indexOf('taxSettings.') === 0) {
+      var tkey = key.substring(12);          // "consumptionTax.rate" など
+      var tdot = tkey.indexOf('.');
+      if (tdot > 0) {
+        var grp = tkey.substring(0, tdot), fld = tkey.substring(tdot + 1);
+        if (TAX_SETTING_FIELDS[grp] && TAX_SETTING_FIELDS[grp].indexOf(fld) >= 0) {
+          if (!taxSettings[grp]) taxSettings[grp] = {};
+          if (TAX_TEXT_KEYS.indexOf(tkey) >= 0) {
+            taxSettings[grp][fld] = str_(value);
+          } else if (TAX_BOOL_KEYS.indexOf(tkey) >= 0) {
+            taxSettings[grp][fld] = (value === true || str_(value) === 'true' || num_(value) === 1);
+          } else {
+            taxSettings[grp][fld] = parseFloat(str_(value)) || 0;
+          }
+        }
+      }
     } else if (key === 'bankBalance') {
       bankBalance = num_(value);
     } else if (key === 'currentFiscalYearId') {
@@ -355,6 +385,7 @@ function readSettings_(sh) {
     nextBillingId: nextBillingId,
     finance: finance,
     travel: travel,
+    taxSettings: taxSettings,
     bankBalance: bankBalance,
     currentFiscalYearId: currentFiscalYearId,
     nextFiscalYearId: nextFiscalYearId
@@ -432,6 +463,22 @@ function writeAll_(data) {
   settings.push(['travel.googleMapsApiKey', str_(tv.googleMapsApiKey)]);
   settings.push(['travel.gasolinePrice', num_(tv.gasolinePrice) || 175]);
   settings.push(['travel.fuelEfficiency', parseFloat(tv.fuelEfficiency) || 15]);
+  var tx = data.taxSettings || {};
+  Object.keys(TAX_SETTING_FIELDS).forEach(function (grp) {
+    var g = tx[grp] || {};
+    TAX_SETTING_FIELDS[grp].forEach(function (fld) {
+      var key = grp + '.' + fld;
+      var v = g[fld];
+      if (TAX_TEXT_KEYS.indexOf(key) >= 0) {
+        v = str_(v);
+      } else if (TAX_BOOL_KEYS.indexOf(key) >= 0) {
+        v = !!v;
+      } else {
+        v = parseFloat(v) || 0;
+      }
+      settings.push(['taxSettings.' + key, v]);
+    });
+  });
   settings.push(['bankBalance', num_(data.bankBalance)]);
   settings.push(['currentFiscalYearId', num_(data.currentFiscalYearId)]);
   settings.push(['nextFiscalYearId', num_(data.nextFiscalYearId) || 1]);
