@@ -379,6 +379,16 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - invoiceStatusOf(p) はレコードがあればそこから導く（全月入金済→paid、
   1件でも請求済→invoiced）。レコードが無い案件は従来どおり p.invoiceStatus
 - 一括ステータス変更・入金確認は対象月のレコードだけを更新する
+- ★ 請求・入金まわりの金額は getBillingForMonth(projectId, 'YYYY-MM') /
+  billingAmountForMonth(p, ym) を使う（レコードの amount、無ければ projectDefaultMonthly）。
+  p.amount / projectMonthAmount を直接使うと、月ごとに変えた金額が反映されない
+  対象：入金確認（請求済のうち一番古い月）／一括請求書（billingYear()の年）／
+  一括ステータス変更（billingYm(mi)）／addPlannedInForProject
+- 一括請求書を作ると、その月のレコードも invoiced にして invoiceId・支払期限を入れ、
+  入金予定を作る（invoiceStatusOf はレコードから導くため、p.invoiceStatus だけでは変わらない）
+- ドライブ請求書同期は PDF の小計（税抜）をレコードの amount に反映する。
+  同じ顧客の案件が複数あるときは1枚を分けられないので金額は触らない
+- レコードの金額を変えたら syncPlannedInAmount() で作成済みの入金予定の金額も揃える
 
 ## 請求書フォルダとの同期
 - 請求書関係フォルダID：14QU-Gwgpj-wM6an0i7I8tzF0DoPMoFOP

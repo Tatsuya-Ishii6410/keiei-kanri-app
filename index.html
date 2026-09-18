@@ -3484,7 +3484,7 @@ function addPlannedInForProject(p,date,mi){
     expectedDate:date,
     type:'売上',
     desc:`${p.client||p.name} ${mi+1}月分 入金予定`,
-    amount:grossAmount(projectMonthAmount(p,mi)),
+    amount:grossAmount(billingAmountForMonth(p,billingYm(mi))),
     memo:'',
     status:'planned_in',
     projectId:p.id
@@ -5105,8 +5105,8 @@ function renderBulkStatusList(){
     +'<th style="width:36px"></th><th>顧客名</th><th>案件名</th><th>現在</th>'+lastCol
     +'</tr></thead><tbody>'
     +list.map(p=>{
-      const gross=grossAmount(projectMonthAmount(p,mi));
       const ymRow=billingYm(mi);
+      const gross=grossAmount(billingAmountForMonth(p,ymRow));
       const bRow=findBilling(p.id,ymRow);
       const planDefault=(bRow&&bRow.expectedPayDate)||nextMonthEndOf(ymRow);
       const last=cfg.amount
@@ -5193,8 +5193,7 @@ function applyBulkStatus(){
     });
     saveState();closeModal('modal-bulk-status');refreshAll();
     alert(targets.length+'件のステータスを変更しました（'+cfg.label+'）'
-      +(planned>0?`
-（${planned}件を${planDate}の入金予定として登録しました）`:''));
+      +(planned>0?`\n（${planned}件をCF管理の入金予定として登録しました）`:''));
     return;
   }
 
@@ -5206,7 +5205,7 @@ function applyBulkStatus(){
   let added=0;
   const ymPaid=billingYm(mi);
   targets.forEach(p=>{
-    const amount=(cfg.amount?amounts[p.id]:0)||grossAmount(projectMonthAmount(p,mi));
+    const amount=(cfg.amount?amounts[p.id]:0)||grossAmount(billingAmountForMonth(p,ymPaid));
     const b=ensureBilling(p,ymPaid);
     b.invoiceStatus=cfg.to;b.paidDate=date;b.paidAmount=amount;
     markProjectPaid(p,date,amount,cfg.to);
@@ -5423,8 +5422,9 @@ async function syncInvoices(){
   const btn=document.getElementById('inv-sync-btn');
   btn.disabled=true;
 
-  let added=0,skipExact=0,skipUser=0,updated=0,billed=0,planned=0;
+  let added=0,skipExact=0,skipUser=0,updated=0,billed=0,planned=0,amountUpdated=0;
   const errors=[];
+  const noProject=[];
 
   for(let n=0;n<idx.length;n++){
     const f=invFiles[idx[n]];
@@ -5473,14 +5473,24 @@ async function syncInvoices(){
     }
 
     // 顧客名が一致する案件の、その月の請求レコードを請求済にする
-    const proj=S.projects.find(x=>x.client&&client&&
-      (x.client.indexOf(client)>=0||client.indexOf(x.client)>=0));
+    const sameClient=x=>x.client&&client&&
+      (x.client.indexOf(client)>=0||client.indexOf(x.client)>=0);
+    const proj=S.projects.find(sameClient);
     if(proj&&target){
       const b=ensureBilling(proj,ym);
       if(b.invoiceStatus==='uninvoiced'){b.invoiceStatus='invoiced';billed++;}
       b.invoiceId=target.id;
       if(p.due)b.expectedPayDate=p.due;
+      // PDFの小計（税抜）を請求レコードの金額にする。
+      // 同じ顧客の案件が複数あると1枚の金額を案件ごとに分けられないので触らない
+      const clientProjects=S.projects.filter(x=>x.status!=='失注'&&sameClient(x));
+      if(sub>0&&clientProjects.length===1&&b.amount!==sub){
+        b.amount=sub;amountUpdated++;
+        syncPlannedInAmount(b);
+      }
       if(addPlannedInForBilling(b))planned++;
+    }else if(!proj){
+      noProject.push(client||f.name);
     }
   }
 
@@ -5494,7 +5504,9 @@ async function syncInvoices(){
     +`・${skipUser}件をスキップ（既存データを選択）\n`
     +`・${updated}件を上書き更新\n`
     +`・${billed}件のmonthlyBillingを請求済みに更新\n`
+    +`・${amountUpdated}件のmonthlyBillingの金額をPDFの小計（税抜）に更新\n`
     +`・${planned}件の入金予定をCF管理に追加`
+    +(noProject.length?`\n\n顧客名が一致する案件が無かった請求書:\n`+noProject.join('\n'):'')
     +(errors.length?`\n\n読み取れなかったファイル:\n`+errors.join('\n'):''));
 }
 
@@ -5518,8 +5530,18 @@ function billingsOf(projectId){
     .sort((a,b)=>String(a.billingMonth).localeCompare(String(b.billingMonth)));
 }
 
-function findBilling(projectId,ym){
-  return billingList().find(b=>b.projectId===projectId&&b.billingMonth===ym)||null;
+// 対象月（YYYY-MM）の請求レコード。無ければ null
+function getBillingForMonth(projectId,billingMonth){
+  return billingList().find(b=>b.projectId===projectId&&b.billingMonth===billingMonth)||null;
+}
+function findBilling(projectId,ym){return getBillingForMonth(projectId,ym)}
+
+// 対象月の請求金額（税抜）。レコードがあればその金額、無ければ案件の月額。
+// ★ 入金確認・一括請求書・一括ステータス変更の金額は必ずこれを使う
+//   （案件の金額をそのまま使うと、月ごとに変えた金額が反映されない）
+function billingAmountForMonth(p,billingMonth){
+  const b=getBillingForMonth(p.id,billingMonth);
+  return b?(parseInt(b.amount)||0):projectDefaultMonthly(p);
 }
 
 // 請求レコードを作る対象の案件か
@@ -5668,6 +5690,9 @@ function saveBilling(){
   b.paidAmount=paid?(parseInt(document.getElementById('mb-paidamount').value)||null):null;
   b.note=document.getElementById('mb-note').value.trim();
 
+  // 金額を変えたら、作成済みの入金予定の金額も直す
+  syncPlannedInAmount(b);
+
   // 請求済にしたら、その月の入金予定をCF管理に作る
   let planned=false;
   if(st==='invoiced')planned=addPlannedInForBilling(b);
@@ -5702,6 +5727,17 @@ function addPlannedInForBilling(b){
     billingMonth:b.billingMonth
   });
   return true;
+}
+
+// 請求レコードの金額を変えたとき、作成済みの入金予定（planned_in）の金額も揃える
+function syncPlannedInAmount(b){
+  const gross=grossAmount(b.amount);
+  let changed=0;
+  S.ledger.forEach(l=>{
+    if(l.projectId===b.projectId&&l.billingMonth===b.billingMonth
+      &&ledgerStatusOf(l)==='planned_in'&&l.amount!==gross){l.amount=gross;changed++;}
+  });
+  return changed;
 }
 
 /* ---- 一括変更・入金確認から使う ---- */
@@ -5766,16 +5802,25 @@ function currentInvoiceFilter(){
 
 /* ---- 入金確認モーダル ---- */
 
+// 入金確認の対象レコード（請求済のうち一番古い月）
+function paymentTargetBilling(p){
+  return billingsOf(p.id).find(x=>x.invoiceStatus==='invoiced')||null;
+}
+
 function openPaymentModal(id){
   const p=S.projects.find(x=>x.id===id);
   if(!p)return;
   payTargetId=id;
+  const b=paymentTargetBilling(p);
   const now=new Date();
-  const ym=now.getFullYear()+'年'+(now.getMonth()+1)+'月';
+  const ym=b?ymJp(b.billingMonth):now.getFullYear()+'年'+(now.getMonth()+1)+'月';
+  // 金額はその月の請求レコードを優先する（無ければ案件の月額）
+  const net=b?billingAmountForMonth(p,b.billingMonth):projectDefaultMonthly(p);
   document.getElementById('pay-info').innerHTML=
     `<div style="font-size:14px;font-weight:600">${p.name}</div>`
-    +`<div style="font-size:12px;color:var(--text-secondary);margin-top:2px">${p.client||'（顧客名未設定）'}　／　請求状態: ${INVOICE_STATES[invoiceStatusOf(p)].label}</div>`;
-  document.getElementById('pay-amount').value=grossAmount(p.amount);
+    +`<div style="font-size:12px;color:var(--text-secondary);margin-top:2px">${p.client||'（顧客名未設定）'}　／　請求状態: ${INVOICE_STATES[invoiceStatusOf(p)].label}`
+    +(b?`　／　対象月: ${ym}（請求額 ${fmt(net)}・税抜）`:'')+`</div>`;
+  document.getElementById('pay-amount').value=grossAmount(net);
   document.getElementById('pay-date').value=today();
   document.getElementById('pay-desc').value=`${p.client||p.name} ${ym}分 入金`;
   document.getElementById('pay-toledger').checked=true;
@@ -5807,7 +5852,7 @@ function confirmPayment(){
 
   // 収支の日付は必ずモーダルで入力した入金日を使う
   // 請求レコードがあれば、対応する月のレコードを入金済にする
-  const b=billingsOf(p.id).find(x=>x.invoiceStatus==='invoiced')||null;
+  const b=paymentTargetBilling(p);
   if(b){b.invoiceStatus='paid';b.paidDate=date;b.paidAmount=amount;}
   markProjectPaid(p,date,amount);
   if(toLedger){
@@ -7766,10 +7811,18 @@ function updateBulkInvoiceForm(){
   renderBulkInvoiceList();
 }
 
+// 一括請求書の対象月（YYYY-MM）。品名の「○年○月分」と同じ年を使う
+function bulkInvoiceYm(mi){
+  return billingYear()+'-'+String(mi+1).padStart(2,'0');
+}
+
 // その月の請求対象案件（進行中・完了）
+// 契約期間の月に入っていなくても、その月の請求レコードがあれば対象にする
 function bulkInvoiceTargets(){
   const mi=parseInt(document.getElementById('bulk-month').value)||0;
-  return S.projects.filter(p=>(p.status==='進行中'||p.status==='完了')&&projectHasMonth(p,mi));
+  const ym=bulkInvoiceYm(mi);
+  return S.projects.filter(p=>(p.status==='進行中'||p.status==='完了')
+    &&(projectHasMonth(p,mi)||getBillingForMonth(p.id,ym)));
 }
 
 // value属性に入れる文字列をエスケープする
@@ -7800,7 +7853,7 @@ function renderBulkInvoiceList(){
       <td style="font-size:12px">${p.client||'-'}</td>
       <td style="font-size:12px">${p.name}</td>
       <td><input type="text" class="bulk-name" data-id="${p.id}" value="${escAttr(defaultItemName(p,mi))}" style="font-size:12px"></td>
-      <td style="text-align:right;white-space:nowrap">${fmt(projectMonthAmount(p,mi))}</td>
+      <td style="text-align:right;white-space:nowrap">${fmt(billingAmountForMonth(p,bulkInvoiceYm(mi)))}</td>
     </tr>`).join('')
     +'</tbody></table></div>';
   updateBulkCount();
@@ -7840,8 +7893,9 @@ function bulkInvoiceGroups(){
   const merge=bulkMergeEnabled();
   const groups=[];
   const byClient={};
+  const ym=bulkInvoiceYm(mi);
   S.projects.filter(p=>ids.indexOf(p.id)>=0).forEach(p=>{
-    const unit=projectMonthAmount(p,mi);
+    const unit=billingAmountForMonth(p,ym);
     const item={name:names[p.id]||defaultItemName(p,mi),qty:1,unit,total:unit,projectId:p.id};
     const client=(p.client||'').trim();
     if(merge&&client){
@@ -7879,11 +7933,15 @@ function createBulkInvoices(){
   if(groups.length===0){alert('請求する案件を選択してください');return;}
 
   const y=billingYear();
+  const ym=bulkInvoiceYm(mi);
+  const invoiceIdOf={};   // 案件id → 請求書番号
   groups.forEach(g=>{
     // まとめた請求書は月まとめの件名、1件だけの請求書は品名をそのまま件名にする
     const subject=g.items.length===1?g.items[0].name:`${y}年${mi+1}月分 ご請求`;
+    const docId=makeDocNumber('請求書');
+    g.items.forEach(it=>{invoiceIdOf[it.projectId]=docId});
     S.quotes.push({
-      id:makeDocNumber('請求書'),
+      id:docId,
       subject,
       client:(g.client||'')+' 御中',
       amount:bulkGroupAmount(g),
@@ -7897,14 +7955,22 @@ function createBulkInvoices(){
     });
   });
 
-  // 請求書を出した案件は「請求済」にする
+  // 請求書を出した案件は「請求済」にする。
+  // ステータスは請求レコードから導く（invoiceStatusOf）ので、その月のレコードも請求済にする
+  let planned=0;
   S.projects.filter(p=>ids.indexOf(p.id)>=0).forEach(p=>{
     if(invoiceStatusOf(p)==='uninvoiced')p.invoiceStatus='invoiced';
+    const b=ensureBilling(p,ym);
+    if(b.invoiceStatus==='uninvoiced')b.invoiceStatus='invoiced';
+    b.invoiceId=invoiceIdOf[p.id]||b.invoiceId;
+    if(due)b.expectedPayDate=due;
+    if(b.invoiceStatus==='invoiced'&&addPlannedInForBilling(b))planned++;
   });
 
   saveState();
   closeModal('modal-bulk-invoice');
-  alert(groups.length+'件の請求書を作成しました');
+  alert(groups.length+'件の請求書を作成しました'
+    +(planned>0?`\n（${planned}件をCF管理の入金予定として登録しました）`:''));
   showPage('quotes',document.querySelectorAll('.nav-btn')[2]);
 }
 
