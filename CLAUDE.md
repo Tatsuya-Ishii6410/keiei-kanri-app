@@ -268,6 +268,9 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   同時に収支へ「売上」として登録する（ledgerに projectId を持たせる）
 - 銀行明細CSVの入金行は、税込金額の±1%以内の未入金案件を突合候補として提示する。
   チェックを入れて登録すると案件も入金済みになる
+  対象月は入金日の前月と推定（paymentBillingMonth）し、比較する金額は
+  grossAmount(billingAmountForMonth(p, 対象月))。候補には「○月分・税込額」を出す
+  登録時はその月の請求レコードも paid にし、入金予定を消す
 - ダッシュボードの「💰 入金待ち」はCF管理の入金予定（planned_in）の合計。
   クリックでCF管理ページへ（請求済にしても入金予定を作らなかった案件は出てこない）
 
@@ -389,6 +392,10 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - ドライブ請求書同期は PDF の小計（税抜）をレコードの amount に反映する。
   同じ顧客の案件が複数あるときは1枚を分けられないので金額は触らない
 - レコードの金額を変えたら syncPlannedInAmount() で作成済みの入金予定の金額も揃える
+- ★ 入金実績を ledger に登録したら（入金確認・一括で入金済・銀行明細の突合）、
+  removePlannedInForBilling(projectId, billingMonth) でその月の入金予定を自動削除する
+  （残すと残高予測で二重計上になる）。planned_in を作るときは必ず billingMonth を持たせること
+  billingMonth の無い古い予定は、摘要の「(YYYY年)M月分 入金予定」で月を見分けて消す
 
 ## 請求書フォルダとの同期
 - 請求書関係フォルダID：14QU-Gwgpj-wM6an0i7I8tzF0DoPMoFOP

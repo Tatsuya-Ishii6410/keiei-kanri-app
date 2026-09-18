@@ -3468,7 +3468,8 @@ function createPlannedFromInvoiced(){
       amount:grossAmount(b.amount),
       memo:'',
       status:'planned_in',
-      projectId:b.projectId
+      projectId:b.projectId,
+      billingMonth:b.billingMonth
     });
   });
   saveState();refreshAll();
@@ -3487,7 +3488,8 @@ function addPlannedInForProject(p,date,mi){
     amount:grossAmount(billingAmountForMonth(p,billingYm(mi))),
     memo:'',
     status:'planned_in',
-    projectId:p.id
+    projectId:p.id,
+    billingMonth:billingYm(mi)
   });
   return true;
 }
@@ -5204,6 +5206,7 @@ function applyBulkStatus(){
   const y=monthYear(mi);
   let added=0;
   const ymPaid=billingYm(mi);
+  let removed=0;
   targets.forEach(p=>{
     const amount=(cfg.amount?amounts[p.id]:0)||grossAmount(billingAmountForMonth(p,ymPaid));
     const b=ensureBilling(p,ymPaid);
@@ -5219,11 +5222,14 @@ function applyBulkStatus(){
         projectId:p.id
       });
       added++;
+      // 実績に置き換わるので、その月の入金予定は消す
+      removed+=removePlannedInForBilling(p.id,ymPaid);
     }
   });
   saveState();closeModal('modal-bulk-status');refreshAll();
   alert(targets.length+'件のステータスを変更しました（'+cfg.label+'）'
-    +(added>0?`\n（${added}件を収支に登録しました）`:''));
+    +(added>0?`\n（${added}件を収支に登録しました）`:'')
+    +(removed>0?`\n入金予定${removed}件を自動削除しました。`:''));
 }
 
 /* ===== ドライブの請求書フォルダと同期 ================================
@@ -5740,6 +5746,26 @@ function syncPlannedInAmount(b){
   return changed;
 }
 
+// 入金実績を登録したら、その月の入金予定（planned_in）を消す。残すと残高予測で二重になる。
+// billingMonth を持たない古い予定は、摘要の「(YYYY年)M月分 入金予定」で月を見分ける
+function removePlannedInForBilling(projectId,billingMonth){
+  const abs=ymToAbs(billingMonth);
+  if(abs===null)return 0;
+  const y=Math.floor(abs/12),m=abs%12+1;
+  const legacyRe=new RegExp('(?:^|[^0-9年])(?:'+y+'年)?'+m+'月分 入金予定');
+  const hit=l=>{
+    if(ledgerStatusOf(l)!=='planned_in'||l.projectId!==projectId)return false;
+    if(l.billingMonth)return l.billingMonth===billingMonth;
+    const d=String(l.desc||'');
+    const yr=/(d{4})年d{1,2}月分 入金予定/.exec(d);
+    if(yr&&parseInt(yr[1])!==y)return false;
+    return legacyRe.test(d);
+  };
+  const before=S.ledger.length;
+  S.ledger=S.ledger.filter(l=>!hit(l));
+  return before-S.ledger.length;
+}
+
 /* ---- 一括変更・入金確認から使う ---- */
 
 // 請求月（YYYY-MM）の翌月末日。入金予定日の既定値に使う。
@@ -5855,16 +5881,20 @@ function confirmPayment(){
   const b=paymentTargetBilling(p);
   if(b){b.invoiceStatus='paid';b.paidDate=date;b.paidAmount=amount;}
   markProjectPaid(p,date,amount);
+  let removed=0;
   if(toLedger){
     S.ledger.push({id:S.nextLedgerId++,date,type:'売上',desc,amount,projectId:p.id});
+    // 実績に置き換わるので、その月の入金予定は消す
+    if(b)removed=removePlannedInForBilling(p.id,b.billingMonth);
   }
   payTargetId=null;
   saveState();
   closeModal('modal-payment');
   refreshAll();
-  alert(toLedger
-    ?`✓ ${desc} を収支に登録しました（${date}）`
-    :`✓ ${label} を入金済みにしました（${date}）`);
+  alert((toLedger
+    ?`✓ 入金を登録しました（${desc}／${date}）。`
+    :`✓ ${label} を入金済みにしました（${date}）。`)
+    +(removed>0?`入金予定${removed}件を自動削除しました。`:''));
 }
 
 // 案件を入金済みにする（収支への登録は呼び出し側で行う）
@@ -5902,18 +5932,32 @@ function goToInvoiced(){
 
 /* ---- 銀行明細との突合 ---- */
 
-// 入金額に近い未入金案件を探す（案件金額×1.1 の ±1% 以内）
-function matchProjectByPayment(amount){
+// 入金日から対象の請求月を推定する（前月分の請求が翌月に入金される運用）
+// 例: 2026-10-25 の入金 → 2026-09
+function paymentBillingMonth(date){
+  const ym=String(date||'').slice(0,7);
+  const abs=ymToAbs(ym);
+  return abs===null?null:absToYm(abs-1);
+}
+
+// 入金額に近い未入金案件を探す（対象月の請求金額×1.1 の ±1% 以内）
+// 金額は billingAmountForMonth（その月の請求レコード、無ければ案件の月額）
+// 戻り値: {p, ym, gross} または null
+function matchProjectByPayment(amount,date){
   if(!amount)return null;
+  const ym=paymentBillingMonth(date);
+  if(!ym)return null;
   let best=null,bestDiff=Infinity;
   S.projects.forEach(p=>{
     if(p.status==='失注')return;
-    const st=invoiceStatusOf(p);
+    // その月のレコードがあればその月の状態、無ければ案件の状態で判定する
+    const b=getBillingForMonth(p.id,ym);
+    const st=b?b.invoiceStatus:invoiceStatusOf(p);
     if(st!=='uninvoiced'&&st!=='invoiced')return;
-    const gross=grossAmount(p.amount);
+    const gross=grossAmount(billingAmountForMonth(p,ym));
     if(!gross)return;
     const diff=Math.abs(amount-gross);
-    if(diff<=gross*0.01&&diff<bestDiff){best=p;bestDiff=diff;}
+    if(diff<=gross*0.01&&diff<bestDiff){best={p,ym,gross};bestDiff=diff;}
   });
   return best;
 }
@@ -8419,13 +8463,15 @@ async function bankHandleFile(file){
     const income=inc>0;
     const amount=income?inc:out;
     // 入金は、税込金額が近い未入金案件を突合候補として探す
-    const match=income?matchProjectByPayment(amount):null;
+    const match=income?matchProjectByPayment(amount,date):null;
     bankRows.push({
       date,desc,amount,income,
       type:bankGuessType(desc,income),
       dup:bankIsDuplicate(date,amount,desc),
       checked:!bankIsDuplicate(date,amount,desc),
-      matchId:match?match.id:null,
+      matchId:match?match.p.id:null,
+      matchYm:match?match.ym:null,        // 推定した対象月（YYYY-MM）
+      matchGross:match?match.gross:0,     // 突合に使った税込金額
       applyMatch:!!match
     });
   });
@@ -8480,9 +8526,12 @@ function bankMatchCell(r,i){
   if(!r.income)return'<span style="color:var(--text-muted)">-</span>';
   const p=r.matchId?S.projects.find(x=>x.id===r.matchId):null;
   if(!p)return'<span style="color:var(--text-muted)">候補なし</span>';
-  return`<div><span class="badge badge-blue">💡 突合候補あり</span></div>
-    <div style="margin-top:3px">${p.client||'-'}／${p.name}</div>
-    <div style="color:var(--text-secondary)">税込 ${fmt(grossAmount(p.amount))}</div>
+  // 対象月は入金日の前月（推定）。金額はその月の請求金額×1.1
+  const a=ymToAbs(r.matchYm);
+  const monthLabel=a===null?'':(a%12+1)+'月分・';
+  return`<div><span class="badge badge-blue">💡 突合候補</span></div>
+    <div style="margin-top:3px">${p.client||'-'} ${p.name}（${monthLabel}${fmt(r.matchGross)}税込）</div>
+    <div style="color:var(--text-muted)">対象月（推定）：${r.matchYm?ymJp(r.matchYm):'-'}</div>
     <label style="display:flex;align-items:center;gap:4px;margin-top:3px;cursor:pointer">
       <input type="checkbox" ${r.applyMatch?'checked':''} onchange="bankRows[${i}].applyMatch=this.checked" style="width:auto">
       この案件の入金として登録する
@@ -8498,18 +8547,28 @@ function bankRegister(){
   // 表とカードの両方にチェックボックスがあるので、DOMではなくデータ側を見る
   const rows=bankRows.filter(r=>r.checked&&r.date&&r.desc&&r.amount);
   if(rows.length===0){alert('登録する明細を選択してください');return;}
-  let matched=0;
+  let matched=0,removed=0;
   rows.forEach(r=>{
     const entry={id:S.nextLedgerId++,date:r.date,type:r.type,desc:r.desc,amount:r.amount};
-    // 突合を選んだ入金は、案件を入金済みにして紐づける
+    // 突合を選んだ入金は、案件（と推定した月の請求レコード）を入金済みにして紐づける
     if(r.income&&r.applyMatch&&r.matchId){
       const p=S.projects.find(x=>x.id===r.matchId);
-      if(p){markProjectPaid(p,r.date,r.amount);entry.projectId=p.id;matched++;}
+      if(p){
+        markProjectPaid(p,r.date,r.amount);entry.projectId=p.id;matched++;
+        if(r.matchYm){
+          const b=ensureBilling(p,r.matchYm);
+          b.invoiceStatus='paid';b.paidDate=r.date;b.paidAmount=r.amount;
+          // 実績に置き換わるので、その月の入金予定は消す
+          removed+=removePlannedInForBilling(p.id,r.matchYm);
+        }
+      }
     }
     S.ledger.push(entry);
   });
   saveState();
-  alert(rows.length+'件を収支に登録しました'+(matched>0?`\n（${matched}件を案件の入金として突合しました）`:''));
+  alert(rows.length+'件を収支に登録しました'
+    +(matched>0?`\n（${matched}件を案件の入金として突合しました）`:'')
+    +(removed>0?`\n入金予定${removed}件を自動削除しました。`:''));
   bankReset();
   refreshAll();
 }
