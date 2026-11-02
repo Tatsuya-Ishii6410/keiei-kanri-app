@@ -44,6 +44,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - tests/receipt-import.test.js：領収書の読み取り・誰と／用件・重複判定のテスト（AIの呼び出しはモック）
 - tests/inbox-scan.test.js：受信箱の週次読み取り・取込待ちからの登録・一括登録・重複判定のテスト（AI・Driveはモック）
 - tests/ops-checks.test.js：週次バックアップ・入金遅延・月次締めチェックのテスト（Drive・GASはモック）
+- tests/travel-suggest.test.js：交通費の訪問先の候補（駅名・訪問先の正規化・自宅駅の除外・並び順）のテスト
 - .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
 - netlify.toml：旧Netlify用の設定（移行後も念のため残している）
 
@@ -434,7 +435,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   初回はGASエディタで testCalendarAccess() を実行して権限を承認する
 - eventId は「予定ID@日付」（繰り返し予定は同じIDを共有するため）。ledger の calId に保存し、
   登録済みの予定は次に取得したとき除外する
-- 分類：A 場所あり（到着=場所、出発=青野ヶ原駅・電車・バス・往復が既定）／
+- 分類：A 場所あり（到着=場所、出発=モーダルで選んだ自宅駅（既定 青野ヶ原駅。HOME_STATIONS）・電車・バス・往復が既定）／
   B オンライン（タイトルに「オンライン」か、場所が空で説明に会議URL。折りたたみから復活可）／
   C 場所なし（出発・到着・手段・運賃・用件は空のまま）
 - 訪問先の初期値は予定名から先頭の【…】［…］[…] だけ外したもの。名前の加工はしない
@@ -703,3 +704,32 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   （確認済みの行と別の行が新しく組になれば、また出る）。一覧の「確認済みも表示」から解除できる
 - 一覧ではペアの2行を並べ、それぞれ「編集」「削除」（deleteLedger）を出す
 - GASの ledger シートに reviewed 列（TEXT_COLUMNS）。keepLocalWhenMissing でも残す
+
+## 自宅駅（HOME_STATIONS）
+- ★ 自宅駅は keiei-kanri.html の「@travel-rules-begin」の直後にある `HOME_STATIONS=['青野ヶ原駅','天神橋筋六丁目駅']` の1か所だけ。
+  変える・増やすときはここだけ直す（settings には持たない）
+- 参照しているところ：カレンダーから作成の出発駅（CAL_DEFAULT_FROM＝HOME_STATIONS[0]。モーダルの「出発駅」セレクト ci-home の初期値）／
+  交通費の入力モーダルの自宅駅ボタン（te-home-btns。押すと出発地に入る）／訪問先の候補（自宅駅の判定 isHomeStation）
+- 比較は normStation（NFKC・空白を除く・末尾の「駅」を外す）で行う。「天神橋筋六丁目」と「天神橋筋六丁目駅」は同じ
+- カレンダーから作成で出発駅を変えると、出発地が自宅駅のままの行だけ新しい駅にする（手で変えた出発地は触らない。推定運賃は消す）
+
+## 交通費：訪問先の候補（到着駅から過去の訪問先を選ぶ）
+- 交通費の入力モーダル（openTravelEntry。カレンダーから作った要編集の行の編集も同じ）の訪問先欄 te-visit を候補つきにする
+- 候補は保存しない。実績の交通費の行から実行時に集計する（buildVisitIndex）。対象外：訪問先が空・「（未入力）」、摘要が「（未入力）」、予定の行
+  集計は saveState（travelIndexDirty）と読み込み（S.ledger が替わる）のあと、モーダルを開いたときに1回だけ作り直す
+- 訪問先側の駅（visitSideStation）：出発・到着のうち自宅駅でない方。両方とも自宅駅でなければ到着。
+  両方とも自宅駅（自宅駅どうし）は集計しない。帰りの行（到着が自宅駅）は出発駅になる
+- 訪問先は normVisit でまとめる（NFKC・空白、前後の「株式会社」「(株)」「㈱」、末尾の「様」「御中」を除いて比べる）。
+  表示はいちばん使われている表記（同数なら最近）
+- 候補は2段：「この駅の訪問先」（visitSuggestions。最大8件・回数の多い順、同数は最近の順。「5回・最終 10/28」を併記）／
+  「取引先から」（clientSuggestions。案件の取引先名で1段目と重複しないもの。新しい案件から最大5件）。駅が空・駅の候補なしは2段目だけ
+- 訪問先を選んで用件が空なら、その訪問先の最後の用件（lastPurposeFor）を「候補：…」として薄く出す。自動では入れない（タップで入る）
+- 判定は「@travel-rules-begin〜end」（tests/travel-suggest.test.js が切り出して読む。DOM・S を触らない。TRAVEL_BLANK_DESC もここ）
+
+## 部品：候補つき入力欄 suggestCombo
+- suggestCombo(input,{sections,onPick}) → {open,close,isOpen}。交通費専用にしない（ほかの欄にも使える）
+  sections() は開くたびに呼ぶ [{title,items:[{value,label,meta}]}]。入力中の文字で絞り込む
+- 欄のタップ・フォーカスで開く。↑↓で選択・Enterで決定・Escで閉じる・外を押すと閉じる。候補が1件も無ければ何も出さない（普通の入力欄）
+- 見た目は CSS 変数 --ui-*（背景 #FFFFFF／本文 #17233D／補助 #64748B／強調 #3976F6／リストの角丸 12px など）。
+  ★ 変数は .ui-scope（部品の外枠）の中だけで定義する。既存の画面の色は変えない（今後のデザイン刷新用）
+- 件数・日付は tabular-nums。開閉は150ms、prefers-reduced-motion のときはアニメーションなし。768px以下は候補の高さ44px以上

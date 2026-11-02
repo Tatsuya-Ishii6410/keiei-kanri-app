@@ -154,6 +154,37 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .rc-photo img{max-width:100%;max-height:70vh;object-fit:contain;border-radius:6px}
 .rc-photo iframe{width:100%;height:70vh;border:0;border-radius:6px;background:#fff}
 .inbox-item{border:0.5px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:8px}
+
+/* ===== 部品：候補つき入力欄（suggestCombo） =====
+   ★ --ui- の変数は .ui-scope の中だけで定義する（今後のデザイン刷新用。既存の画面の色は変えない） */
+.ui-scope{
+  --ui-bg:#FFFFFF;--ui-text:#17233D;--ui-muted:#64748B;--ui-accent:#3976F6;
+  --ui-accent-soft:rgba(57,118,246,.10);--ui-border:rgba(23,35,61,.10);
+  --ui-radius-list:12px;--ui-radius-item:8px;--ui-shadow:0 6px 20px rgba(23,35,61,.10);
+  --ui-space-1:4px;--ui-space-2:8px;--ui-space-3:12px;--ui-motion:150ms;
+}
+.sc-wrap{position:relative}
+.sc-list{position:absolute;left:0;right:0;top:calc(100% + var(--ui-space-1));z-index:40;
+  background:var(--ui-bg);color:var(--ui-text);border:1px solid var(--ui-border);border-radius:var(--ui-radius-list);
+  box-shadow:var(--ui-shadow);padding:var(--ui-space-1);max-height:min(320px,50vh);overflow-y:auto;overscroll-behavior:contain;
+  visibility:hidden;opacity:0;transform:translateY(-4px);
+  transition:opacity var(--ui-motion) ease,transform var(--ui-motion) ease,visibility 0s linear var(--ui-motion)}
+.sc-list.open{visibility:visible;opacity:1;transform:none;
+  transition:opacity var(--ui-motion) ease,transform var(--ui-motion) ease,visibility 0s}
+.sc-sec{font-size:11px;font-weight:600;color:var(--ui-muted);padding:var(--ui-space-2) var(--ui-space-3) var(--ui-space-1)}
+.sc-item{display:flex;align-items:center;gap:var(--ui-space-2);padding:var(--ui-space-2) var(--ui-space-3);min-height:36px;
+  border-radius:var(--ui-radius-item);cursor:pointer;color:var(--ui-text);font-size:14px}
+.sc-item.active{background:var(--ui-accent-soft)}
+.sc-item.active .sc-label{color:var(--ui-accent)}
+.sc-label{flex:1;min-width:0;overflow-wrap:anywhere}
+.sc-meta{font-size:11px;color:var(--ui-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sc-chip{display:inline-flex;align-items:center;gap:var(--ui-space-1);margin-top:var(--ui-space-1);padding:2px var(--ui-space-2);
+  border:1px dashed var(--ui-border);border-radius:var(--ui-radius-item);background:var(--ui-bg);color:var(--ui-muted);
+  font-size:12px;cursor:pointer;max-width:100%;text-align:left}
+.sc-chip:hover{color:var(--ui-accent);border-color:var(--ui-accent)}
+.te-home-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+@media (max-width:768px){.sc-item{min-height:44px}.sc-chip{min-height:32px}}
+@media (prefers-reduced-motion:reduce){.sc-list,.sc-list.open{transition:none;transform:none}}
 .rc-warn{background:var(--amber-bg) !important;border-color:#e0a800 !important}
 .req-mark{color:var(--red)}
 @media (max-width:768px){.rc-grid{grid-template-columns:1fr}.rc-photo{position:static}.rc-photo img{max-height:45vh}.rc-photo iframe{height:50vh}}
@@ -1573,12 +1604,14 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     </div>
   </div>
   <div class="form-row">
-    <div class="form-group"><label class="form-label">出発地</label><input id="te-from" type="text" placeholder="三宮"></div>
-    <div class="form-group"><label class="form-label">到着地</label><input id="te-to" type="text" placeholder="大阪"></div>
+    <div class="form-group"><label class="form-label">出発地</label><input id="te-from" type="text" placeholder="三宮" onchange="travelStationChanged()">
+      <div class="te-home-btns" id="te-home-btns"></div></div>
+    <div class="form-group"><label class="form-label">到着地</label><input id="te-to" type="text" placeholder="大阪" onchange="travelStationChanged()"></div>
   </div>
   <div class="form-row">
-    <div class="form-group"><label class="form-label">訪問先（任意）</label><input id="te-visit" type="text" placeholder="株式会社〇〇"></div>
-    <div class="form-group"><label class="form-label">用件（任意）</label><input id="te-purpose" type="text" placeholder="営業同行、打ち合わせ、研修"></div>
+    <div class="form-group"><label class="form-label">訪問先（任意）</label><input id="te-visit" type="text" placeholder="株式会社〇〇" autocomplete="off"></div>
+    <div class="form-group"><label class="form-label">用件（任意）</label><input id="te-purpose" type="text" placeholder="営業同行、打ち合わせ、研修" oninput="renderPurposeHint()">
+      <div id="te-purpose-hint" class="ui-scope"></div></div>
   </div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">金額</label><input id="te-amount" type="number" placeholder="420"></div>
@@ -1632,7 +1665,9 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="form-group" style="justify-content:flex-end"><label class="form-label">&nbsp;</label>
       <button class="btn primary" id="ci-fetch" onclick="fetchCalendarEvents()">予定を取得</button></div>
   </div>
-  <div class="form-row single">
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">出発駅（場所のある予定の出発地）</label>
+      <select id="ci-home" onchange="calHomeChanged()"></select></div>
     <div class="form-group"><label class="form-label">除外キーワード（カンマ区切り。予定名に含む行のチェックを外します）</label>
       <input id="ci-exclude" type="text" onchange="applyCalExclude();renderCalImport()"></div>
   </div>
@@ -2502,6 +2537,7 @@ function saveLocal(){
 
 // データを変更したら必ずこれを呼ぶ。localStorageに控えを取り、GASへ書き込む。
 function saveState(){
+  travelIndexDirty=true;   // 訪問先の候補の集計を作り直す
   saveLocal();
   scheduleGasSave();
 }
@@ -5557,8 +5593,109 @@ function nextMonth25(){
    =================================================================== */
 
 const TRAVEL_MODES=['電車・バス','タクシー','車','その他'];
+
+// ===== 交通費の訪問先の候補（判定） ===== @travel-rules-begin
+/* テスト（tests/travel-suggest.test.js）が切り出して Node で読む。DOM や S を直接触らないこと */
+
+// ★ 自宅駅（既定の出発駅）。変えるときはここだけ直す。
+//   カレンダーから作成の出発駅（CAL_DEFAULT_FROM＝先頭）・入力モーダルの自宅駅ボタン・訪問先の候補がすべてこれを見る
+const HOME_STATIONS=['青野ヶ原駅','天神橋筋六丁目駅'];
 // カレンダーから作った「場所なし」の行の摘要。GASは摘要が空の行を捨てるので空にしない
 const TRAVEL_BLANK_DESC='（未入力）';
+
+// 駅名をそろえる：全角半角（NFKC）・空白を除き、末尾の「駅」を外す（鷹取／鷹取駅／ 鷹取 は同じ）
+function normStation(s){
+  return String(s||'').normalize('NFKC').replace(/\s+/g,'').replace(/駅$/,'');
+}
+function isHomeStation(s){
+  const n=normStation(s);
+  return !!n&&HOME_STATIONS.some(h=>normStation(h)===n);
+}
+
+// 訪問先をそろえる（比べるときだけ）：全角半角・空白、前後の「株式会社」「(株)」「㈱」、末尾の「様」「御中」を除く
+function normVisit(s){
+  let v=String(s||'').normalize('NFKC').replace(/\s+/g,'');
+  let prev;
+  do{
+    prev=v;
+    v=v.replace(/(様|御中)$/,'').replace(/^(株式会社|\(株\))/,'').replace(/(株式会社|\(株\))$/,'');
+  }while(v!==prev);
+  return v.toLowerCase();
+}
+
+/* 訪問先側の駅（正規化した駅名）。出発・到着のうち自宅駅でない方。両方とも自宅駅でなければ到着。
+   両方とも自宅駅（自宅駅どうしの移動）・どちらも空なら ''（集計しない）。帰りの行（到着が自宅駅）は出発駅になる */
+function visitSideStation(from,to){
+  const f=normStation(from),t=normStation(to);
+  if(t&&!isHomeStation(t))return t;
+  if(f&&!isHomeStation(f))return f;
+  return'';
+}
+
+/* 交通費の行から「駅 → 訪問先」の集計を作る（保存はしない。実行時に作る）
+   partsOf(l) → {from,to}（アプリでは travelPartsOf）。実績の交通費で、訪問先が空・「（未入力）」でなく、
+   摘要が「（未入力）」でない行だけ。返り値 {stations:{駅:{訪問先キー:{count,last,labels:{表記:{count,last}}}}}, purposes:{訪問先キー:{purpose,date}}} */
+function buildVisitIndex(ledger,partsOf){
+  const stations={},purposes={};
+  (ledger||[]).forEach(l=>{
+    if(!l||l.type!=='交通費'||(l.status||'actual')!=='actual')return;
+    const visit=String(l.visit||'').trim();
+    if(!visit||visit===TRAVEL_BLANK_DESC||l.desc===TRAVEL_BLANK_DESC)return;
+    const key=normVisit(visit);
+    if(!key)return;
+    const date=String(l.date||'');
+    const purpose=String(l.purpose||'').trim();
+    if(purpose&&(!purposes[key]||date>=purposes[key].date))purposes[key]={purpose,date};
+    const p=partsOf(l)||{};
+    const st=visitSideStation(p.from,p.to);
+    if(!st)return;
+    const g=(stations[st]=stations[st]||{});
+    const v=(g[key]=g[key]||{count:0,last:'',labels:{}});
+    v.count++;
+    if(date>v.last)v.last=date;
+    const lb=(v.labels[visit]=v.labels[visit]||{count:0,last:''});
+    lb.count++;
+    if(date>lb.last)lb.last=date;
+  });
+  return{stations,purposes};
+}
+
+// 回数の多い順、同数は最近の順
+const byCountRecent=(a,b)=>b.count-a.count||String(b.last).localeCompare(String(a.last));
+
+// 表示する表記：いちばん使われている表記（同数なら最近の表記）
+function visitLabelOf(v){
+  return Object.keys(v.labels).map(k=>Object.assign({label:k},v.labels[k])).sort(byCountRecent)[0].label;
+}
+
+// その駅の訪問先の候補 [{label,count,last}]（limit 件まで）
+function visitSuggestions(index,station,limit){
+  const g=(index&&index.stations[normStation(station)])||{};
+  return Object.keys(g).map(k=>({label:visitLabelOf(g[k]),count:g[k].count,last:g[k].last}))
+    .sort(byCountRecent).slice(0,limit||8);
+}
+
+// 取引先の候補：案件の取引先名（重複・exclude と同じものを除く）。新しい案件から limit 件
+function clientSuggestions(projects,exclude,limit){
+  const seen={};
+  (exclude||[]).forEach(x=>{seen[normVisit(x)]=true;});
+  const out=[];
+  (projects||[]).slice().sort((a,b)=>(b.id||0)-(a.id||0)).forEach(p=>{
+    const c=String((p&&p.client)||'').trim();
+    const k=normVisit(c);
+    if(!c||!k||seen[k]||out.length>=(limit||5))return;
+    seen[k]=true;
+    out.push(c);
+  });
+  return out;
+}
+
+// その訪問先の最後の用件（無ければ ''）
+function lastPurposeFor(index,visit){
+  const r=index&&index.purposes[normVisit(visit)];
+  return r?r.purpose:'';
+}
+// ===== @travel-rules-end
 let editTravelId=null;
 let editTravelRound=false;
 
@@ -5880,6 +6017,149 @@ tfoot td{background:#eef1f5;font-weight:700;border-top:2px solid #1a2e4a}
 
 /* ---- 入力モーダル ---- */
 
+/* ===== 訪問先の候補（交通費の入力モーダル） =====
+   集計（visitIndex）は台帳の読み込み・変更のあと、モーダルを開いたときに1回だけ作り直す（入力のたびには走らせない）。
+   判定は @travel-rules。欄は部品 suggestCombo を使う */
+let travelVisitIndex=null;
+let travelVisitIndexOf=null;   // 集計したときの S.ledger（読み込みで S が替わったら作り直す）
+let travelIndexDirty=true;
+let visitCombo=null;
+
+function travelIndexNow(){
+  if(travelIndexDirty||travelVisitIndexOf!==S.ledger){
+    travelVisitIndex=buildVisitIndex(S.ledger,travelPartsOf);
+    travelVisitIndexOf=S.ledger;
+    travelIndexDirty=false;
+  }
+  return travelVisitIndex;
+}
+
+// 「5回・最終 10/28」
+function visitMeta(x){
+  const m=/^\d{4}-(\d{2})-(\d{2})/.exec(x.last||'');
+  return`${x.count}回`+(m?`・最終 ${+m[1]}/${+m[2]}`:'');
+}
+
+function travelVisitSections(){
+  const idx=travelIndexNow();
+  const st=visitSideStation(document.getElementById('te-from').value,document.getElementById('te-to').value);
+  const own=st?visitSuggestions(idx,st,8):[];
+  const clients=clientSuggestions(S.projects,own.map(x=>x.label),5);
+  return[
+    {title:'この駅の訪問先',items:own.map(x=>({value:x.label,label:x.label,meta:visitMeta(x)}))},
+    {title:'取引先から',items:clients.map(c=>({value:c,label:c,meta:''}))}
+  ];
+}
+
+function initVisitCombo(){
+  if(visitCombo)return visitCombo;
+  visitCombo=suggestCombo(document.getElementById('te-visit'),{
+    sections:travelVisitSections,
+    onPick:()=>renderPurposeHint()
+  });
+  return visitCombo;
+}
+
+// 出発地・到着地を入れたら候補を開く（候補が無ければ何も出さない）
+function travelStationChanged(){
+  if(visitCombo&&document.getElementById('modal-travel-entry').classList.contains('open'))visitCombo.open();
+}
+
+function setTravelFrom(st){
+  const el=document.getElementById('te-from');
+  el.value=st;
+  travelStationChanged();
+}
+
+// 用件が空なら、その訪問先の最後の用件を候補として薄く出す（自動では入れない。タップで入る）
+function renderPurposeHint(){
+  const el=document.getElementById('te-purpose-hint');
+  if(!el)return;
+  const purpose=document.getElementById('te-purpose').value.trim();
+  const last=purpose?'':lastPurposeFor(travelIndexNow(),document.getElementById('te-visit').value);
+  el.innerHTML=last?`<button type="button" class="sc-chip" onclick="usePurposeHint()" title="タップで用件に入れます">候補：${escAttr(last)}</button>`:'';
+  el.dataset.value=last||'';
+}
+function usePurposeHint(){
+  const el=document.getElementById('te-purpose-hint');
+  document.getElementById('te-purpose').value=el.dataset.value||'';
+  renderPurposeHint();
+}
+
+/* ===== 部品：候補つき入力欄 suggestCombo =====================================
+   suggestCombo(input, {sections, onPick})
+     sections() → [{title, items:[{value, label, meta}]}]。開くたびに呼ぶ。入力中の文字で絞り込む
+     onPick(item) … 候補を選んだあと（値は input に入れてから呼ぶ）
+   返り値 {open, close, isOpen}
+   ・欄をタップ／フォーカスで開く。↑↓で選択・Enterで決定・Escで閉じる。外を押すと閉じる
+   ・候補が1件も無ければ何も出さない（普通の入力欄のまま）。候補にない文字もそのまま入力できる
+   ・見た目は .ui-scope の --ui- 変数（部品の中だけ）。交通費専用の作り込みはしない
+   ============================================================================= */
+function suggestCombo(input,opts){
+  const wrap=document.createElement('div');
+  wrap.className='ui-scope sc-wrap';
+  input.parentNode.insertBefore(wrap,input);
+  wrap.appendChild(input);
+  const list=document.createElement('div');
+  list.className='sc-list';
+  list.setAttribute('role','listbox');
+  wrap.appendChild(list);
+  input.setAttribute('autocomplete','off');
+  input.setAttribute('aria-autocomplete','list');
+  let flat=[],active=-1,isOpen=false;
+  const norm=v=>String(v||'').normalize('NFKC').replace(/\s+/g,'').toLowerCase();
+
+  function render(){
+    const q=norm(input.value);
+    const secs=(opts.sections()||[]).map(sc=>({title:sc.title,items:(sc.items||[]).filter(it=>!q||norm(it.label).indexOf(q)>=0)}))
+      .filter(sc=>sc.items.length);
+    // 入力がちょうど1件の候補と同じなら、選び直す必要がないので閉じる
+    flat=[];
+    secs.forEach(sc=>sc.items.forEach(it=>flat.push(it)));
+    if(!flat.length||(flat.length===1&&norm(flat[0].value)===q)){hide();return;}
+    if(active>=flat.length)active=flat.length-1;
+    let n=0;
+    list.innerHTML=secs.map(sc=>`<div class="sc-sec">${escAttr(sc.title)}</div>`+sc.items.map(it=>{
+      const i=n++;
+      return`<div class="sc-item${i===active?' active':''}" role="option" data-i="${i}">`
+        +`<span class="sc-label">${escAttr(it.label)}</span>${it.meta?`<span class="sc-meta">${escAttr(it.meta)}</span>`:''}</div>`;
+    }).join('')).join('');
+    list.classList.add('open');
+    isOpen=true;
+  }
+  function hide(){list.classList.remove('open');isOpen=false;active=-1;}
+  function pick(i){
+    const it=flat[i];
+    if(!it)return;
+    input.value=it.value;
+    hide();
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+    if(opts.onPick)opts.onPick(it);
+  }
+  function move(d){
+    if(!isOpen){active=-1;render();if(!isOpen)return;}
+    active=(active+d+flat.length)%flat.length;
+    list.querySelectorAll('.sc-item').forEach(el=>el.classList.toggle('active',+el.dataset.i===active));
+    const el=list.querySelector('.sc-item.active');
+    if(el)el.scrollIntoView({block:'nearest'});
+  }
+  input.addEventListener('focus',()=>{active=-1;render();});
+  input.addEventListener('click',()=>{if(!isOpen){active=-1;render();}});
+  input.addEventListener('input',()=>{active=-1;render();});
+  input.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'){e.preventDefault();move(1);}
+    else if(e.key==='ArrowUp'){e.preventDefault();move(-1);}
+    else if(e.key==='Enter'&&isOpen&&active>=0){e.preventDefault();pick(active);}
+    else if(e.key==='Escape'&&isOpen){e.preventDefault();e.stopPropagation();hide();}
+  });
+  input.addEventListener('blur',()=>setTimeout(()=>{if(document.activeElement!==input)hide();},120));
+  // 候補を押してもフォーカスを外さない（blur で閉じる前に選べるように）
+  list.addEventListener('mousedown',e=>e.preventDefault());
+  list.addEventListener('click',e=>{const el=e.target.closest('.sc-item');if(el)pick(+el.dataset.i);});
+  document.addEventListener('pointerdown',e=>{if(isOpen&&!wrap.contains(e.target))hide();});
+  return{open:()=>{active=-1;render();},close:hide,isOpen:()=>isOpen};
+}
+
 function openTravelEntry(id){
   const l=(id!==undefined&&id!==null)?S.ledger.find(x=>x.id===id):null;
   editTravelId=l?l.id:null;
@@ -5898,6 +6178,11 @@ function openTravelEntry(id){
   document.getElementById('te-result').innerHTML='';
   document.getElementById('te-title').textContent=l?'交通費を編集':'交通費を追加';
   document.getElementById('te-submit').textContent=l?'✓ 保存':'+ 追加';
+  document.getElementById('te-home-btns').innerHTML=HOME_STATIONS.map(st=>
+    `<button type="button" class="btn sm" onclick="setTravelFrom('${escAttr(st)}')">🏠 ${escAttr(st)}</button>`).join('');
+  initVisitCombo().close();
+  travelIndexNow();
+  document.getElementById('te-purpose-hint').innerHTML='';
   toggleTravelSearch();
   openModal('modal-travel-entry');
 }
@@ -5971,7 +6256,7 @@ function saveTravelEntry(){
    ledger には calId を持たせ、同じ予定を二重に登録しない。
    =================================================================== */
 
-const CAL_DEFAULT_FROM='青野ヶ原駅';
+const CAL_DEFAULT_FROM=HOME_STATIONS[0];   // 自宅駅は HOME_STATIONS（@travel-rules）で1か所にまとめている
 const CAL_DEFAULT_PERIOD=['2026-03-01','2026-07-31'];
 const CAL_DEFAULT_EXCLUDE='病院,クリニック,医院,内科,歯科';
 const CAL_FARE_CHUNK=10;   // GASの fareBatch は1回10区間まで
@@ -5987,6 +6272,11 @@ function openCalendarImport(){
   if(!document.getElementById('ci-from').value)document.getElementById('ci-from').value=CAL_DEFAULT_PERIOD[0];
   if(!document.getElementById('ci-to').value)document.getElementById('ci-to').value=CAL_DEFAULT_PERIOD[1];
   if(!document.getElementById('ci-exclude').value)document.getElementById('ci-exclude').value=CAL_DEFAULT_EXCLUDE;
+  const home=document.getElementById('ci-home');
+  if(!home.options.length){
+    home.innerHTML=HOME_STATIONS.map(st=>`<option value="${escAttr(st)}">${escAttr(st)}</option>`).join('');
+    home.value=CAL_DEFAULT_FROM;
+  }
   calRows=[];calOnline=[];calSkipped=0;
   calMsg('');
   renderCalImport();
@@ -6026,7 +6316,7 @@ function makeCalRow(ev){
     online:!!ev.online,
     cat:hasLoc?'A':'C',
     checked:true,
-    from:hasLoc?CAL_DEFAULT_FROM:'',
+    from:hasLoc?calHomeStation():'',
     to:hasLoc?String(ev.location).trim():'',
     mode:hasLoc?'電車・バス':'',
     round:hasLoc,
@@ -6101,6 +6391,24 @@ async function fetchCalendarEvents(){
     calMsg(`<div class="alert alert-error">❌ ${e.message}<br><small>初めて使うときは、GASエディタで testCalendarAccess を実行して権限を承認し、新しいバージョンでデプロイしてください。</small></div>`);
   }
   btn.disabled=false;
+  renderCalImport();
+}
+
+// 作成モーダルで選んだ出発駅（初期値は青野ヶ原駅）
+function calHomeStation(){
+  const el=document.getElementById('ci-home');
+  return(el&&el.value)||CAL_DEFAULT_FROM;
+}
+
+// 出発駅を変えたら、出発地が自宅駅のままの行を新しい駅にする（手で変えた出発地は触らない）
+function calHomeChanged(){
+  const st=calHomeStation();
+  calRows.concat(calOnline).forEach(r=>{
+    if(!isHomeStation(r.from)||normStation(r.from)===normStation(st))return;
+    r.from=st;
+    if(r.conf!=='manual'){r.fare='';r.conf='';r.fareError='';}
+    r.dup=calDupOf(r);
+  });
   renderCalImport();
 }
 
