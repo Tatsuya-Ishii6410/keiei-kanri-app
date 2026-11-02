@@ -40,6 +40,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   （揃え忘れてもデプロイ時にワークフローが keiei-kanri.html から作り直すので、公開版は常に最新）
 - gas-code.js：Google Apps Script用のコード（GASエディタに貼り付けて使う。ブラウザからは読み込まれない）
 - tests/debit-import.test.js：取込の判定のテスト。`node tests/debit-import.test.js` で実行する
+- tests/invoice-drafts.test.js：請求書の下書き・訂正のテスト。`node tests/invoice-drafts.test.js` で実行する
 - .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
 - netlify.toml：旧Netlify用の設定（移行後も念のため残している）
 
@@ -519,3 +520,46 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   月次レポートは同じ考え方の rp-table / rp-cards（rpBoth）を使う。
   ※カード側にもチェックボックスや入力欄が入る場合、DOMを querySelectorAll で
     数えると二重に数える。必ずデータ側（例：bankRows[i].checked）を正とすること。
+
+## 請求書の下書き自動作成・編集（訂正・取消）
+- quotes（請求書）の status：draft（下書き）／issued（発行済）／cancelled（取消）
+  status の無い既存の書類は issued として扱う（normalizeQuoteDoc）。見積書は status を使わない
+- 追加項目：revision（枝番。1＝原本）／history（訂正・取消の履歴、配列）／billingMonth（請求月 YYYY-MM）／
+  billingKey（二重作成防止キー「請求月|取引先|案件id」）／cancelReason／issuedAt
+  GASの quotes シートにも同じ列がある（history は JSON）。行の変換は quoteRow_ / quoteFromRow_
+  古いデプロイで列が無くても keepLocalWhenMissing が手元の値を残す
+- 判定は keiei-kanri.html の「@invoice-rules-begin〜end」に集約（テストが切り出して Node で読む）
+  ★ この範囲は loadState()（mergeState）より前に置くこと。const が初期化前だと起動時に落ちる
+  ★ DOM や S を直接触らない（projects / monthlyBillings / quotes は引数で渡す）
+
+### 下書きの自動作成（アプリを開いたとき。GASのトリガーは使わない）
+- bootApp で loadFromGAS().finally(checkInvoiceDraftsOnOpen)。1セッション1回
+- 対象月は invoiceDetectYm(今日)：当月の月末3日前〜月末＝当月／翌月1〜10日＝前月／それ以外は検出しない
+- 未作成＝missingInvoiceTargets：その月の請求レコード（金額>0）で案件が「進行中」「完了」（一括請求書と同じ）
+  のうち、レコードが未請求で、invoiceId の請求書（取消以外）も、同じ billingKey・同じ請求月で同じ案件の
+  明細を持つ請求書（下書き含む・取消除く）も無いもの。入金予定（planned_in）は発行後に作られるので対象の判定には使わない
+- 確認ダイアログ［作成する］［今は作成しない（今日は再表示しない）］。後者は localStorage の
+  bizapp_invoice_prompt_v1 に今日の日付を入れる（このブラウザだけ）
+- 作成は createDraftInvoices：案件ごとに1通、請求日＝請求月の末日、支払期限＝レコードの入金予定日か翌月末。
+  請求レコードの invoiceId に番号を入れるが、ステータスは未請求のまま。番号は作成時に makeDocNumber で振る
+- ダッシュボードの「🧾 請求書（○月分）：未作成○件／下書き○件」（renderInvoiceDocStatus）。
+  検出期間外は当月を数える。押すと goToInvoices で請求書タブへ（下書きがあれば下書きで絞り込む）
+
+### 編集
+- 下書き：作成モーダルを編集モードで開き自由に書き換え・削除できる。「✅ 発行」で issued にし、
+  紐づく請求レコードを請求済にして入金予定を作る（一括請求書と同じ）。下書きはPDF・HTML出力のボタンを出さない
+- 発行済み：「✏️ 訂正」。理由必須。変更前・変更後・日時・理由を history に残し revision を上げる。
+  番号（id）は変えず、表示は invoiceDisplayNo（INV-…-2）。帳票に「訂正版」の印。履歴は「🕘 履歴」
+  単価・数量・月額固定・契約期間を変えていなければ金額は計算し直さない（一括請求書は切り捨てで1円ずれるため）
+- 発行済み・取消済みは削除不可（canDeleteQuote）。「取消」で cancelled＋理由。既定で紐づく請求済レコードを
+  未請求に戻して入金予定を消す（入金済みは触らない）
+- 金額が変わったら confirm で、紐づく請求レコード（linkedBillingsOf）の金額と入金予定（syncPlannedInAmount）を更新する
+- 一覧の合計は発行済みだけ。月次レポートの請求書発行状況も発行済みだけ
+
+### ファイル名・PDF
+- 請求書は「【アスリンク請求書（2026年11月）分】_株式会社○○御中」（invoiceFileName。年月は invoiceMonthOf＝
+  billingMonth → 紐づく請求レコード → 請求日の月）。見積書は従来どおり
+- 「🖨 PDFで保存（印刷）」は別ウィンドウに帳票を書き、フォント読み込み後に print。<title> をファイル名にしてあるので
+  「PDFに保存」の既定名になる。HTMLダウンロードも同じ名前
+- 帳票のフォントは DOC_JA_FONT（Noto Sans CJK JP → Webフォントの Noto Sans JP）。単体HTMLには DOC_FONT_LINK を入れる
+

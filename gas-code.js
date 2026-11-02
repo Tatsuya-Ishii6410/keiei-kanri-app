@@ -37,7 +37,8 @@ var SHEET_DEFS = {
     'invoiceStatus', 'paidMonth', 'paidAmount'],
   quotes:   ['id', 'subject', 'client', 'amount', 'type', 'date', 'expire', 'due',
     'contractStart', 'contractEnd', 'paymentMethod', 'isMonthly',
-    'source', 'driveFileId', 'items', 'note'],
+    'source', 'driveFileId', 'items', 'note',
+    'status', 'revision', 'history', 'billingMonth', 'billingKey', 'cancelReason', 'issuedAt'],
   ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'settlementMonth', 'billingMonth', 'fixedCostId',
     'visit', 'purpose', 'calId'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
@@ -50,7 +51,8 @@ var SHEET_DEFS = {
 // 日付として自動変換されると困る列（テキスト書式を強制する）
 var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'value',
   'startMonth', 'endMonth', 'contractStart', 'contractEnd', 'paidMonth', 'expectedDate', 'settlementMonth',
-  'billingMonth', 'paidDate', 'expectedPayDate', 'invoiceId', 'driveFileId'];
+  'billingMonth', 'paidDate', 'expectedPayDate', 'invoiceId', 'driveFileId',
+  'history', 'billingKey', 'issuedAt'];
 
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
@@ -206,12 +208,23 @@ function readProjects_(sh) {
 }
 
 function readQuotes_(sh) {
-  return rowObjects_(sh, SHEET_DEFS.quotes).map(function (o) {
-    var items = [];
-    var rawItems = str_(o.items);
-    if (rawItems) {
-      try { items = JSON.parse(rawItems) || []; } catch (err) { items = []; }
-    }
+  return rowObjects_(sh, SHEET_DEFS.quotes).map(quoteFromRow_).filter(function (q) { return q.id !== ''; });
+}
+
+/** JSON の列（items / history）を配列に。壊れていたら空配列。 */
+function jsonArray_(v) {
+  var raw = str_(v);
+  if (!raw) return [];
+  try { var a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch (err) { return []; }
+}
+
+/**
+ * quotes シートの1行（列名→値）を書類に。
+ * status が空の既存行は発行済み（issued）。history は訂正・取消の履歴（JSON）。
+ */
+function quoteFromRow_(o) {
+    var items = jsonArray_(o.items);
+    var status = str_(o.status);
     return {
       id: str_(o.id),
       subject: str_(o.subject),
@@ -228,9 +241,31 @@ function readQuotes_(sh) {
       source: str_(o.source) || 'manual',
       driveFileId: str_(o.driveFileId),
       items: items,
-      note: str_(o.note)
+      note: str_(o.note),
+      status: (status === 'draft' || status === 'cancelled') ? status : 'issued',
+      revision: num_(o.revision) || 1,
+      history: jsonArray_(o.history),
+      billingMonth: ym_(o.billingMonth),
+      billingKey: str_(o.billingKey),
+      cancelReason: str_(o.cancelReason),
+      issuedAt: str_(o.issuedAt)
     };
-  }).filter(function (q) { return q.id !== ''; });
+}
+
+/** 書類を quotes シートの1行に（SHEET_DEFS.quotes の列順）。 */
+function quoteRow_(q) {
+  var status = str_(q.status);
+  return [
+    str_(q.id), str_(q.subject), str_(q.client), num_(q.amount), str_(q.type) || '見積書',
+    str_(q.date), str_(q.expire), str_(q.due),
+    ym_(q.contractStart), ym_(q.contractEnd), str_(q.paymentMethod), !!q.isMonthly,
+    str_(q.source) || 'manual', str_(q.driveFileId),
+    JSON.stringify(q.items || []), str_(q.note),
+    (status === 'draft' || status === 'cancelled') ? status : 'issued',
+    num_(q.revision) || 1,
+    JSON.stringify(Array.isArray(q.history) ? q.history : []),
+    ym_(q.billingMonth), str_(q.billingKey), str_(q.cancelReason), str_(q.issuedAt)
+  ];
 }
 
 function readLedger_(sh) {
@@ -430,15 +465,7 @@ function writeAll_(data) {
     ];
   });
 
-  var quotes = (data.quotes || []).map(function (q) {
-    return [
-      str_(q.id), str_(q.subject), str_(q.client), num_(q.amount), str_(q.type) || '見積書',
-      str_(q.date), str_(q.expire), str_(q.due),
-      ym_(q.contractStart), ym_(q.contractEnd), str_(q.paymentMethod), !!q.isMonthly,
-      str_(q.source) || 'manual', str_(q.driveFileId),
-      JSON.stringify(q.items || []), str_(q.note)
-    ];
-  });
+  var quotes = (data.quotes || []).map(quoteRow_);
 
   var ledger = (data.ledger || []).map(function (l) {
     return [num_(l.id), str_(l.date), str_(l.type), str_(l.desc), num_(l.amount), str_(l.memo),
