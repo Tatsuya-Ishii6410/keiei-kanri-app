@@ -129,7 +129,7 @@ function doPost(e) {
     if (action === 'inboxDone') return respond_(inboxDone_(body), '');
     if (action === 'driveProcessed') return respond_({ ok: true, renamed: driveMarkProcessed_(body.fileIds) }, '');
     if (action === 'advise') return respond_(loanAdvice_(body.data), '');
-    if (action === 'fare') return respond_(fareLookup_(body.from, body.to), '');
+    if (action === 'fare') return respond_(fareLookup_(body.from, body.to, body.mode), '');
     if (action === 'fareBatch') return respond_(fareBatch_(body.pairs), '');
     if (action === 'distance') return respond_(distanceLookup_(body.origin, body.destination, body.apiKey), '');
   } catch (err) {
@@ -1594,15 +1594,19 @@ function driveRead_(fileId) {
 // Distance Matrix API で取得する。どちらもブラウザからは呼べないので
 // （APIキーの露出とCORS）GAS側で実行する。
 
-/** 電車・バスのICカード運賃を調べる。 */
-function fareLookup_(from, to) {
+/** 運賃を調べる。mode は '電車'（既定）か 'バス'。バスのときは路線バスの運賃を調べさせる */
+var FARE_MODE_BUS = 'バス';
+function fareLookup_(from, to, mode) {
   var key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
   if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY がスクリプト プロパティに設定されていません' };
   from = str_(from); to = str_(to);
   if (!from || !to) return { ok: false, error: '出発駅と到着駅を入力してください' };
 
-  var prompt = from + 'から' + to + 'までの電車のICカード運賃を調べて、'
-    + '金額だけを数値で返してください。例：320';
+  var prompt = mode === FARE_MODE_BUS
+    ? from + 'から' + to + 'までの路線バスの運賃（ICカード利用時。ICの運賃が無ければ現金の運賃）を調べて、'
+      + '金額だけを数値で返してください。電車の運賃は答えないでください。例：230'
+    : from + 'から' + to + 'までの電車のICカード運賃を調べて、'
+      + '金額だけを数値で返してください。例：320';
 
   var payload = {
     model: ANTHROPIC_MODEL,
@@ -1697,17 +1701,19 @@ function fareBatch_(pairs) {
   var fresh = {};
   var results = pairs.map(function (p) {
     var from = str_(p && p.from), to = str_(p && p.to);
-    var key = from + '|' + to;
-    if (!from || !to) return { from: from, to: to, ok: false, error: '出発と到着が必要です' };
+    var mode = str_(p && p.mode) === FARE_MODE_BUS ? FARE_MODE_BUS : '電車';
+    // 運賃キャッシュのキー：電車「出発|到着」（これまでのキー）／バス「出発|到着|バス」
+    var key = from + '|' + to + (mode === FARE_MODE_BUS ? '|' + FARE_MODE_BUS : '');
+    if (!from || !to) return { from: from, to: to, mode: mode, ok: false, error: '出発と到着が必要です' };
     var hit = cache[key];
     if (hit && num_(hit.amount) > 0) {
-      return { from: from, to: to, ok: true, amount: num_(hit.amount), confidence: hit.confidence || 'mid', cached: true };
+      return { from: from, to: to, mode: mode, ok: true, amount: num_(hit.amount), confidence: hit.confidence || 'mid', cached: true };
     }
-    var r = fareLookup_(from, to);
-    if (!r.ok) return { from: from, to: to, ok: false, error: r.error, confidence: 'low' };
+    var r = fareLookup_(from, to, mode);
+    if (!r.ok) return { from: from, to: to, mode: mode, ok: false, error: r.error, confidence: 'low' };
     var conf = fareConfidence_(r.note);
     cache[key] = fresh[key] = { amount: r.amount, confidence: conf, at: Utilities.formatDate(new Date(), timezone_(ss), 'yyyy-MM-dd') };
-    return { from: from, to: to, ok: true, amount: r.amount, confidence: conf, cached: false };
+    return { from: from, to: to, mode: mode, ok: true, amount: r.amount, confidence: conf, cached: false };
   });
   if (Object.keys(fresh).length) {
     var lock = LockService.getScriptLock();

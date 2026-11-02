@@ -1,4 +1,4 @@
-/* 交通費の訪問先の候補（到着駅から過去の訪問先を選ぶ）・用件の選択式・同じ区間の過去の運賃のテスト
+/* 交通費の訪問先の候補（到着駅から過去の訪問先を選ぶ）・用件の選択式・同じ区間の過去の運賃・電車／バスの手段のテスト
    実行: node tests/travel-suggest.test.js
 
    - keiei-kanri.html は「@travel-rules-begin」〜「@travel-rules-end」の範囲だけを切り出して読む
@@ -15,11 +15,16 @@ const end = html.indexOf('@travel-rules-end');
 assert(begin > 0 && end > begin, 'keiei-kanri.html に @travel-rules の範囲が見つかりません');
 const app = {};
 vm.createContext(app);
+// TRAVEL_MODES は範囲の外にあるので、アプリの定義をそのまま取り出して渡す
+const modesSrc = /const TRAVEL_MODES=(\[[^\]]*\]);/.exec(html)[1];
 vm.runInContext(html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + `
+const TRAVEL_MODES_FOR_TEST=${modesSrc};
 globalThis.exported = { HOME_STATIONS, TRAVEL_BLANK_DESC, normStation, isHomeStation, normVisit, visitSideStation,
   buildVisitIndex, visitSuggestions, clientSuggestions, lastPurposeFor,
   TRAVEL_PURPOSES, purposeFromState, purposeToState, travelPurposeHintFor, isReturnTrip, applyReturnAutofill,
-  pastFares, fareAutofill, isCalendarTravel, isFareConfirmed, normFareCache, shouldConfirmFare, confirmFareInCache, calcFareSources };`, app);
+  pastFares, fareAutofill, isCalendarTravel, isFareConfirmed, normFareCache, shouldConfirmFare, confirmFareInCache, calcFareSources,
+  fareModeOf, rowFareModeOf, buildTravelDesc, travelModeChoices, fareCacheKey, legacyModeRows, relabelTravelMode,
+  TRAVEL_MODES_FOR_TEST };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -437,7 +442,113 @@ test('カレンダーの運賃計算：過去実績が先に使われ、AI検索
   const plan = A.calcFareSources(rows, ledger, partsOf, cache);
   assert.deepStrictEqual(plain(plan.past.map(x => [x.row.to, x.amount])), [['鷹取', 230]]);          // キャッシュの999円より実績
   assert.deepStrictEqual(plain(plan.cached.map(x => [x.row.to, parseInt(x.entry.amount)])), [['三宮', 420]]);
-  assert.deepStrictEqual(plain(plan.missing), ['青野ヶ原駅|大阪']);                           // AI検索は1区間だけ
+  assert.deepStrictEqual(plain(plan.missing), [{ from: '青野ヶ原駅', to: '大阪', mode: '電車', key: '青野ヶ原駅|大阪' }]);  // AI検索は1区間だけ
+});
+
+console.log('移動手段：電車／バス');
+
+test('新しい行は「電車」「バス」で保存・復元される（摘要の手段）', () => {
+  assert.deepStrictEqual(plain(A.TRAVEL_MODES_FOR_TEST), ['電車', 'バス', 'タクシー', '車', 'その他']);
+  seq = 0;
+  ['電車', 'バス'].forEach(m => {
+    const l = { id: ++seq, type: '交通費', desc: A.buildTravelDesc('青野ヶ原駅', '鷹取', m, false) };
+    assert.strictEqual(l.desc, `青野ヶ原駅→鷹取（${m}）`);
+    assert.strictEqual(partsOf(l).mode, m);
+  });
+  assert.strictEqual(A.buildTravelDesc('青野ヶ原駅', '鷹取', 'バス', true), '青野ヶ原駅→鷹取（バス）　往復');
+  assert.strictEqual(A.buildTravelDesc('', '', '電車', false), '（未入力）');
+  assert.strictEqual(A.buildTravelDesc('', '鷹取', '', false), '鷹取');
+});
+
+test('旧「電車・バス」の行は、開くと「電車・バス（旧）」を出し、保存し直しても値は変わらない', () => {
+  const desc = '青野ヶ原駅→鷹取（電車・バス）　往復';
+  const p = partsOf({ desc });
+  const choices = plain(A.travelModeChoices(A.TRAVEL_MODES_FOR_TEST, p.mode));
+  assert.deepStrictEqual(choices[0], { value: '電車・バス', label: '電車・バス（旧）' });
+  // 手段欄の値（電車・バス）のまま保存 → 摘要は同じ
+  assert.strictEqual(A.buildTravelDesc(p.from, p.to, choices[0].value, p.round), desc);
+  // 新しい行・電車の行には「（旧）」を出さない
+  assert(!A.travelModeChoices(A.TRAVEL_MODES_FOR_TEST, '電車').some(o => o.value === '電車・バス'));
+  assert(!A.travelModeChoices(A.TRAVEL_MODES_FOR_TEST, '').some(o => o.value === '電車・バス'));
+});
+
+test('バスの入力は逆区間を参照しない／電車は参照する。電車とバスの実績は混ざらない', () => {
+  seq = 0;
+  const ledger = [fr('2026-10-28', '鷹取', '青野ヶ原駅', 230, {}, '電車'), fr('2026-10-20', '鷹取', '青野ヶ原駅', 210, {}, 'バス')];
+  assert.deepStrictEqual(PF(ledger, '青野ヶ原駅', '鷹取', '電車'), { source: 'reverse', options: [{ amount: 230, last: '2026-10-28' }] });
+  assert.deepStrictEqual(PF(ledger, '青野ヶ原駅', '鷹取', 'バス'), { source: '', options: [] });
+  assert.deepStrictEqual(PF(ledger, '鷹取', '青野ヶ原駅', 'バス'), { source: 'same', options: [{ amount: 210, last: '2026-10-20' }] });
+  assert.deepStrictEqual(PF(ledger, '鷹取', '青野ヶ原駅', '電車'), { source: 'same', options: [{ amount: 230, last: '2026-10-28' }] });
+});
+
+test('旧データの判定：旧「電車・バス」と「（電車）」の行は、駅名に「バス」「停留所」があればバス、それ以外は電車', () => {
+  assert.strictEqual(A.rowFareModeOf({ mode: '電車・バス', from: '青野ヶ原駅', to: '鷹取' }), '電車');
+  assert.strictEqual(A.rowFareModeOf({ mode: '電車・バス', from: '市役所前バス停', to: '青野ヶ原駅' }), 'バス');
+  assert.strictEqual(A.rowFareModeOf({ mode: '電車', from: '中央停留所', to: '鷹取' }), 'バス');
+  assert.strictEqual(A.rowFareModeOf({ mode: 'バス', from: '青野ヶ原駅', to: '鷹取' }), 'バス');
+  assert.strictEqual(A.rowFareModeOf({ mode: '車', from: 'A', to: 'B' }), '');
+  assert.strictEqual(A.rowFareModeOf({ mode: '', from: 'A', to: 'B' }), '');            // 手段が空は対象外
+  // 入力中の手段：選んだ電車・バスはそのまま、旧「電車・バス」は駅名で決める
+  assert.strictEqual(A.fareModeOf('電車', '市役所前バス停', '鷹取'), '電車');
+  assert.strictEqual(A.fareModeOf('電車・バス', '市役所前バス停', '鷹取'), 'バス');
+  assert.strictEqual(A.fareModeOf('タクシー', 'A', 'B'), '');
+  // 旧「電車・バス」の過去の行は、電車の入力の参照元になる（バス停の行はバスの参照元）
+  seq = 0;
+  const ledger = [fr('2026-10-01', '青野ヶ原駅', '鷹取', 230), fr('2026-10-02', '青野ヶ原駅', '市役所前バス停', 220),
+    fr('2026-10-03', '青野ヶ原駅', '三宮', 420, {}, '電車')];                               // 収支入力モーダルの（電車）
+  assert.strictEqual(PF(ledger, '青野ヶ原駅', '鷹取', '電車').options[0].amount, 230);
+  assert.strictEqual(PF(ledger, '青野ヶ原駅', '市役所前バス停', 'バス').options[0].amount, 220);
+  assert.deepStrictEqual(PF(ledger, '青野ヶ原駅', '市役所前バス停', '電車').options, []);
+  assert.strictEqual(PF(ledger, '青野ヶ原駅', '三宮', '電車').options[0].amount, 420);
+  assert.deepStrictEqual(PF([fr('2026-10-01', '青野ヶ原駅', '鷹取', 230, {}, 'タクシー')], '青野ヶ原駅', '鷹取', '電車').options, []);
+});
+
+test('運賃キャッシュ：電車とバスのキーが分かれ、既存のキー（手段なし）は電車として読める', () => {
+  assert.strictEqual(A.fareCacheKey('青野ヶ原駅', '鷹取', '電車'), '青野ヶ原駅|鷹取');
+  assert.strictEqual(A.fareCacheKey('青野ヶ原駅', '鷹取', 'バス'), '青野ヶ原駅|鷹取|バス');
+  const cache = { '青野ヶ原駅|鷹取': { amount: 230, confidence: 'mid' }, '青野ヶ原|鷹取駅|バス': { amount: 210, confidence: 'mid' } };
+  const n = A.normFareCache(cache);
+  assert.strictEqual(n['青野ヶ原|鷹取|電車'].amount, 230);
+  assert.strictEqual(n['青野ヶ原|鷹取|バス'].amount, 210);
+  const rows = [{ from: '青野ヶ原駅', to: '鷹取', mode: '電車' }, { from: '青野ヶ原駅', to: '鷹取', mode: 'バス' },
+    { from: '青野ヶ原駅', to: '三宮', mode: 'バス' }, { from: '青野ヶ原駅', to: '鷹取', mode: 'タクシー' }];
+  const plan = A.calcFareSources(rows, [], partsOf, cache);
+  assert.deepStrictEqual(plain(plan.cached.map(x => [x.row.mode, parseInt(x.entry.amount)])), [['電車', 230], ['バス', 210]]);
+  assert.deepStrictEqual(plain(plan.missing), [{ from: '青野ヶ原駅', to: '三宮', mode: 'バス', key: '青野ヶ原駅|三宮|バス' }]);
+  // 確認（manual）もバスはバスのキーへ。電車の既存キーは触らない
+  const c2 = Object.assign({}, cache);
+  A.confirmFareInCache(c2, '青野ヶ原駅', '鷹取', 220, '2026-11-03', 'バス');
+  assert.deepStrictEqual(plain(c2['青野ヶ原|鷹取駅|バス']), { amount: 220, confidence: 'manual', at: '2026-11-03' });
+  assert.deepStrictEqual(plain(c2['青野ヶ原駅|鷹取']), { amount: 230, confidence: 'mid' });
+  // カレンダーのバスの行は、バスのキーが manual のときだけ確認済み
+  seq = 0;
+  const bus = fr('2026-10-04', '青野ヶ原駅', '鷹取', 220, { calId: 'evt@2026-10-04' }, 'バス');
+  assert.strictEqual(A.isFareConfirmed(bus, partsOf(bus), A.normFareCache(c2)), true);
+  assert.strictEqual(A.isFareConfirmed(bus, partsOf(bus), A.normFareCache({ '青野ヶ原駅|鷹取': { amount: 220, confidence: 'manual' } })), false);
+});
+
+test('旧データの整理：精算済みの月・手段が空・ほかの手段は対象外、提案は駅名で、適用前はデータが変わらない', () => {
+  seq = 0;
+  const ledger = [
+    fr('2026-09-10', '青野ヶ原駅', '鷹取', 230),                                    // 9月は精算済み
+    { id: ++seq, type: '交通費', desc: '交通費精算 2026年9月分', amount: 230, status: 'planned_out', date: '2026-10-25', settlementMonth: '2026-09' },
+    fr('2026-10-01', '青野ヶ原駅', '鷹取', 460, {}, '電車・バス', true),
+    fr('2026-10-02', '市役所前バス停', '青野ヶ原駅', 220),
+    fr('2026-10-03', '青野ヶ原駅', '鷹取', 230, {}, '電車'),
+    fr('2026-10-04', '青野ヶ原駅', '鷹取', 2300, {}, 'タクシー'),
+    Object.assign(fr('2026-10-05', '', '', 0), { desc: '（未入力）' }),
+    Object.assign(fr('不明', '青野ヶ原駅', '鷹取', 230), { date: '' })                 // 日付が読めない → 安全側で外す
+  ];
+  const before = JSON.stringify(ledger);
+  const rows = A.legacyModeRows(ledger, partsOf);
+  assert.deepStrictEqual(plain(rows), [{ id: 3, suggestion: '電車' }, { id: 4, suggestion: 'バス' }]);
+  assert.strictEqual(JSON.stringify(ledger), before);                                 // 一覧を作っただけでは変わらない
+  // 適用：摘要の（手段）だけを書き換える（往復の印・区間はそのまま）
+  assert.strictEqual(A.relabelTravelMode(ledger[2].desc, '電車'), '青野ヶ原駅→鷹取（電車）　往復');
+  assert.strictEqual(A.relabelTravelMode(ledger[3].desc, 'バス'), '市役所前バス停→青野ヶ原駅（バス）');
+  ledger[3].desc = A.relabelTravelMode(ledger[3].desc, 'バス');
+  assert.strictEqual(partsOf(ledger[3]).mode, 'バス');
+  assert.deepStrictEqual(plain(A.legacyModeRows(ledger, partsOf).map(x => x.id)), [3]);
 });
 
 console.log(`\n${passed}件 成功` + (process.exitCode ? '（失敗あり）' : ''));

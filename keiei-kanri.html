@@ -836,6 +836,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
         <button class="btn primary" onclick="openTravelEntry()">+ 交通費を追加</button>
         <button class="btn" onclick="openCalendarImport()">📅 カレンダーから作成</button>
         <button class="btn" onclick="openSettleModal()">🚃 交通費精算を追加</button>
+        <button class="btn" onclick="openLegacyModeModal()">🔀 旧「電車・バス」の手段を整理</button>
         <button class="btn" onclick="exportTravelCsv()">📥 CSV出力</button>
         <button class="btn" onclick="printTravelLedger()">🖨️ PDF出力</button>
       </div>
@@ -1608,7 +1609,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="form-group"><label class="form-label">日付</label><input id="te-date" type="date"></div>
     <div class="form-group"><label class="form-label">移動手段</label>
       <select id="te-mode" onchange="toggleTravelSearch();travelStationChanged()">
-        <option>電車・バス</option><option>タクシー</option><option>車</option><option>その他</option>
+
       </select>
     </div>
   </div>
@@ -1645,6 +1646,22 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-travel-entry')">キャンセル</button>
     <button class="btn primary" id="te-submit" onclick="saveTravelEntry()">+ 追加</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-legacy-mode">
+<div class="modal wide" style="max-width:820px">
+  <div class="modal-header"><span class="modal-title">🔀 旧「電車・バス」の手段を整理</span><button class="btn sm" onclick="closeModal('modal-legacy-mode')">✕</button></div>
+  <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;line-height:1.7">
+    手段が「電車・バス」のまま保存されている行を、「電車」か「バス」に分けます。提案は、駅名に「バス」「停留所」があればバス、それ以外は電車です。
+    行ごとに変えられます。「適用」を押すまでデータは変わりません。適用すると摘要の（手段）も書き換えます。<br>
+    ※ 精算を登録済みの月の行は対象にしません（精算の記録を変えないため）。
+  </div>
+  <div id="lm-body"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-legacy-mode')">閉じる</button>
+    <button class="btn primary" id="lm-apply" onclick="applyLegacyModes()">✓ 適用</button>
   </div>
 </div>
 </div>
@@ -1950,7 +1967,10 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="form-label" style="margin-bottom:8px">交通費の計算</div>
     <div style="display:flex;gap:16px;margin-bottom:10px;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-        <input type="radio" name="travel-mode" id="travel-mode-train" value="train" checked onchange="setTravelMode('train')" style="width:auto"> 🚃 電車・バス
+        <input type="radio" name="travel-mode" id="travel-mode-train" value="train" checked onchange="setTravelMode('train')" style="width:auto"> 🚃 電車
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+        <input type="radio" name="travel-mode" id="travel-mode-bus" value="bus" onchange="setTravelMode('bus')" style="width:auto"> 🚌 バス
       </label>
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
         <input type="radio" name="travel-mode" id="travel-mode-car" value="car" onchange="setTravelMode('car')" style="width:auto"> 🚗 車（マイカー）
@@ -5608,7 +5628,8 @@ function nextMonth25(){
    摘要は「{出発}→{到着}（{手段}）」の形で保存し、表示時に分解する。
    =================================================================== */
 
-const TRAVEL_MODES=['電車・バス','タクシー','車','その他'];
+// 新しく入力できる手段（旧「電車・バス」は選べない。保存済みの行は書き換えない。@travel-rules の LEGACY_TRAIN_BUS）
+const TRAVEL_MODES=['電車','バス','タクシー','車','その他'];
 
 // ===== 交通費の訪問先の候補（判定） ===== @travel-rules-begin
 /* テスト（tests/travel-suggest.test.js）が切り出して Node で読む。DOM や S を直接触らないこと */
@@ -5775,27 +5796,73 @@ function applyReturnAutofill(st,from,to){
 }
 const isHomeVisit=v=>!!normVisit(v)&&normVisit(v)===normVisit(VISIT_HOME);
 
-/* ---- 同じ区間の過去の運賃 ----
-   参照元：同じ出発駅・到着駅（normStation で比べる）・同じ手段（電車・バスだけ）の、実績の交通費で金額が0より大きい行。
-   ★ 運賃が「AI推定のまま、人が確認していない行」は使わない（推定の誤りが広がらないように）
-     カレンダーから作った行（calId が予定ID）は、運賃キャッシュ（travel.fareCache）がその区間で manual かつ
-     片道の金額が一致するときだけ確認済み。それ以外の行（手入力・入力モーダルで追加）は確認済み
-   金額は片道（往復の行は半分）で扱う */
-const FARE_AUTO_MODE='電車・バス';
-const FARE_MAX_OPTIONS=3;
+/* ---- 移動手段（電車／バス）----
+   手段は摘要「出発→到着（手段）」の括弧の中に入っている（列は持たない）。
+   新しく入力する手段は 電車／バス／タクシー／車／その他（TRAVEL_MODES）。旧「電車・バス」は選べないが、保存済みの行は書き換えない
+   運賃（検索・自動反映・キャッシュ）の手段は「電車」か「バス」（fareModeOf）。
+     旧「電車・バス」と、収支入力モーダルから登録した「（電車）」の行は、駅名に「バス」「停留所」が入っていればバス、それ以外は電車 */
+const LEGACY_TRAIN_BUS='電車・バス';
+const MODE_TRAIN='電車',MODE_BUS='バス';
 
-function fareKeyNorm(from,to){return normStation(from)+'|'+normStation(to)}
+// バス停らしい駅名（旧データの電車／バスの見分けにだけ使う）
+function isBusStop(name){return /バス|停留所/.test(normStation(name))}
+function guessTrainOrBus(from,to){return isBusStop(from)||isBusStop(to)?MODE_BUS:MODE_TRAIN}
 
-// 運賃キャッシュを、駅名をそろえたキーで引けるようにする（キャッシュのキーは入力どおりの「出発|到着」）
+// 入力中の手段 → 運賃の手段（'電車'/'バス'/''）。選んだ電車・バスはそのまま、旧「電車・バス」は駅名で決める
+function fareModeOf(mode,from,to){
+  if(mode===MODE_TRAIN||mode===MODE_BUS)return mode;
+  if(mode===LEGACY_TRAIN_BUS)return guessTrainOrBus(from,to);
+  return'';
+}
+// 過去の行 → 運賃の手段。旧「電車・バス」と「（電車）」（収支入力モーダル・新しく選んだ電車の行）は駅名で見分ける
+function rowFareModeOf(p){
+  if(!p)return'';
+  if(p.mode===MODE_BUS)return MODE_BUS;
+  if(p.mode===MODE_TRAIN||p.mode===LEGACY_TRAIN_BUS)return guessTrainOrBus(p.from,p.to);
+  return'';
+}
+
+// 摘要「出発→到着（手段）　往復」を作る（手段が空なら括弧なし。区間が無ければ「（未入力）」）
+function buildTravelDesc(from,to,mode,round){
+  from=String(from||'').trim();to=String(to||'').trim();
+  if(!from&&!to)return TRAVEL_BLANK_DESC;
+  return(from&&to?`${from}→${to}`:(to||from))+(mode?`（${mode}）`:'')+(round?'　往復':'');
+}
+
+// 入力モーダルの手段の選択肢。旧「電車・バス」の行を開いたときだけ「電車・バス（旧）」を足す（保存し直しても値は変わらない）
+function travelModeChoices(modes,current){
+  const list=(modes||[]).map(m=>({value:m,label:m}));
+  if(current===LEGACY_TRAIN_BUS)list.unshift({value:LEGACY_TRAIN_BUS,label:'電車・バス（旧）'});
+  return list;
+}
+
+/* ---- 運賃キャッシュ（travel.fareCache）のキー ----
+   電車：「出発|到着」（これまでのキー。既存のキーは電車として読む）／バス：「出発|到着|バス」 */
+function fareCacheKey(from,to,mode){
+  return String(from||'').trim()+'|'+String(to||'').trim()+(mode===MODE_BUS?'|'+MODE_BUS:'');
+}
+function fareKeyNorm(from,to,mode){return normStation(from)+'|'+normStation(to)+'|'+(mode===MODE_BUS?MODE_BUS:MODE_TRAIN)}
+
+// 運賃キャッシュを、駅名をそろえたキー（＋手段）で引けるようにする
 function normFareCache(cache){
   const out={};
   Object.keys(cache||{}).forEach(k=>{
-    const i=k.indexOf('|');
-    if(i<0)return;
-    out[fareKeyNorm(k.slice(0,i),k.slice(i+1))]=Object.assign({key:k},cache[k]);
+    const parts=k.split('|');
+    if(parts.length<2)return;
+    const mode=parts[2]===MODE_BUS?MODE_BUS:MODE_TRAIN;
+    out[fareKeyNorm(parts[0],parts[1],mode)]=Object.assign({key:k},cache[k]);
   });
   return out;
 }
+
+/* ---- 同じ区間の過去の運賃 ----
+   参照元：同じ出発駅・到着駅（normStation で比べる）・同じ運賃の手段（電車／バス）の、実績の交通費で金額が0より大きい行。
+   タクシー・車・その他・手段が空の行は使わない
+   ★ 運賃が「AI推定のまま、人が確認していない行」は使わない（推定の誤りが広がらないように）
+     カレンダーから作った行（calId が予定ID）は、運賃キャッシュがその区間・手段で manual かつ
+     片道の金額が一致するときだけ確認済み。それ以外の行（手入力・入力モーダル・収支入力モーダルで追加）は確認済み
+   金額は片道（往復の行は半分）で扱う */
+const FARE_MAX_OPTIONS=3;
 
 // カレンダーから作った行（calId が予定ID。デビット通知・領収書・銀行明細の印ではない）
 function isCalendarTravel(l){
@@ -5812,27 +5879,25 @@ function legFareOf(l,p){
 // 運賃が確認済みか。cacheN は normFareCache の戻り値
 function isFareConfirmed(l,p,cacheN){
   if(!isCalendarTravel(l))return true;
-  const c=(cacheN||{})[fareKeyNorm(p.from,p.to)];
+  const c=(cacheN||{})[fareKeyNorm(p.from,p.to,rowFareModeOf(p))];
   return !!c&&c.confidence==='manual'&&(parseInt(c.amount)||0)===legFareOf(l,p)&&legFareOf(l,p)>0;
 }
 
-// バス停らしい駅名（バスは逆区間を参照しない。手段は「電車・バス」で1つなので駅名で見分ける）
-function isBusStop(name){return /バス|停留所/.test(normStation(name))}
-
 /* 過去の運賃。返り値 {source:'same'|'reverse'|'', options:[{amount,last}]}
    options は片道の金額ごとに最新の日付で、新しい順に最大3つ（先頭が採用する金額）。
-   逆区間（出発と到着を入れ替え）は、同じ区間の行が1件もなく、どちらもバス停でないときだけ */
+   逆区間（出発と到着を入れ替え）は電車だけ。同じ区間の行が1件も無いときだけ見る。バスは同じ区間だけ */
 function pastFares(ledger,partsOf,cache,from,to,mode){
   const none={source:'',options:[]};
   const f=normStation(from),t=normStation(to);
-  if(!f||!t||f===t||mode!==FARE_AUTO_MODE)return none;
+  const fm=fareModeOf(mode,from,to);
+  if(!f||!t||f===t||!fm)return none;
   const cacheN=normFareCache(cache);
   const rows=[];
   (ledger||[]).forEach(l=>{
     if(!l||l.type!=='交通費'||(l.status||'actual')!=='actual'||l.desc===TRAVEL_BLANK_DESC)return;
     if(!((parseInt(l.amount)||0)>0))return;
     const p=partsOf(l)||{};
-    if(p.mode!==FARE_AUTO_MODE)return;
+    if(rowFareModeOf(p)!==fm)return;
     if(!isFareConfirmed(l,p,cacheN))return;
     rows.push({pf:normStation(p.from),pt:normStation(p.to),amount:legFareOf(l,p),date:String(l.date||''),id:l.id||0});
   });
@@ -5844,7 +5909,7 @@ function pastFares(ledger,partsOf,cache,from,to,mode){
   };
   const same=rows.filter(r=>r.pf===f&&r.pt===t);
   if(same.length)return{source:'same',options:pick(same)};
-  if(isBusStop(from)||isBusStop(to))return none;
+  if(fm!==MODE_TRAIN)return none;
   const rev=rows.filter(r=>r.pf===t&&r.pt===f);
   return rev.length?{source:'reverse',options:pick(rev)}:none;
 }
@@ -5869,29 +5934,54 @@ function shouldConfirmFare(l,flags){
 }
 
 /* カレンダーの運賃計算の順番：1. 過去の実績（pastFares。信頼度は高）2. 運賃キャッシュ 3. AI検索
-   rows はプレビューの行 {from,to,mode}。返り値 {past:[{row,amount}], cached:[{row,entry}], missing:[キー]}
-   missing（AI検索する区間）は「出発|到着」（入力どおり）の重複なし。過去実績で取れた行は数えない */
+   rows はプレビューの行 {from,to,mode}。返り値 {past:[{row,amount}], cached:[{row,entry}], missing:[{from,to,mode,key}]}
+   missing（AI検索する区間）は区間×手段で重複なし。過去実績で取れた行は数えない。電車・バス（旧も）以外の行は対象外 */
 function calcFareSources(rows,ledger,partsOf,cache){
   const cacheN=normFareCache(cache);
   const out={past:[],cached:[],missing:[]};
   (rows||[]).forEach(r=>{
+    const fm=fareModeOf(r.mode,r.from,r.to);
+    if(!fm)return;
     const pf=pastFares(ledger,partsOf,cache,r.from,r.to,r.mode);
     if(pf.options.length){out.past.push({row:r,amount:pf.options[0].amount});return;}
-    const c=cacheN[fareKeyNorm(r.from,r.to)];
+    const c=cacheN[fareKeyNorm(r.from,r.to,fm)];
     if(c&&parseInt(c.amount)>0){out.cached.push({row:r,entry:c});return;}
-    const key=String(r.from||'').trim()+'|'+String(r.to||'').trim();
-    if(out.missing.indexOf(key)<0)out.missing.push(key);
+    const key=fareCacheKey(r.from,r.to,fm);
+    if(!out.missing.some(x=>x.key===key))out.missing.push({from:String(r.from||'').trim(),to:String(r.to||'').trim(),mode:fm,key});
   });
   return out;
 }
 
-// キャッシュに manual を書く。すでに同じ区間（駅名をそろえて同じ）のキーがあればそのキーを使う
-function confirmFareInCache(cache,from,to,leg,today){
+// キャッシュに manual を書く。すでに同じ区間・手段（駅名をそろえて同じ）のキーがあればそのキーを使う
+function confirmFareInCache(cache,from,to,leg,today,mode){
+  const fm=mode===MODE_BUS?MODE_BUS:MODE_TRAIN;
   if(!(leg>0)||!normStation(from)||!normStation(to))return null;
-  const hit=normFareCache(cache)[fareKeyNorm(from,to)];
-  const key=hit?hit.key:String(from).trim()+'|'+String(to).trim();
+  const hit=normFareCache(cache)[fareKeyNorm(from,to,fm)];
+  const key=hit?hit.key:fareCacheKey(from,to,fm);
   cache[key]={amount:leg,confidence:'manual',at:today||''};
   return key;
+}
+
+/* ---- 旧「電車・バス」の手段の整理（任意の操作） ----
+   対象：実績の交通費で手段が旧「電車・バス」の行。精算（settlementMonth）が登録されている月の行と、日付が読めない行は外す（安全側）
+   提案：駅名に「バス」「停留所」があればバス、それ以外は電車。返り値 [{id, suggestion}] */
+function legacyModeRows(ledger,partsOf){
+  const settled={};
+  (ledger||[]).forEach(l=>{if(l&&l.settlementMonth)settled[l.settlementMonth]=true;});
+  const out=[];
+  (ledger||[]).forEach(l=>{
+    if(!l||l.type!=='交通費'||(l.status||'actual')!=='actual')return;
+    const p=partsOf(l)||{};
+    if(p.mode!==LEGACY_TRAIN_BUS)return;
+    const ym=/^(\d{4}-\d{2})-\d{2}/.exec(String(l.date||''));
+    if(!ym||settled[ym[1]])return;
+    out.push({id:l.id,suggestion:guessTrainOrBus(p.from,p.to)});
+  });
+  return out;
+}
+// 摘要の手段（末尾の括弧）だけを差し替える。往復の印や区間はそのまま
+function relabelTravelMode(desc,mode){
+  return String(desc||'').replace(/（[^（）]+）((?:\s|　)*(?:往復)?\s*)$/,'（'+mode+'）$1');
 }
 // ===== @travel-rules-end
 let editTravelId=null;
@@ -6460,7 +6550,10 @@ function openTravelEntry(id){
   // 往復で登録済みの金額はすでに2倍なので、チェックは外したまま「往復」の表記だけ引き継ぐ
   editTravelRound=t.round;
   document.getElementById('te-date').value=l?l.date:today();
-  document.getElementById('te-mode').value=TRAVEL_MODES.indexOf(t.mode)>=0?t.mode:TRAVEL_MODES[0];
+  // 旧「電車・バス」の行だけ「電車・バス（旧）」を出す（電車かバスを選んだときだけ値が変わる）
+  const modeEl=document.getElementById('te-mode');
+  modeEl.innerHTML=travelModeChoices(TRAVEL_MODES,t.mode).map(o=>`<option value="${escAttr(o.value)}">${escAttr(o.label)}</option>`).join('');
+  modeEl.value=(t.mode===LEGACY_TRAIN_BUS||TRAVEL_MODES.indexOf(t.mode)>=0)?t.mode:TRAVEL_MODES[0];
   document.getElementById('te-from').value=t.from;
   document.getElementById('te-to').value=t.to;
   document.getElementById('te-visit').value=l?(l.visit||''):'';
@@ -6489,10 +6582,10 @@ function openTravelEntry(id){
   openModal('modal-travel-entry');
 }
 
-// 運賃検索は電車・バスのときだけ出す
+// 運賃検索は電車・バス（旧「電車・バス」も）のときだけ出す
 function toggleTravelSearch(){
   const el=document.getElementById('te-search-row');
-  el.style.display=document.getElementById('te-mode').value==='電車・バス'?'':'none';
+  el.style.display=fareModeOf(document.getElementById('te-mode').value,'','')?'':'none';
 }
 
 async function searchTravelFare(){
@@ -6504,11 +6597,12 @@ async function searchTravelFare(){
   btn.disabled=true;
   out.innerHTML='<div class="alert alert-info"><span class="spinner"></span> 運賃を検索しています...</div>';
   try{
-    const json=await gasCall({action:'fare',from,to});
+    const mode=fareModeOf(document.getElementById('te-mode').value,from,to)||MODE_TRAIN;
+    const json=await gasCall({action:'fare',from,to,mode});
     if(!json.ok)throw new Error(json.error||'運賃を取得できませんでした');
     document.getElementById('te-amount').value=json.amount;
     travelFare.auto=false;travelFare.found=null;renderFareHint();
-    out.innerHTML=`<div class="alert alert-success">${from} → ${to}：<strong>${fmt(json.amount)}</strong>（IC）を金額に入れました</div>`;
+    out.innerHTML=`<div class="alert alert-success">${escAttr(from)} → ${escAttr(to)}（${mode}）：<strong>${fmt(json.amount)}</strong>を金額に入れました</div>`;
   }catch(e){
     out.innerHTML=`<div class="alert alert-error">❌ ${e.message}<br><small>金額は手入力もできます。</small></div>`;
   }
@@ -6535,9 +6629,7 @@ function saveTravelEntry(){
   if(round)amount*=2;
 
   const isRound=round||(editing&&editTravelRound);
-  const desc=(from||to)
-    ?(from&&to?`${from}→${to}`:(to||from))+`（${mode}）`+(isRound?'　往復':'')
-    :TRAVEL_BLANK_DESC;
+  const desc=buildTravelDesc(from,to,mode,isRound);
   const values={date,expectedDate:'',type:'交通費',desc,amount,memo,visit,purpose,status:'actual'};
 
   if(editTravelId!==null){
@@ -6545,9 +6637,10 @@ function saveTravelEntry(){
     if(!l){alert('対象が見つかりませんでした');return;}
     Object.assign(l,values);
     // 到着地や訪問先だけを直した保存は、運賃の確認とみなさない
-    if(shouldConfirmFare(l,travelFare)&&from&&to){
+    const fm=fareModeOf(mode,from,to);
+    if(shouldConfirmFare(l,travelFare)&&from&&to&&fm){
       if(!S.travel.fareCache)S.travel.fareCache={};
-      confirmFareInCache(S.travel.fareCache,from,to,legFareOf(l,{round:isRound}),today());
+      confirmFareInCache(S.travel.fareCache,from,to,legFareOf(l,{round:isRound}),today(),fm);
     }
   }else{
     S.ledger.push(Object.assign({id:S.nextLedgerId++},values));
@@ -6629,7 +6722,7 @@ function makeCalRow(ev){
     checked:true,
     from:hasLoc?calHomeStation():'',
     to:hasLoc?String(ev.location).trim():'',
-    mode:hasLoc?'電車・バス':'',
+    mode:hasLoc?MODE_TRAIN:'',
     round:hasLoc,
     visit:calVisitName(ev.title),
     purpose:'',
@@ -6723,8 +6816,10 @@ function calHomeChanged(){
   renderCalImport();
 }
 
+// 運賃キャッシュのキー（電車「出発|到着」／バス「出発|到着|バス」）。電車・バス以外の行は ''
 function calFareKey(r){
-  return String(r.from||'').trim()+'|'+String(r.to||'').trim();
+  const fm=fareModeOf(r.mode,r.from,r.to);
+  return fm?fareCacheKey(r.from,r.to,fm):'';
 }
 
 // プレビューの入力を data に反映する（チェックボックスは checked、それ以外は value）
@@ -6740,7 +6835,7 @@ function calEdit(i,field,el){
     r.fareError='';
     r.fareSrc='';
     // 手修正した運賃は次回から使えるようにキャッシュへ
-    if(v!==''&&r.from.trim()&&r.to.trim()){
+    if(v!==''&&r.from.trim()&&r.to.trim()&&calFareKey(r)){
       if(!S.travel.fareCache)S.travel.fareCache={};
       S.travel.fareCache[calFareKey(r)]={amount:v,confidence:'manual',at:today()};
       saveState();
@@ -6859,7 +6954,7 @@ function renderCalImport(){
 async function calcCalFares(){
   const cache=S.travel.fareCache||(S.travel.fareCache={});
   // 到着が入っている電車・バスの行だけ（場所なしの行・手入力した行は対象外）
-  const targets=calRows.filter(r=>r.from.trim()&&r.to.trim()&&r.mode==='電車・バス'&&r.conf!=='manual');
+  const targets=calRows.filter(r=>r.from.trim()&&r.to.trim()&&fareModeOf(r.mode,r.from,r.to)&&r.conf!=='manual');
   if(targets.length===0){alert('運賃を計算できる行がありません（出発・到着が入っている電車・バスの行が対象です）');return;}
 
   const apply=(r,c,src)=>{r.fare=parseInt(c.amount)||'';r.conf=c.confidence||'mid';r.fareError='';r.fareSrc=src;};
@@ -6877,10 +6972,12 @@ async function calcCalFares(){
     for(let k=0;k<missing.length;k+=CAL_FARE_CHUNK){
       const chunk=missing.slice(k,k+CAL_FARE_CHUNK);
       calMsg(`<div class="alert alert-info"><span class="spinner"></span> 運賃を検索しています...（${Math.min(k+chunk.length,missing.length)}/${missing.length}区間）</div>`);
-      const json=await gasCall({action:'fareBatch',pairs:chunk.map(key=>{const p=key.split('|');return{from:p[0],to:p[1]};})});
+      const json=await gasCall({action:'fareBatch',pairs:chunk.map(x=>({from:x.from,to:x.to,mode:x.mode}))});
       if(!json||!json.ok)throw new Error((json&&json.error)||'運賃を取得できませんでした');
-      (json.results||[]).forEach(res=>{
-        const key=res.from+'|'+res.to;
+      // 結果は送った順に返る（古いデプロイは手段を返さないので、キーは送った側で決める）
+      (json.results||[]).forEach((res,i)=>{
+        const key=chunk[i]&&chunk[i].key;
+        if(!key)return;
         if(res.ok)cache[key]={amount:res.amount,confidence:res.confidence||'mid',at:today()};
         targets.filter(r=>calFareKey(r)===key).forEach(r=>{
           if(res.ok)apply(r,res,'search');
@@ -6908,9 +7005,7 @@ function registerCalRows(){
   sel.forEach(r=>{
     const from=r.from.trim(),to=r.to.trim(),mode=r.mode;
     // 場所なしで何も入れていない行は「（未入力）」。金額0円のまま登録し、台帳で要編集にする
-    const desc=(from||to)
-      ?(from&&to?`${from}→${to}`:(to||from))+(mode?`（${mode}）`:'')+(r.round?'　往復':'')
-      :TRAVEL_BLANK_DESC;
+    const desc=buildTravelDesc(from,to,mode,r.round);
     S.ledger.push({
       id:S.nextLedgerId++,
       date:r.date,
@@ -7100,7 +7195,9 @@ function toggleTravelPanel(){
   if(on)setTravelMode(document.querySelector('input[name="travel-mode"]:checked').value);
 }
 
+let travelPanelMode='train';   // train / bus / car
 function setTravelMode(mode){
+  travelPanelMode=mode;
   const car=mode==='car';
   document.getElementById('travel-train').style.display=car?'none':'';
   document.getElementById('travel-car').style.display=car?'':'none';
@@ -7123,6 +7220,52 @@ function refreshTravelMode(){
 
 function travelMsg(html){document.getElementById('travel-result').innerHTML=html||''}
 
+/* ===== 旧「電車・バス」の手段の整理（交通費台帳。任意の操作） =====
+   対象と提案は legacyModeRows（@travel-rules）。「適用」を押すまでデータは変えない */
+let legacyModeChoice={};   // {ledgerId: '電車'|'バス'}（画面の中だけ）
+
+function openLegacyModeModal(){
+  legacyModeChoice={};
+  legacyModeRows(S.ledger,travelPartsOf).forEach(x=>{legacyModeChoice[x.id]=x.suggestion;});
+  renderLegacyModes();
+  openModal('modal-legacy-mode');
+}
+
+function renderLegacyModes(){
+  const ids=Object.keys(legacyModeChoice).map(Number);
+  const rows=S.ledger.filter(l=>ids.indexOf(l.id)>=0).sort(sortTravel);
+  document.getElementById('lm-apply').disabled=!rows.length;
+  document.getElementById('lm-body').innerHTML=rows.length?rows.map(l=>{
+    const v=legacyModeChoice[l.id];
+    return`<div class="inbox-item" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span style="font-family:var(--font-num);white-space:nowrap">${escAttr(l.date)}</span>
+      <span style="flex:1;min-width:180px;word-break:break-all">${escAttr(l.desc)}<span style="font-size:11px;color:var(--text-muted)">　${fmt(l.amount)}</span></span>
+      <select style="width:auto" onchange="legacyModeChoice[${l.id}]=this.value">
+        ${[MODE_TRAIN,MODE_BUS].map(m=>`<option value="${m}"${m===v?' selected':''}>${m}</option>`).join('')}
+      </select>
+    </div>`;
+  }).join(''):'<div class="empty-state">整理する行はありません（精算を登録済みの月の行は対象外です）</div>';
+}
+
+function applyLegacyModes(){
+  const ids=Object.keys(legacyModeChoice).map(Number);
+  if(!ids.length)return;
+  const n={[MODE_TRAIN]:0,[MODE_BUS]:0};
+  ids.forEach(id=>{n[legacyModeChoice[id]]++;});
+  if(!confirm(`${ids.length}件の手段を書き換えます（電車 ${n[MODE_TRAIN]}件／バス ${n[MODE_BUS]}件）。摘要の（手段）も変わります。よろしいですか？`))return;
+  let done=0;
+  ids.forEach(id=>{
+    const l=S.ledger.find(x=>x.id===id);
+    if(!l||travelPartsOf(l).mode!==LEGACY_TRAIN_BUS)return;
+    l.desc=relabelTravelMode(l.desc,legacyModeChoice[id]);
+    done++;
+  });
+  saveState();
+  closeModal('modal-legacy-mode');
+  renderTravelLedger();refreshAll();
+  alert(`✓ ${done}件の手段を書き換えました`);
+}
+
 /* ---- 電車・バス ---- */
 
 async function searchFare(){
@@ -7134,13 +7277,14 @@ async function searchFare(){
   btn.disabled=true;
   travelMsg('<div class="alert alert-info"><span class="spinner"></span> 運賃を検索しています...</div>');
   try{
-    const json=await gasCall({action:'fare',from,to});
+    const mode=travelPanelMode==='bus'?MODE_BUS:MODE_TRAIN;
+    const json=await gasCall({action:'fare',from,to,mode});
     if(!json.ok)throw new Error(json.error||'運賃を取得できませんでした');
     const one=json.amount;
     const total=round?one*2:one;
-    travelResult={amount:total,desc:`${from}→${to}（電車）`+(round?'　往復':'')};
+    travelResult={amount:total,desc:buildTravelDesc(from,to,mode,round)};
     travelMsg(`<div class="alert alert-success">
-      ${from} → ${to}：<strong>${fmt(one)}</strong>（IC）
+      ${escAttr(from)} → ${escAttr(to)}（${mode}）：<strong>${fmt(one)}</strong>
       ${round?`<br>往復：<strong>${fmt(total)}</strong>`:''}
       </div>
       <button class="btn primary" onclick="applyTravelResult()">この金額で登録</button>`);

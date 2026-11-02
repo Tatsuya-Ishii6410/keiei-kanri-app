@@ -1,4 +1,4 @@
-/* 運用チェックのテスト（①週次バックアップ ②入金遅延アラート ③月次締めチェック）
+/* 運用チェックのテスト（①週次バックアップ ②入金遅延アラート ③月次締めチェック。GASの運賃検索の電車／バス）
    実行: node tests/ops-checks.test.js
 
    - gas-code.js はまるごと読む。DriveApp・ScriptApp・SpreadsheetApp・LockService・Utilities はモックに差し替える
@@ -536,6 +536,37 @@ test('GASとの往復：ledger の reviewed 列・settings の月次締めの確
   const old = gas.SHEET_DEFS.ledger.filter(h => h !== 'reviewed');
   ss.sheets.ledger = mockSheet([old, old.map(h => ({ id: 9, date: '2026-10-01', type: '通信料', desc: 'Z', amount: 100, status: 'actual' })[h] ?? '')]);
   assert.strictEqual(gas.readAll_().ledger[0].reviewed, '');
+});
+
+console.log('交通費の運賃検索（GAS）：電車／バス');
+
+test('GASの運賃検索：バスはバスの運賃を調べ、キャッシュのキーが「出発|到着|バス」で分かれる（既存の電車のキーはそのまま）', () => {
+  ss = mockSpreadsheet();
+  gas.ensureSheets_(ss);
+  ss.sheets.settings = mockSheet([['key', 'value'], ['travel.fareCache', JSON.stringify({ '青野ヶ原駅|鷹取': { amount: 230, confidence: 'mid' } })]]);
+  ss.sheets.settings.getRange = (orig => (r, c, nr, nc) => Object.assign(orig(r, c, nr, nc), {
+    setValue: v => { ss.sheets.settings.data[r - 1][c - 1] = v; }
+  }))(ss.sheets.settings.getRange);
+  const prompts = [];
+  gas.PropertiesService = { getScriptProperties: () => ({ getProperty: k => (k === 'ANTHROPIC_API_KEY' ? 'sk-ant-test' : null) }) };
+  gas.UrlFetchApp = { fetch: (url, opts) => {
+    prompts.push(JSON.parse(opts.payload).messages[0].content[0].text);
+    return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ content: [{ type: 'text', text: '210円です' }] }) };
+  } };
+  const r = gas.fareBatch_([{ from: '青野ヶ原駅', to: '鷹取' }, { from: '青野ヶ原駅', to: '鷹取', mode: 'バス' }]);
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(plain(r.results.map(x => [x.mode, x.amount, x.cached])), [['電車', 230, true], ['バス', 210, false]]);
+  assert.strictEqual(prompts.length, 1);                       // 電車はキャッシュ、バスだけ検索
+  assert(/路線バス/.test(prompts[0]) && !/電車のICカード運賃を調べて/.test(prompts[0]), prompts[0]);
+  const saved = JSON.parse(ss.sheets.settings.data.find(row => row[0] === 'travel.fareCache')[1]);
+  assert.deepStrictEqual(Object.keys(saved).sort(), ['青野ヶ原駅|鷹取', '青野ヶ原駅|鷹取|バス']);
+  assert.strictEqual(saved['青野ヶ原駅|鷹取'].amount, 230);
+  // 手段を渡さない呼び出し（古いアプリ・単発の fare）は電車
+  prompts.length = 0;
+  gas.fareLookup_('三宮', '大阪');
+  assert(/電車のICカード運賃/.test(prompts[0]));
+  gas.fareLookup_('三宮', '大阪', 'バス');
+  assert(/路線バス/.test(prompts[1]));
 });
 
 console.log(`\n${passed}件 成功` + (process.exitCode ? '（失敗あり）' : ''));
