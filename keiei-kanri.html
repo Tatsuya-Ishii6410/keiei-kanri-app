@@ -152,9 +152,11 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .rc-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:18px;align-items:start}
 .rc-photo{position:sticky;top:0;background:var(--bg-secondary);border-radius:var(--radius-md);padding:8px;text-align:center}
 .rc-photo img{max-width:100%;max-height:70vh;object-fit:contain;border-radius:6px}
+.rc-photo iframe{width:100%;height:70vh;border:0;border-radius:6px;background:#fff}
+.inbox-item{border:0.5px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:8px}
 .rc-warn{background:var(--amber-bg) !important;border-color:#e0a800 !important}
 .req-mark{color:var(--red)}
-@media (max-width:768px){.rc-grid{grid-template-columns:1fr}.rc-photo{position:static}.rc-photo img{max-height:45vh}}
+@media (max-width:768px){.rc-grid{grid-template-columns:1fr}.rc-photo{position:static}.rc-photo img{max-height:45vh}.rc-photo iframe{height:50vh}}
 .modal.doc{max-width:720px}
 @media(max-width:480px){
   #modal-preview-quote .actions-row .btn{width:100%;justify-content:center}
@@ -563,6 +565,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     ※売上は案件発生ベース。経費・役員報酬・税金・公課はCF管理の実績値。入金待ちはCF管理の入金予定
   </div>
   <div id="d-bank-import" style="font-size:13px;margin:-8px 0 6px"></div>
+  <div id="d-inbox-status" style="font-size:13px;margin:0 0 6px"></div>
   <div id="d-invoice-status" style="font-size:13px;margin:0 0 16px"></div>
   <div class="two-col">
     <div class="card">
@@ -729,6 +732,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn" onclick="openDriveImportModal()">☁️ ドライブから取込</button>
       <button class="btn" onclick="startReceiptImport()">📷 領収書から登録</button>
+      <button class="btn" onclick="openInboxList()">📥 取込待ち</button>
       <button class="btn" onclick="openDebitImportModal()">📧 デビット通知から取込</button>
       <button class="btn" onclick="openFixedCostsModal()">🔁 固定費管理</button>
       <button class="btn primary" onclick="openLedgerModal(null,'actual')">+ 実績入力</button>
@@ -1065,6 +1069,29 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div id="travel-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
   </div>
   <div class="card">
+    <div class="card-header"><span class="card-title">📥 受信箱フォルダ（Googleドライブ）</span></div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;line-height:1.7">
+      Googleドライブに「領収書」「受取請求書」の受信箱フォルダを作り、そのURL（またはフォルダID）を貼ってください。
+      毎週月曜の朝にGASが読み取り、ダッシュボードの「📥 取込待ち」に入れます（経費への登録は確認してから）。
+      処理が終わったファイルは、受信箱の中の「処理済み」フォルダに移動します（削除はしません）。<br>
+      ※「📷 領収書から登録」の写真の保存先（マイドライブの「領収書/年月」）とは別のフォルダにしてください。
+    </div>
+    <div class="form-row single">
+      <div class="form-group"><label class="form-label">領収書の受信箱（URL または ID）</label>
+        <input id="ib-receipt" type="text" placeholder="https://drive.google.com/drive/folders/..." oninput="showInboxFolderId('receipt')">
+        <div id="ib-receipt-id" style="font-size:11px;color:var(--text-muted);margin-top:3px"></div></div>
+    </div>
+    <div class="form-row single">
+      <div class="form-group"><label class="form-label">受取請求書の受信箱（URL または ID）</label>
+        <input id="ib-invoice" type="text" placeholder="https://drive.google.com/drive/folders/..." oninput="showInboxFolderId('invoice')">
+        <div id="ib-invoice-id" style="font-size:11px;color:var(--text-muted);margin-top:3px"></div></div>
+    </div>
+    <div class="actions-row">
+      <button class="btn primary" onclick="saveInboxFolders()">✓ 保存する</button>
+    </div>
+    <div id="inbox-folder-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
+  </div>
+  <div class="card">
     <div class="card-header"><span class="card-title">財務情報（融資力診断に使用）</span></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">現預金残高（円）※CF管理の口座残高と共通</label><input id="f-cash" type="number" placeholder="1500000"></div>
@@ -1309,8 +1336,25 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 <input type="file" id="rc-camera" accept="image/*" capture="environment" style="display:none" onchange="onReceiptFiles(this)">
 <div class="modal-overlay" id="modal-receipt">
 <div class="modal wide" style="max-width:1040px">
-  <div class="modal-header"><span class="modal-title">📷 領収書から登録 <span id="rc-counter" style="font-size:13px;font-weight:400;color:var(--text-secondary)"></span></span><button class="btn sm" onclick="closeReceiptModal()">✕</button></div>
+  <div class="modal-header"><span class="modal-title"><span id="rc-title">📷 領収書から登録</span> <span id="rc-counter" style="font-size:13px;font-weight:400;color:var(--text-secondary)"></span></span><button class="btn sm" onclick="closeReceiptModal()">✕</button></div>
   <div id="rc-body"></div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-inbox">
+<div class="modal wide" style="max-width:860px">
+  <div class="modal-header"><span class="modal-title">📥 取込待ち</span><button class="btn sm" onclick="closeModal('modal-inbox')">✕</button></div>
+  <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">
+    受信箱フォルダ（設定ページで指定）を、GASが毎週月曜の朝に読み取った結果です。1回に読むのは8ファイルまでで、残りは次の実行に回ります。
+    読み取りに失敗したファイルは3回まで読み直せます。
+  </div>
+  <div class="actions-row" style="justify-content:flex-start;margin-bottom:6px">
+    <button class="btn" id="inbox-scan-btn" onclick="inboxScanNow()">📥 今すぐ読み取る</button>
+    <button class="btn primary" id="inbox-bulk-btn" onclick="inboxBulkRegister()">✓ 確信度が高のものを一括登録</button>
+  </div>
+  <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">一括登録の対象外：確信度が高でない／金額・日付が空／重複の可能性あり／交際費（誰と・用件が必要）／受取請求書で支払期限が空</div>
+  <div id="inbox-msg"></div>
+  <div id="inbox-list"></div>
 </div>
 </div>
 
@@ -2199,6 +2243,7 @@ const defaultState={
   travel:{googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15,calendarId:DEFAULT_CALENDAR_ID,fareCache:{}},
   mail:{lastDebitSync:''},        // デビット通知メールの取込済みの最終日（YYYY-MM-DD）
   bank:{lastCsvImportDate:''},    // 銀行明細CSVを最後に登録した日（YYYY-MM-DD）
+  inboxFolders:{receipt:'',invoice:''},   // 受信箱フォルダのID（GASの週次読み取りが読む）
   // 財務情報（融資力診断で使う）
   finance:{loan:0},
   /* 税金・社会保険の計算設定。
@@ -2298,6 +2343,8 @@ function mergeState(parsed){
     l.withWhom=l.withWhom||'';
     l.persons=(l.persons===''||l.persons===null||l.persons===undefined)?'':(parseInt(l.persons)||'');
     l.receiptId=l.receiptId||'';
+    l.payee=l.payee||'';
+    l.docNo=l.docNo||'';
     if(['actual','planned_in','planned_out'].indexOf(l.status)<0)l.status='actual';
     l.expectedDate=l.expectedDate||'';
     l.settlementMonth=l.settlementMonth||'';
@@ -2343,6 +2390,9 @@ function mergeState(parsed){
   s.travel.calendarId=s.travel.calendarId||DEFAULT_CALENDAR_ID;
   s.mail={lastDebitSync:String(((parsed&&parsed.mail)||{}).lastDebitSync||'')};
   s.bank={lastCsvImportDate:String(((parsed&&parsed.bank)||{}).lastCsvImportDate||'')};
+  const ibf=(parsed&&parsed.inboxFolders)||{};
+  s.inboxFolders={receipt:String(ibf.receipt||''),invoice:String(ibf.invoice||'')};
+  delete s.inboxItems;
   if(!s.travel.fareCache||typeof s.travel.fareCache!=='object')s.travel.fareCache={};
   s.travel.gasolinePrice=parseInt(s.travel.gasolinePrice)||175;
   s.travel.fuelEfficiency=parseFloat(s.travel.fuelEfficiency)||15;
@@ -2440,7 +2490,7 @@ function keepLocalWhenMissing(remote){
   ['nextBillingId','nextFiscalYearId','nextFixedCostId','bankBalance'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
-  ['travel','finance','taxSettings','mail','bank'].forEach(k=>{
+  ['travel','finance','taxSettings','mail','bank','inboxFolders'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
   if(d.travel&&S.travel&&d.travel!==S.travel){
@@ -2471,7 +2521,7 @@ function keepLocalWhenMissing(remote){
       const o=local[r.id];
       if(!o)return r;
       const x=Object.assign({},r);
-      ['visit','purpose','calId','withWhom','persons','receiptId'].forEach(f=>{if(x[f]===undefined&&o[f])x[f]=o[f];});
+      ['visit','purpose','calId','withWhom','persons','receiptId','payee','docNo'].forEach(f=>{if(x[f]===undefined&&o[f])x[f]=o[f];});
       return x;
     });
   }
@@ -2497,6 +2547,9 @@ async function loadFromGAS(){
   if(!json||!json.ok){
     setSyncStatus('err',(json&&json.error)||'応答が不正です');return;
   }
+  // 取込待ち（inbox シート）は S に入れない（アプリの保存の対象外）
+  if(json.data&&Array.isArray(json.data.inboxItems))inboxItems=json.data.inboxItems;
+  if(json.data)delete json.data.inboxItems;
   if(isRemoteEmpty(json.data)){
     // シートがまだ空のときは、手元のデータを初期投入する（消さない）
     await pushToGAS();
@@ -2992,6 +3045,7 @@ function renderBankImportStatus(){
 
 function updateDashboard(){
   renderBankImportStatus();
+  renderInboxStatus();
   renderInvoiceDocStatus();
   const mi=getMonth();
   const fy=dashboardFiscalYear();
@@ -3816,6 +3870,7 @@ async function onReceiptFiles(input){
   }
   fillRecentDatalists();
   rcQueue=[];rcIndex=0;
+  document.getElementById('rc-title').textContent='📷 領収書から登録';
   document.getElementById('rc-counter').textContent='';
   document.getElementById('rc-body').innerHTML='<div class="alert alert-info"><span class="spinner"></span> 写真を縮小しています...</div>';
   openModal('modal-receipt');
@@ -3834,6 +3889,12 @@ function showReceipt(i){
   rcIndex=i;
   if(i>=rcQueue.length){finishReceipts();return;}
   const it=rcCur();
+  // 取込待ちは、表示するときに重複を調べる（前の1枚を登録した結果も見るため）
+  if(it.src==='inbox'&&!it.dupChecked){
+    it.dupChecked=true;
+    it.dup=inboxDupOf(S.ledger,it.kind,it.f);
+    if(it.dup)it.checked=false;
+  }
   if(it.state==='pending')readReceipt(it);
   else renderReceipt();
 }
@@ -3869,6 +3930,9 @@ function rcWarn(it,key){
   const f=it.f,c=it.conf||{};
   if(key==='date')return!f.date||c.date==='低';
   if(key==='amount')return f.amount===''||f.amount===null||c.total==='低';
+  if(key==='dueDate')return!f.dueDate||c.dueDate==='低';
+  if(key==='docNo')return c.docNo==='低';
+  if(key==='tax')return c.tax==='低';
   if(key==='payee')return c.payee==='低';
   if(key==='item')return c.item==='低';
   if(key==='taxType')return c.taxType==='低';
@@ -3891,27 +3955,41 @@ function renderReceipt(){
   const it=rcCur();
   if(!it)return;
   const f=it.f;
-  document.getElementById('rc-counter').textContent=`${rcIndex+1} / ${rcQueue.length}枚目`;
+  const inbox=it.src==='inbox';
+  const inv=it.kind===INBOX_INVOICE;
+  const what=inv?'請求書':'領収書';
+  document.getElementById('rc-counter').textContent=`${rcIndex+1} / ${rcQueue.length}${inbox?'件目':'枚目'}`;
+  // 読み直し：写真はもう一度AIへ。取込待ちは GAS の inboxRetry（3回まで）
+  const canReread=inbox
+    ?(gasEnabled()&&it.inbox.status==='failed'&&(it.inbox.retries||0)<INBOX_MAX_RETRIES)
+    :(it.dataUrl&&gasEnabled());
   const status=it.state==='reading'
-    ?'<div class="alert alert-info"><span class="spinner"></span> AIが領収書を読み取っています...</div>'
+    ?`<div class="alert alert-info"><span class="spinner"></span> AIが${what}を読み取っています...</div>`
     :it.state==='error'
       ?`<div class="alert alert-error">❌ ${escAttr(it.error)}<br><span style="font-size:12px">下の欄に手入力すれば、そのまま登録できます。</span>
-         ${it.dataUrl&&gasEnabled()?`<div style="margin-top:6px"><button class="btn sm" onclick="readReceipt(rcCur())">🔄 もう一度読み取る</button></div>`:''}</div>`
+         ${canReread?`<div style="margin-top:6px"><button class="btn sm" onclick="rcReread()">🔄 もう一度読み取る</button></div>`:''}</div>`
       :'<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">読み取った内容です。黄色の欄（確信度が低い・空欄）を確認してください。読めなかった項目は空欄のままです。</div>';
   const ent=f.type==='交際費';
   const typeWarn=rcWarn(it,'type');
-  document.getElementById('rc-body').innerHTML=`<div class="rc-grid">
-    <div class="rc-photo">${it.dataUrl?`<img src="${it.dataUrl}" alt="領収書の写真">`:'<div class="empty-state">写真がありません</div>'}</div>
-    <div>
-      ${status}
-      <div id="rc-dup"></div>
-      <div id="rc-taxwarn"></div>
-      <fieldset ${it.state==='reading'?'disabled':''} style="border:none;padding:0;margin:0">
-      <div class="form-row">${rcInput('date','日付 *','type="date"')}${rcInput('amount','合計金額 *','type="number" min="0"')}</div>
+  const viewUrl=it.fileId?'https://drive.google.com/file/d/'+encodeURIComponent(it.fileId):'';
+  const preview=it.fileId
+    ?`<iframe src="${viewUrl}/preview" title="ファイルのプレビュー"></iframe>
+      <div style="font-size:11px;margin-top:4px"><a href="${viewUrl}/view" target="_blank" rel="noopener">別のタブで開く</a></div>`
+    :it.dataUrl?`<img src="${it.dataUrl}" alt="領収書の写真">`:'<div class="empty-state">写真がありません</div>';
+  const typeSelect=`<div class="form-group"><label class="form-label">区分</label>
+          <select id="rc-type" class="${typeWarn?'rc-warn':''}" onchange="rcSet('type',this.value);renderReceipt()">${expenseTypes().map(t=>`<option ${t===f.type?'selected':''}>${t}</option>`).join('')}</select></div>`;
+  const fields=inv
+    ?`<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">登録すると、CF管理の<strong>出金予定</strong>（予定日＝支払期限）になります。</div>
+      <div class="form-row">${rcInput('payee','請求元')}${rcInput('docNo','請求書番号')}</div>
+      <div class="form-row">${rcInput('date','請求日','type="date"')}${rcInput('dueDate','支払期限 *','type="date"')}</div>
+      <div class="form-row">${rcInput('amount','請求金額（税込） *','type="number" min="0"')}${rcInput('tax','税額','type="number"')}</div>
+      <div class="form-row">${typeSelect}${rcInput('invoiceNo','インボイス登録番号','type="text" placeholder="T1234567890123"')}</div>
+      <div class="form-row single">${rcInput('item','請求の内容')}</div>
+      <div class="form-row single">${rcInput('desc','摘要 *')}</div>`
+    :`<div class="form-row">${rcInput('date','日付 *','type="date"')}${rcInput('amount','合計金額 *','type="number" min="0"')}</div>
       <div class="form-row">${rcInput('payee','支払先（店名）')}${rcInput('item','但し書き（品目）')}</div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">区分</label>
-          <select id="rc-type" class="${typeWarn?'rc-warn':''}" onchange="rcSet('type',this.value);renderReceipt()">${expenseTypes().map(t=>`<option ${t===f.type?'selected':''}>${t}</option>`).join('')}</select></div>
+        ${typeSelect}
         <div class="form-group"><label class="form-label">税込／税抜</label>
           <select id="rc-taxType" class="${rcWarn(it,'taxType')?'rc-warn':''}" onchange="rcSet('taxType',this.value)">
             ${['','税込','税抜'].map(t=>`<option value="${t}" ${t===f.taxType?'selected':''}>${t||'（不明）'}</option>`).join('')}</select></div>
@@ -3919,7 +3997,21 @@ function renderReceipt(){
       <div class="form-row">${rcInput('tax10base','10%対象額','type="number"')}${rcInput('tax10','10%税額','type="number"')}</div>
       <div class="form-row">${rcInput('tax8base','8%対象額','type="number"')}${rcInput('tax8','8%税額','type="number"')}</div>
       <div class="form-row">${rcInput('invoiceNo','インボイス登録番号','type="text" placeholder="T1234567890123"')}${rcInput('paymentMethod','支払方法','type="text" list="dl-paymethod"')}</div>
-      <div class="form-row single">${rcInput('desc','摘要 *')}</div>
+      <div class="form-row single">${rcInput('desc','摘要 *')}</div>`;
+  const buttons=inbox
+    ?`<button class="btn" onclick="closeReceiptModal()">中止</button>
+        <button class="btn" onclick="rcLater()" ${it.state==='reading'?'disabled':''}>あとで（次へ）</button>
+        <button class="btn" onclick="rcInboxSkip()" ${it.state==='reading'?'disabled':''}>スキップ（処理済みへ）</button>`
+    :`<button class="btn" onclick="closeReceiptModal()">中止</button>
+        <button class="btn" onclick="rcSkip()" ${it.state==='reading'?'disabled':''}>この写真をスキップ</button>`;
+  document.getElementById('rc-body').innerHTML=`<div class="rc-grid">
+    <div class="rc-photo">${preview}</div>
+    <div>
+      ${status}
+      <div id="rc-dup"></div>
+      <div id="rc-taxwarn"></div>
+      <fieldset ${it.state==='reading'?'disabled':''} style="border:none;padding:0;margin:0">
+      ${fields}
       <div class="form-row">
         <div class="form-group"><label class="form-label">誰と${ent?' <span class="req-mark">*</span>':''}</label><input id="rc-withWhom" type="text" list="dl-with" placeholder="例：株式会社○○ 山田様・2名" value="${escAttr(f.withWhom)}" oninput="rcSet('withWhom',this.value)"></div>
         <div class="form-group"><label class="form-label">用件${ent?' <span class="req-mark">*</span>':''}</label><input id="rc-purpose" type="text" list="dl-purpose" placeholder="例：△△案件の打合せ" value="${escAttr(f.purpose)}" oninput="rcSet('purpose',this.value)"></div>
@@ -3930,12 +4022,11 @@ function renderReceipt(){
       </div>`:''}
       <div class="form-row single"><div class="form-group"><label class="form-label">備考</label><input id="rc-memo" type="text" value="${escAttr(f.memo)}" oninput="rcSet('memo',this.value)"></div></div>
       <label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px">
-        <input id="rc-check" type="checkbox" ${it.checked?'checked':''} onchange="rcCur().checked=this.checked;rcRefresh()" style="width:auto"> この領収書を登録する
+        <input id="rc-check" type="checkbox" ${it.checked?'checked':''} onchange="rcCur().checked=this.checked;rcRefresh()" style="width:auto"> この${what}を登録する
       </label>
       </fieldset>
       <div class="actions-row">
-        <button class="btn" onclick="closeReceiptModal()">中止</button>
-        <button class="btn" onclick="rcSkip()" ${it.state==='reading'?'disabled':''}>この写真をスキップ</button>
+        ${buttons}
         <button class="btn primary" id="rc-submit" onclick="rcRegister()" ${it.state==='reading'?'disabled':''}></button>
       </div>
     </div>
@@ -3952,12 +4043,12 @@ function rcRefresh(){
   const dupEl=document.getElementById('rc-dup');
   if(dupEl)dupEl.innerHTML=it.dup
     ?`<div class="alert alert-warning" style="font-size:12px"><span class="badge badge-amber">重複の可能性</span>
-       同じ金額の経費が ${escAttr(it.dup.date)} に登録済みです：${escAttr(it.dup.desc)}（${fmt(it.dup.amount)}）。
-       別の支払いなら「この領収書を登録する」にチェックしてください。</div>`:'';
-  const tw=receiptTaxWarnings(f);
+       ${it.kind===INBOX_INVOICE?'同じ請求元で、請求書番号か金額・月が同じ収支が':'同じ金額の経費が'} ${escAttr(it.dup.date)} に登録済みです：${escAttr(it.dup.desc)}（${fmt(it.dup.amount)}）。
+       別の支払いなら「この${it.kind===INBOX_INVOICE?'請求書':'領収書'}を登録する」にチェックしてください。</div>`:'';
+  const tw=it.kind===INBOX_INVOICE?[]:receiptTaxWarnings(f);
   const twEl=document.getElementById('rc-taxwarn');
   if(twEl)twEl.innerHTML=tw.length?`<div class="alert alert-warning" style="font-size:12px">⚠ ${tw.map(escAttr).join('<br>⚠ ')}</div>`:'';
-  ['date','amount'].forEach(k=>{
+  ['date','amount','dueDate'].forEach(k=>{
     const el=document.getElementById('rc-'+k);
     if(el)el.classList.toggle('rc-warn',rcWarn(it,k));
   });
@@ -3973,9 +4064,9 @@ function rcSet(key,val){
   const it=rcCur();
   if(!it)return;
   it.f[key]=val;
-  if(key==='date'||key==='amount'){
+  if(['date','amount','payee','docNo','dueDate'].indexOf(key)>=0){
     const before=it.dup;
-    it.dup=receiptDupOf(S.ledger,it.f.date,it.f.amount);
+    it.dup=inboxDupOf(S.ledger,it.kind||INBOX_RECEIPT,it.f);
     if(it.dup&&!before)it.checked=false;   // 新しく重複が見つかったときだけチェックを外す
   }
   rcRefresh();
@@ -3987,18 +4078,11 @@ function rcSkip(){
   showReceipt(rcIndex+1);
 }
 
-function receiptMemo(f){
-  return['領収書取込',
-    f.item?'但し書き:'+f.item:'',
-    f.invoiceNo?'登録番号:'+f.invoiceNo:'',
-    f.paymentMethod?'支払:'+f.paymentMethod:'',
-    String(f.memo||'').trim()].filter(Boolean).join('／');
-}
-
 async function rcRegister(){
   const it=rcCur();
   if(!it||rcSaving)return;
   if(!it.checked){it.result='skip';showReceipt(rcIndex+1);return;}
+  if(it.src==='inbox'){await inboxRegisterCurrent(it);return;}
   const f=it.f;
   const amount=parseInt(f.amount)||0;
   const desc=String(f.desc||'').trim()||String(f.payee||'').trim()||'領収書';
@@ -4033,6 +4117,7 @@ async function rcRegister(){
     status:'actual',
     calId:ext,
     receiptId:fileId,
+    payee:String(f.payee||'').trim(),
     withWhom:String(f.withWhom||'').trim(),
     purpose:String(f.purpose||'').trim(),
     persons:f.type==='交際費'?(parseInt(f.persons)||''):''
@@ -4044,17 +4129,290 @@ async function rcRegister(){
 }
 
 function finishReceipts(){
+  const inbox=rcQueue.some(x=>x.src==='inbox');
   const done=rcQueue.filter(x=>x.result==='done').length;
-  const skipped=rcQueue.length-done;
+  const skipped=rcQueue.filter(x=>x.result==='skip').length;
   closeModal('modal-receipt');
+  const total=rcQueue.length;
   rcQueue=[];rcIndex=0;
-  if(done||skipped)alert(`領収書から ${done}件を経費として登録しました`+(skipped?`（${skipped}件はスキップ）`:''));
+  if(inbox){
+    alert(`取込待ちから ${done}件を登録しました`+(skipped?`（${skipped}件は処理済みへスキップ）`:''));
+    openInboxList();
+    return;
+  }
+  if(done||total)alert(`領収書から ${done}件を経費として登録しました`+(total-done?`（${total-done}件はスキップ）`:''));
 }
 
 function closeReceiptModal(){
   const left=rcQueue.slice(rcIndex).length;
   if(left>0&&rcQueue.length&&!confirm('まだ確認していない写真があります。中止しますか？\n（登録済みの経費はそのまま残ります）'))return;
   finishReceipts();
+}
+
+/* ===== 受信箱フォルダの取込待ち（GASの週次読み取り） ==================
+   GASの weeklyInboxScan が受信箱（領収書・受取請求書）を読み、inbox シートに入れた結果を確認して登録する。
+   一覧は GAS の load の inboxItems（開いたときに inboxList で読み直す）。S には入れない（アプリの保存の対象外）。
+   確認画面は上の領収書の確認画面（modal-receipt / rcQueue）を流用する。
+   判定は @import-rules（inboxFormOf / inboxDupOf / inboxLedgerEntry / inboxEntryError / inboxBulkBlocker）
+   登録・スキップしたファイルは GAS の inboxDone で受信箱の「処理済み」へ移動して名前を変える（削除はしない）
+   ===================================================================== */
+const INBOX_MAX_RETRIES=3;
+let inboxItems=[];     // {fileId,kind,fileName,mimeType,data,confidence,status,error,readAt,retries}
+let inboxBusy=false;
+const INBOX_STATE_LABEL={ready:'読み取り済み',failed:'読み取り失敗',unsupported:'非対応'};
+
+// ダッシュボードの「📥 取込待ち ○件」
+function renderInboxStatus(){
+  const el=document.getElementById('d-inbox-status');
+  if(!el)return;
+  const c=S.inboxFolders||{};
+  if(!inboxItems.length&&!c.receipt&&!c.invoice){el.innerHTML='';return;}
+  const n=inboxItems.length;
+  const bad=inboxItems.filter(x=>x.status!=='ready').length;
+  el.innerHTML=`<a href="#" onclick="openInboxList();return false" style="color:inherit;text-decoration:none" title="クリックすると取込待ちの一覧を開きます">`
+    +`📥 取込待ち <span class="badge ${n?'badge-amber':'badge-gray'}">${n}件</span>`
+    +(bad?` <span class="badge badge-red">要対応 ${bad}件</span>`:'')
+    +`<span style="font-size:11px;color:var(--text-muted);margin-left:6px">→ 一覧へ</span></a>`;
+}
+
+function openInboxList(){
+  document.getElementById('inbox-msg').innerHTML='';
+  openModal('modal-inbox');
+  renderInboxList();
+  refreshInboxItems();
+}
+
+async function refreshInboxItems(){
+  if(!gasEnabled())return;
+  try{
+    const json=await gasCall({action:'inboxList'});
+    if(json&&json.ok&&Array.isArray(json.items)){inboxItems=json.items;renderInboxList();renderInboxStatus();}
+  }catch(e){/* 一覧は読み込み時の内容のまま */}
+}
+
+function inboxSummary(x){
+  const f=inboxFormOf(x);
+  const parts=[];
+  if(x.kind===INBOX_INVOICE){
+    if(f.payee)parts.push(f.payee);
+    if(f.docNo)parts.push('No.'+f.docNo);
+    if(f.dueDate)parts.push('支払期限 '+f.dueDate);
+  }else{
+    if(f.date)parts.push(f.date);
+    if(f.payee)parts.push(f.payee);
+  }
+  if(f.amount!==''&&f.amount!==null)parts.push(fmt(parseInt(f.amount)||0));
+  return parts.join('・');
+}
+
+function renderInboxList(){
+  const el=document.getElementById('inbox-list');
+  if(!el)return;
+  const bulk=inboxItems.filter(x=>!inboxBulkBlocker(x,S.ledger)).length;
+  const bb=document.getElementById('inbox-bulk-btn');
+  bb.textContent=`✓ 確信度が高のものを一括登録（${bulk}件）`;
+  bb.disabled=!bulk||inboxBusy;
+  document.getElementById('inbox-scan-btn').disabled=inboxBusy;
+  if(!inboxItems.length){el.innerHTML='<div class="empty-state">取込待ちはありません</div>';return;}
+  const dis=inboxBusy?'disabled':'';
+  el.innerHTML=inboxItems.map((x,i)=>{
+    const ready=x.status==='ready';
+    const dup=ready?inboxDupOf(S.ledger,x.kind,inboxFormOf(x)):null;
+    const block=ready?inboxBulkBlocker(x,S.ledger):'';
+    const st=ready
+      ?`<span class="badge ${x.confidence==='高'?'badge-green':x.confidence==='中'?'badge-amber':'badge-red'}">確信度 ${escAttr(x.confidence||'-')}</span>`
+      :`<span class="badge badge-red">${escAttr(INBOX_STATE_LABEL[x.status]||x.status)}</span>`;
+    const retry=x.status==='failed'&&(x.retries||0)<INBOX_MAX_RETRIES;
+    return`<div class="inbox-item">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span class="badge ${x.kind===INBOX_INVOICE?'badge-blue':'badge-gray'}">${escAttr(x.kind)}</span>${st}
+        ${dup?'<span class="badge badge-amber">重複の可能性</span>':''}
+        <span style="font-size:11px;color:var(--text-muted);word-break:break-all">${escAttr(x.fileName)}・${escAttr(x.readAt)}</span>
+      </div>
+      <div style="font-size:13px;margin-top:4px">${escAttr(inboxSummary(x))||'<span style="color:var(--text-muted)">（読み取れた項目なし）</span>'}</div>
+      ${ready?'':`<div style="font-size:12px;color:var(--red);margin-top:2px">${escAttr(x.error)}${x.status==='failed'?`（読み直し ${x.retries||0}/${INBOX_MAX_RETRIES}回）`:''}</div>`}
+      ${block?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">一括登録の対象外：${escAttr(block)}</div>`:''}
+      <div class="actions-row" style="justify-content:flex-start;margin-top:6px;flex-wrap:wrap">
+        <button class="btn sm primary" onclick="inboxOpen(${i},false)" ${dis}>${ready?'確認して登録':'手入力で登録'}</button>
+        ${ready?`<button class="btn sm" onclick="inboxOpen(${i},true)" ${dis}>✍ 手入力に切り替え</button>`:''}
+        ${retry?`<button class="btn sm" onclick="inboxRetry(${i})" ${dis}>🔄 読み直す</button>`:''}
+        <button class="btn sm" onclick="inboxSkip(${i})" ${dis}>スキップ（処理済みへ）</button>
+        <a class="btn sm" href="https://drive.google.com/file/d/${encodeURIComponent(x.fileId)}/view" target="_blank" rel="noopener">ファイルを開く</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// 「📥 今すぐ読み取る」：週次のトリガーと同じ weeklyInboxScan を呼ぶ（1回8ファイルまで）
+async function inboxScanNow(){
+  if(!gasEnabled()){alert('GAS_URL が設定されていません');return;}
+  const c=S.inboxFolders||{};
+  if(!c.receipt&&!c.invoice){alert('設定ページの「📥 受信箱フォルダ」で、フォルダを指定してください');return;}
+  inboxBusy=true;renderInboxList();
+  const msg=document.getElementById('inbox-msg');
+  msg.innerHTML='<div class="alert alert-info"><span class="spinner"></span> 受信箱を読み取っています（1回に8ファイルまで。数分かかることがあります）...</div>';
+  let json;
+  try{json=await gasCall({action:'inboxScan'});}catch(e){json={ok:false,error:'GASに接続できませんでした（'+e.message+'）'};}
+  inboxBusy=false;
+  if(json&&json.ok){
+    msg.innerHTML=`<div class="alert alert-success">✓ ${json.read}件を読み取りました（成功 ${json.ready}件・失敗 ${json.failed}件）`
+      +(json.unsupported?`／非対応の形式 ${json.unsupported}件`:'')
+      +(json.remaining?`<br>残り ${json.remaining}件は次の実行に回しました。もう一度「今すぐ読み取る」を押すと続きを読みます。`:'')
+      +(json.read===0&&!json.unsupported?'<br>新しいファイルはありませんでした。':'')+'</div>';
+  }else{
+    msg.innerHTML=`<div class="alert alert-error">❌ ${escAttr((json&&json.error)||'読み取りに失敗しました')}</div>`;
+  }
+  renderInboxList();
+  await refreshInboxItems();
+}
+
+async function inboxRetry(i){
+  const x=inboxItems[i];
+  if(!x||inboxBusy)return;
+  inboxBusy=true;renderInboxList();
+  let json;
+  try{json=await gasCall({action:'inboxRetry',fileId:x.fileId});}catch(e){json={ok:false,error:e.message};}
+  inboxBusy=false;
+  if(json&&json.ok&&json.item){
+    inboxItems[i]=json.item;
+    if(json.item.status!=='ready')alert('読み直しましたが、読み取れませんでした：'+(json.item.error||''));
+  }else{
+    alert('読み直せませんでした：'+((json&&json.error)||''));
+  }
+  renderInboxList();renderInboxStatus();
+}
+
+// 受信箱の「処理済み」へ移動して取込待ちから外す（GASの inboxDone。ファイルは消さない）
+async function inboxMarkDone(x,status,f){
+  if(!gasEnabled())return{ok:false,error:'GAS_URL が設定されていません'};
+  let json;
+  try{
+    json=await gasCall({action:'inboxDone',fileId:x.fileId,status,
+      date:f?(f.date||f.dueDate||''):'',payee:f?String(f.payee||''):'',amount:f?(parseInt(f.amount)||0):0});
+  }catch(e){json={ok:false,error:e.message};}
+  if(json&&json.ok){
+    inboxItems=inboxItems.filter(y=>y.fileId!==x.fileId);
+    renderInboxStatus();
+  }
+  return json||{ok:false,error:'応答がありません'};
+}
+
+async function inboxSkip(i){
+  const x=inboxItems[i];
+  if(!x||inboxBusy)return;
+  if(!confirm(`「${x.fileName}」を取込待ちから外して、受信箱の「処理済み」フォルダへ移動します。\n（経費には登録しません。ファイルは消えません）\n\nよろしいですか？`))return;
+  inboxBusy=true;renderInboxList();
+  const r=await inboxMarkDone(x,'skipped',x.status==='ready'?inboxFormOf(x):null);
+  inboxBusy=false;
+  if(!r.ok)alert('処理済みへ移動できませんでした：'+(r.error||''));
+  renderInboxList();
+}
+
+// 確信度「高」で、対象外の条件に当たらないものを、確認画面を開かずに登録する
+async function inboxBulkRegister(){
+  const targets=inboxItems.filter(x=>!inboxBulkBlocker(x,S.ledger));
+  if(!targets.length||inboxBusy)return;
+  if(!confirm(`確信度が高い ${targets.length}件を、確認画面を開かずに登録します。\n（領収書＝経費の実績、受取請求書＝支払期限の出金予定）\n\nよろしいですか？`))return;
+  inboxBusy=true;renderInboxList();
+  let n=0;
+  const fails=[];
+  for(const x of targets){
+    if(inboxBulkBlocker(x,S.ledger))continue;   // 先に登録した分と重複していないか見直す
+    const f=inboxFormOf(x);
+    S.ledger.push(inboxLedgerEntry(x.kind,f,x.fileId,S.nextLedgerId++));
+    saveState();
+    n++;
+    const r=await inboxMarkDone(x,'registered',f);
+    if(!r.ok)fails.push(x.fileName+'：'+(r.error||''));
+  }
+  inboxBusy=false;
+  refreshAll();
+  renderInboxList();
+  alert(`${n}件を登録しました`+(fails.length?`\n\n次のファイルは「処理済み」へ移動できませんでした（登録はできています。一覧に残るので、あとでスキップしてください）：\n`+fails.join('\n'):''));
+}
+
+// 確認画面の1件分（rcQueue の要素）。manual なら読み取り結果を使わず空欄から
+function inboxQueueItem(x,manual){
+  const ok=x.status==='ready'&&!manual;
+  return{
+    src:'inbox',inbox:x,kind:x.kind,fileId:x.fileId,dataUrl:'',
+    state:ok?'ready':'error',
+    error:ok?'':(manual?'手入力に切り替えました。左のファイルを見ながら入力してください':(x.error||'読み取りに失敗しました')),
+    conf:ok?inboxConfOf(x):{},
+    f:ok?inboxFormOf(x):(x.kind===INBOX_INVOICE?payableFormFrom(null):receiptFormFrom(null)),
+    dup:null,dupChecked:false,checked:true,result:''
+  };
+}
+
+// 一覧の i 件目から確認画面で1件ずつ見る
+function inboxOpen(i,manual){
+  if(!inboxItems[i])return;
+  fillRecentDatalists();
+  rcQueue=inboxItems.slice(i).map((x,j)=>inboxQueueItem(x,j===0&&manual));
+  rcIndex=0;
+  closeModal('modal-inbox');
+  document.getElementById('rc-title').textContent='📥 取込待ちの確認';
+  openModal('modal-receipt');
+  showReceipt(0);
+}
+
+// 確認画面の「🔄 もう一度読み取る」
+async function rcReread(){
+  const it=rcCur();
+  if(!it)return;
+  if(it.src!=='inbox'){readReceipt(it);return;}
+  it.state='reading';renderReceipt();
+  let json;
+  try{json=await gasCall({action:'inboxRetry',fileId:it.fileId});}catch(e){json={ok:false,error:e.message};}
+  if(json&&json.ok&&json.item){
+    const k=inboxItems.findIndex(y=>y.fileId===json.item.fileId);
+    if(k>=0)inboxItems[k]=json.item;
+    Object.assign(it,inboxQueueItem(json.item,false));
+  }else{
+    it.state='error';
+    it.error=(json&&json.error)||'読み直せませんでした';
+  }
+  if(rcCur()===it)showReceipt(rcIndex);
+}
+
+function rcLater(){
+  const it=rcCur();
+  if(it)it.result='later';
+  showReceipt(rcIndex+1);
+}
+
+async function rcInboxSkip(){
+  const it=rcCur();
+  if(!it||rcSaving)return;
+  rcSaving=true;rcRefresh();
+  const r=await inboxMarkDone(it.inbox,'skipped',it.state==='ready'?it.f:null);
+  rcSaving=false;
+  if(!r.ok){alert('処理済みへ移動できませんでした：'+(r.error||''));rcRefresh();return;}
+  it.result='skip';
+  showReceipt(rcIndex+1);
+}
+
+// 取込待ちの1件を登録する（領収書＝経費の実績／受取請求書＝出金予定）。登録後に処理済みへ移動
+async function inboxRegisterCurrent(it){
+  const f=it.f;
+  const err=inboxEntryError(it.kind,f);
+  if(err){alert(err);return;}
+  if(it.kind!==INBOX_INVOICE){
+    const tw=receiptTaxWarnings(f);
+    if(tw.length&&!confirm('合計金額と税額が合っていません。\n\n'+tw.join('\n')+'\n\nこのまま登録しますか？'))return;
+  }
+  // 同じファイルを2回登録しない（前回、処理済みへの移動だけ失敗した場合など）
+  if(!S.ledger.some(l=>l.calId===rcptExtId(it.fileId))){
+    S.ledger.push(inboxLedgerEntry(it.kind,f,it.fileId,S.nextLedgerId++));
+    saveState();
+    refreshAll();
+  }
+  it.result='done';
+  rcSaving=true;rcRefresh();
+  const r=await inboxMarkDone(it.inbox,'registered',f);
+  rcSaving=false;
+  if(!r.ok)alert('登録しました。ただし、ファイルを「処理済み」フォルダへ移動できませんでした（'+(r.error||'')+'）。\n取込待ちの一覧に残るので、あとで「スキップ（処理済みへ）」で移動してください。');
+  showReceipt(rcIndex+1);
 }
 
 /* ===== Googleドライブからの経費取込 ==================================
@@ -8918,7 +9276,7 @@ function bankCardHtml(r,i){
     +`<div style="margin-top:6px">
       <input type="number" value="${r.amount}" oninput="bankRows[${i}].amount=parseInt(this.value)||0" style="font-size:14px;font-weight:700">
     </div>`
-    +(r.income?`<div style="font-size:11px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">${bankMatchCell(r,i)}</div>`:''));
+    +(r.income||r.planId?`<div style="font-size:11px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">${bankMatchCell(r,i)}</div>`:''));
 }
 
 /* ---- スマホ用の表示（テーブルの代わりにカード・リスト） ----
@@ -10130,8 +10488,36 @@ function loadSettingsForm(){
   document.getElementById('f-cash').value=bankBalance();
   document.getElementById('f-loan').value=S.finance.loan||0;
   loadTravelForm();
+  loadInboxFolderForm();
   loadTaxForm();
   renderFiscalList();
+}
+
+function loadInboxFolderForm(){
+  const c=S.inboxFolders||{};
+  document.getElementById('ib-receipt').value=c.receipt||'';
+  document.getElementById('ib-invoice').value=c.invoice||'';
+  showInboxFolderId('receipt');showInboxFolderId('invoice');
+}
+
+// 貼ったURLから取り出したフォルダIDを入力欄の下に出す
+function showInboxFolderId(k){
+  const raw=document.getElementById('ib-'+k).value.trim();
+  const id=driveFolderIdFrom(raw);
+  document.getElementById('ib-'+k+'-id').innerHTML=!raw?'未設定'
+    :id?'フォルダID：'+escAttr(id):'<span style="color:var(--red)">URLまたはIDを読み取れません</span>';
+}
+
+function saveInboxFolders(){
+  const raw={receipt:document.getElementById('ib-receipt').value.trim(),invoice:document.getElementById('ib-invoice').value.trim()};
+  const ids={receipt:driveFolderIdFrom(raw.receipt),invoice:driveFolderIdFrom(raw.invoice)};
+  if((raw.receipt&&!ids.receipt)||(raw.invoice&&!ids.invoice)){alert('フォルダのURLまたはIDを読み取れませんでした。ドライブでフォルダを開いたときのURLを貼ってください');return;}
+  if(ids.receipt&&ids.receipt===ids.invoice){alert('「領収書」と「受取請求書」には別のフォルダを指定してください');return;}
+  S.inboxFolders=ids;
+  saveState();
+  loadInboxFolderForm();
+  const msg=document.getElementById('inbox-folder-msg');
+  msg.textContent='✓ 保存しました';setTimeout(()=>{msg.textContent=''},3000);
 }
 
 function saveFinance(){
@@ -10382,6 +10768,143 @@ function receiptTaxWarnings(f){
   }
   return w;
 }
+function receiptMemo(f){
+  return['領収書取込',
+    f.item?'但し書き:'+f.item:'',
+    f.invoiceNo?'登録番号:'+f.invoiceNo:'',
+    f.paymentMethod?'支払:'+f.paymentMethod:'',
+    String(f.memo||'').trim()].filter(Boolean).join('／');
+}
+
+// ---- 受信箱フォルダの取込待ち（領収書・受取請求書） ----
+const INBOX_RECEIPT='領収書';
+const INBOX_INVOICE='受取請求書';
+
+// Googleドライブのフォルダの URL（…/folders/{ID}?usp=… や ?id=…）か ID から ID を取り出す。読めなければ空
+function driveFolderIdFrom(v){
+  const s=String(v||'').trim();
+  const m=/\/folders\/([\w-]{10,})/.exec(s)||/[?&]id=([\w-]{10,})/.exec(s);
+  if(m)return m[1];
+  return/^[\w-]{10,}$/.test(s)?s:'';
+}
+
+/* GASの受取請求書の読み取り結果を確認画面の入力値にする。読めなかった項目は空欄のまま
+   請求元は payee（領収書の支払先と同じ欄）に入れる */
+function payableFormFrom(d){
+  d=d||{};
+  const v=x=>x===null||x===undefined?'':x;
+  const issuer=String(d.issuer||''),item=String(d.item||'');
+  return{
+    date:d.date||'',dueDate:d.dueDate||'',amount:v(d.total),tax:v(d.tax),
+    payee:issuer,docNo:String(d.docNo||''),invoiceNo:d.invoiceNo||'',item,
+    type:d.category||'その他経費',
+    desc:issuer?issuer+(item?'（'+item+'）':''):(item||''),
+    withWhom:'',persons:'',purpose:'',memo:''
+  };
+}
+
+// 取込待ちの1件を入力値に（読み取り済みでなければ空欄）
+function inboxFormOf(x){
+  const inv=x&&x.kind===INBOX_INVOICE;
+  const d=x&&x.status==='ready'?x.data:null;
+  return inv?payableFormFrom(d):receiptFormFrom(d);
+}
+
+// 確信度を確認画面の欄の名前にそろえる（受取請求書の請求元 issuer → payee）
+function inboxConfOf(x){
+  const c=(x&&x.data&&x.data.confidence)||{};
+  return x&&x.kind===INBOX_INVOICE?Object.assign({},c,{payee:c.issuer||''}):Object.assign({},c);
+}
+
+function normWho(v){return normKey(v).replace(/[\s　]/g,'')}
+
+/* 受取請求書の重複：同じ請求元で、同じ請求書番号、または同額・同じ月（請求日の月）の収支があれば、その収支。無ければ null
+   請求元・請求書番号は ledger の payee / docNo で見る */
+function payableDupOf(ledger,f){
+  const who=normWho(f&&f.payee);
+  if(!who)return null;
+  const no=normWho(f.docNo);
+  const amount=parseInt(f.amount)||0;
+  const ym=String(f.date||f.dueDate||'').slice(0,7);
+  return(ledger||[]).find(l=>{
+    if(l.type==='売上'||normWho(l.payee)!==who)return false;
+    if(no&&normWho(l.docNo)===no)return true;
+    return amount>0&&l.amount===amount&&!!ym&&String(l.date||'').slice(0,7)===ym;
+  })||null;
+}
+
+// 種別ごとの重複判定（領収書は receiptDupOf＝同額・前後1日。デビット通知・銀行CSVの経費も対象）
+function inboxDupOf(ledger,kind,f){
+  return kind===INBOX_INVOICE?payableDupOf(ledger,f):receiptDupOf(ledger,f.date,f.amount);
+}
+
+function payableMemo(f){
+  return['受取請求書',
+    f.docNo?'請求書番号:'+f.docNo:'',
+    f.invoiceNo?'登録番号:'+f.invoiceNo:'',
+    f.tax!==''&&f.tax!==null&&f.tax!==undefined?'税額:'+f.tax:'',
+    String(f.memo||'').trim()].filter(Boolean).join('／');
+}
+
+/* 取込待ちから登録する収支
+   領収書 …… 経費の実績（status=actual、memo は「領収書取込」から）
+   受取請求書 …… 出金予定（status=planned_out、expectedDate＝支払期限、projectId は空、date＝請求日。無ければ支払期限）
+   どちらも receiptId にファイルID、calId に外部ID 'rcpt:{ファイルID}' */
+function inboxLedgerEntry(kind,f,fileId,id){
+  const inv=kind===INBOX_INVOICE;
+  const desc=String(f.desc||'').trim()||String(f.payee||'').trim()||kind;
+  return{
+    id,
+    date:inv?(f.date||f.dueDate):f.date,
+    expectedDate:inv?f.dueDate:'',
+    type:f.type,desc,amount:parseInt(f.amount)||0,
+    memo:inv?payableMemo(f):receiptMemo(f),
+    status:inv?'planned_out':'actual',
+    projectId:null,
+    calId:fileId?rcptExtId(fileId):'',
+    receiptId:fileId||'',
+    payee:String(f.payee||'').trim(),
+    docNo:inv?String(f.docNo||'').trim():'',
+    withWhom:String(f.withWhom||'').trim(),
+    purpose:String(f.purpose||'').trim(),
+    persons:f.type==='交際費'?(parseInt(f.persons)||''):''
+  };
+}
+
+// 登録前の入力チェック（問題なければ空）。受取請求書は支払期限、領収書は日付が必須。交際費は誰と・用件
+function inboxEntryError(kind,f){
+  if(!(parseInt(f.amount)>0))return'金額を入力してください';
+  if(kind===INBOX_INVOICE){
+    if(!f.dueDate)return'支払期限を入力してください（読み取れなかった場合は請求書を見て入力してください）';
+  }else if(!f.date){
+    return'日付を入力してください';
+  }
+  return expenseEntryError({type:f.type,withWhom:f.withWhom,purpose:f.purpose});
+}
+
+/* 「確信度が高のものを一括登録」の対象外の理由（対象なら空文字）
+   対象外：読み取り済みでない／確信度が高でない／金額・日付が空／受取請求書で支払期限が空／
+          交際費（誰と・用件が必要）／重複の可能性／登録済み */
+function inboxBulkBlocker(x,ledger){
+  if(!x||x.status!=='ready')return'読み取りが済んでいない';
+  if(x.confidence!=='高')return'確信度が高ではない';
+  const f=inboxFormOf(x);
+  if(!f.date||!(parseInt(f.amount)>0))return'金額・日付が空';
+  if(x.kind===INBOX_INVOICE&&!f.dueDate)return'支払期限が空';
+  if(f.type==='交際費')return'交際費（誰と・用件の入力が必要）';
+  if((ledger||[]).some(l=>l.calId===rcptExtId(x.fileId)))return'登録済み';
+  if(inboxDupOf(ledger,x.kind,f))return'重複の可能性';
+  return'';
+}
+
+/* 銀行明細CSVの出金と照合する出金予定：同額で、予定日が前後 days 日（既定7日）以内の planned_out（いちばん近いもの）
+   交通費精算（settlementMonth あり）は除く（実績にすると交通費が二重に経費になるため） */
+function matchPlannedOut(ledger,date,amount,days){
+  const d=days==null?7:days;
+  const at=l=>l.expectedDate||l.date;
+  return(ledger||[]).filter(l=>l.status==='planned_out'&&!l.settlementMonth&&l.amount===amount&&Math.abs(dayDiff(date,at(l)))<=d)
+    .sort((a,b)=>Math.abs(dayDiff(date,at(a)))-Math.abs(dayDiff(date,at(b))))[0]||null;
+}
 // ===== @import-rules-end
 
 // 文字コードを判定して読む（UTF-8で読めなければShift-JIS）
@@ -10459,6 +10982,8 @@ async function bankHandleFile(file){
     const amount=income?inc:out;
     // 入金は、税込金額が近い未入金案件を突合候補として探す
     const match=income?matchProjectByPayment(amount,date):null;
+    // 出金は、同額で予定日が近い出金予定（受取請求書・税金など）を突合候補にする
+    const plan=income?null:matchPlannedOut(S.ledger,date,amount);
     const f=bankDupFlags(S.ledger,date,amount,desc,income);
     bankRows.push({
       date,desc,amount,income,
@@ -10472,7 +10997,9 @@ async function bankHandleFile(file){
       matchId:match?match.p.id:null,
       matchYm:match?match.ym:null,        // 推定した対象月（YYYY-MM）
       matchGross:match?match.gross:0,     // 突合に使った税込金額
-      applyMatch:!!match
+      applyMatch:!!match,
+      planId:plan?plan.id:null,           // 突合候補の出金予定
+      applyPlan:!!plan
     });
   });
 
@@ -10526,7 +11053,16 @@ function renderBankPreview(){
 
 // 突合候補の表示セル
 function bankMatchCell(r,i){
-  if(!r.income)return'<span style="color:var(--text-muted)">-</span>';
+  if(!r.income){
+    const po=r.planId?S.ledger.find(l=>l.id===r.planId):null;
+    if(!po)return'<span style="color:var(--text-muted)">-</span>';
+    return`<div><span class="badge badge-blue">💡 出金予定と突合</span></div>
+    <div style="margin-top:3px">${escAttr(po.desc)}（予定日 ${escAttr(po.expectedDate||po.date)}・${fmt(po.amount)}）</div>
+    <label style="display:flex;align-items:center;gap:4px;margin-top:3px;cursor:pointer">
+      <input type="checkbox" ${r.applyPlan?'checked':''} onchange="bankRows[${i}].applyPlan=this.checked" style="width:auto">
+      この出金予定を実績にする（新しく追加しない）
+    </label>`;
+  }
   const p=r.matchId?S.projects.find(x=>x.id===r.matchId):null;
   if(!p)return'<span style="color:var(--text-muted)">候補なし</span>';
   // 対象月は入金日の前月（推定）。金額はその月の請求金額×1.1
@@ -10563,8 +11099,19 @@ function bankRegister(){
   const rows=bankRows.filter(r=>r.checked&&r.date&&r.desc&&r.amount);
   if(rows.length===0){alert('登録する明細を選択してください');return;}
   if(entertainMissing(rows).length){alert('交際費の行は「誰と」「用件」を入力してください（'+entertainMissing(rows).length+'件）');return;}
-  let matched=0,removed=0;
+  let matched=0,removed=0,planned=0;
   rows.forEach(r=>{
+    // 出金予定と突合した出金は、その予定を実績に変える（同じ支払いを二重に入れない）
+    if(!r.income&&r.applyPlan&&r.planId){
+      const po=S.ledger.find(l=>l.id===r.planId&&l.status==='planned_out');
+      if(po){
+        po.status='actual';
+        po.date=r.date;
+        po.memo=[po.memo,'銀行明細で出金確認（'+r.amount+'円）'].filter(Boolean).join('／');
+        planned++;
+        return;
+      }
+    }
     const entry={id:S.nextLedgerId++,date:r.date,type:r.type,desc:r.desc,amount:r.amount};
     if(r.type==='交際費'){entry.withWhom=String(r.withWhom||'').trim();entry.purpose=String(r.purpose||'').trim();}
     // 突合を選んだ入金は、案件（と推定した月の請求レコード）を入金済みにして紐づける
@@ -10586,6 +11133,7 @@ function bankRegister(){
   saveState();
   alert(rows.length+'件を収支に登録しました'
     +(matched>0?`\n（${matched}件を案件の入金として突合しました）`:'')
+    +(planned>0?`\n（${planned}件は出金予定を実績にしました）`:'')
     +(removed>0?`\n入金予定${removed}件を自動削除しました。`:''));
   bankReset();
   refreshAll();

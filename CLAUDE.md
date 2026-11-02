@@ -42,6 +42,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - tests/debit-import.test.js：取込の判定のテスト。`node tests/debit-import.test.js` で実行する
 - tests/invoice-drafts.test.js：請求書の下書き・訂正のテスト。`node tests/invoice-drafts.test.js` で実行する
 - tests/receipt-import.test.js：領収書の読み取り・誰と／用件・重複判定のテスト（AIの呼び出しはモック）
+- tests/inbox-scan.test.js：受信箱の週次読み取り・取込待ちからの登録・一括登録・重複判定のテスト（AI・Driveはモック）
 - .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
 - netlify.toml：旧Netlify用の設定（移行後も念のため残している）
 
@@ -217,6 +218,9 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - お支払金額>0=支出、お預り金額>0=収入（売上）として取り込む
 - 区分は摘要のキーワードから推測（BANK_RULES）。該当なしの支出は「その他経費」
 - 同じ日付・金額・摘要が既にledgerにあれば「重複の可能性あり」として未選択にする
+- 出金行は、同額で予定日が前後7日以内の出金予定（planned_out）を突合候補に出す（matchPlannedOut）。
+  チェックしたまま登録すると、新しく追加せずにその予定を実績（actual・日付＝取引日）に変える。
+  交通費精算（settlementMonth あり）は候補にしない（実績化すると交通費が二重に経費になるため）
 - 文字コードは readCsvFile() が UTF-8 → Shift-JIS の順で自動判別する
 - 区分の推測・重複判定・認証判定は keiei-kanri.html の「@import-rules-begin〜end」の範囲に集約
   （guessExpenseType / bankGuessType / bankDupFlags / isAuthLike / debitRowsFrom）。
@@ -596,3 +600,41 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 重複：receiptDupOf＝同額で日付が前後1日以内の経費（実績・売上以外。手入力・デビット通知・銀行CSV・領収書すべて）。
   あれば「重複の可能性」でチェックOFF。判定は nearExpenses を銀行CSVの mailNear と共通で使う
 - 初回はGASエディタで testReceiptFolder() を実行して、フォルダ作成ができることを確認する
+
+## 受信箱フォルダの週次読み取り（取込待ち）
+- 設定ページの「📥 受信箱フォルダ」に「領収書」「受取請求書」のフォルダURL（またはID）を貼る。
+  アプリはURLからIDを取り出して（driveFolderIdFrom）settings の inboxFolders.receipt / inboxFolders.invoice に保存する。
+  フォルダ名はハードコードしない。2つに同じフォルダは指定できない
+- ★ 受信箱と「📷 領収書から登録」の保存先（領収書/年月）は別フォルダ。receiptRootFolder_ は「領収書」という名前の
+  フォルダを探すとき、受信箱に指定したフォルダを飛ばす。受信箱は直下のファイルだけを読む（サブフォルダは見ない）
+- GAS：weeklyInboxScan()。毎週月曜 7〜8時の時間トリガーは GASエディタで setupWeeklyTrigger() を1回実行して作る
+  （すでにあれば作らない）。止めるときは deleteWeeklyTrigger()。アプリの「📥 今すぐ読み取る」（action inboxScan）も同じ関数
+- 1回で読むのは8ファイルまで（INBOX_MAX_PER_RUN。GASの6分制限）。残りは次の実行へ（結果の remaining）。新しいファイルが先、
+  失敗したファイルの読み直しは後。二重実行はスクリプト プロパティ INBOX_SCAN_RUNNING で防ぐ（保存用のロックは長く握らない）
+- 対象は JPEG・PNG・PDF。それ以外（HEICなど）と4MB超はAIを呼ばず status=unsupported＋理由で取込待ちに出す
+- AIは callClaude_（ドライブ経費取込・領収書・受信箱で共通）。領収書は receiptPrompt_ / parseReceiptReply_（写真の領収書と同じ項目）、
+  受取請求書は payablePrompt_ / parsePayableReply_（請求元・請求書番号・請求日・支払期限・請求金額（税込）・税額・
+  インボイス登録番号・内容・区分・確信度）。★ 読めない項目は null／空のまま（推測しない）
+- 結果は inbox シート（取込待ち）：fileId / kind（領収書・受取請求書）/ fileName / mimeType / data（抽出JSON）/
+  confidence（大事な項目のいちばん低い確信度。inboxConfidence_）/ status / error（失敗理由）/ readAt / retries / folderId /
+  doneName / updatedAt。status は ready（読み取り済み）・failed・unsupported・registered・skipped
+  ★ inbox シートは SHEET_DEFS に入れない（writeAll_ の全置換で消えないように）。足りない列は右端に足すだけ（inboxSheet_）
+- 同じファイルを2回読まない：inbox シートにある行（状態を問わず）と、受信箱の「処理済み」サブフォルダにあるファイルは読まない
+  （planInboxScan_）。失敗した行だけ読み直す。読み直し（自動・アプリの「🔄 読み直す」＝inboxRetry）は3回まで
+- 走査の本体 runInboxScan_ は Drive・シート・AI を io で受け取る（テストでモックにするため）
+- ★ GASがするのは受信箱の読み取り・「処理済み」への移動と名前の変更・inbox シートへの書き込みだけ。ファイルは削除しない
+- アプリ：ダッシュボード「📥 取込待ち ○件」（renderInboxStatus）と CF管理の「📥 取込待ち」で一覧（modal-inbox）。
+  一覧は load の inboxItems（開いたとき inboxList で読み直す）。S には入れない（inboxItems はグローバル変数）
+- 確認画面は領収書の写真の確認画面（modal-receipt / rcQueue / renderReceipt）を流用。src:'inbox' の項目は
+  左に Drive のプレビュー（iframe）、受取請求書は入力欄を切り替える（請求元・請求書番号・請求日・支払期限・請求金額・税額）。
+  支払期限が空・確信度「低」は黄色。誰と・用件・人数も入れられる（交際費は必須のまま）
+- 登録（inboxLedgerEntry）：領収書＝経費の実績（memo「領収書取込…」）／受取請求書＝ status=planned_out・
+  expectedDate＝支払期限・date＝請求日（無ければ支払期限）・projectId 空。どちらも receiptId＝ファイルID、
+  calId＝'rcpt:{ファイルID}'、payee（請求元・支払先）、docNo（請求書番号）。ledger シートに payee / docNo 列がある
+- 登録・スキップしたら inboxDone で受信箱の「処理済み」（無ければ作る）へ移動し、名前を YYYYMMDD_支払先_金額.拡張子にする
+  （inboxDoneName_。日付も金額も無ければ元の名前）。「あとで（次へ）」は何もしない。「✍ 手入力に切り替え」は空欄から入力
+- 「確信度が高のものを一括登録」（inboxBulkBlocker が空のもの）。対象外：確信度が高でない／金額・日付が空／
+  受取請求書で支払期限が空／交際費／重複の可能性／登録済み
+- 重複：領収書は receiptDupOf（同額・前後1日。デビット通知・銀行CSVの経費も）。受取請求書は payableDupOf
+  （同じ請求元で、同じ請求書番号、または同額・同じ月）。どちらも「重複の可能性」でチェックOFF
+- 受取請求書の出金予定は、銀行明細CSVの出金と突合できる（matchPlannedOut。「銀行明細CSV取込」の節）

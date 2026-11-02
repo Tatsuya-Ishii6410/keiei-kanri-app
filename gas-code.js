@@ -40,7 +40,7 @@ var SHEET_DEFS = {
     'source', 'driveFileId', 'items', 'note',
     'status', 'revision', 'history', 'billingMonth', 'billingKey', 'cancelReason', 'issuedAt'],
   ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'settlementMonth', 'billingMonth', 'fixedCostId',
-    'visit', 'purpose', 'calId', 'withWhom', 'persons', 'receiptId'],
+    'visit', 'purpose', 'calId', 'withWhom', 'persons', 'receiptId', 'payee', 'docNo'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
   fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
   monthlyBillings: ['id', 'projectId', 'billingMonth', 'amount', 'invoiceStatus',
@@ -52,7 +52,7 @@ var SHEET_DEFS = {
 var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'value',
   'startMonth', 'endMonth', 'contractStart', 'contractEnd', 'paidMonth', 'expectedDate', 'settlementMonth',
   'billingMonth', 'paidDate', 'expectedPayDate', 'invoiceId', 'driveFileId',
-  'history', 'billingKey', 'issuedAt', 'receiptId'];
+  'history', 'billingKey', 'issuedAt', 'receiptId', 'docNo'];
 
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
@@ -122,6 +122,10 @@ function doPost(e) {
     if (action === 'driveExtract') return respond_(driveExtract_(body.fileId), '');
     if (action === 'receiptRead') return respond_(receiptRead_(body.image, body.categories), '');
     if (action === 'receiptSave') return respond_(receiptSave_(body), '');
+    if (action === 'inboxScan') return respond_(weeklyInboxScan(), '');
+    if (action === 'inboxList') return respond_({ ok: true, items: inboxOpenItems_() }, '');
+    if (action === 'inboxRetry') return respond_(inboxRetry_(body.fileId), '');
+    if (action === 'inboxDone') return respond_(inboxDone_(body), '');
     if (action === 'driveProcessed') return respond_({ ok: true, renamed: driveMarkProcessed_(body.fileIds) }, '');
     if (action === 'advise') return respond_(loanAdvice_(body.data), '');
     if (action === 'fare') return respond_(fareLookup_(body.from, body.to), '');
@@ -172,6 +176,8 @@ function readAll_() {
     fixedCosts: readFixedCosts_(ss.getSheetByName('fixedCosts')),
     fiscalYears: readFiscalYears_(ss.getSheetByName('fiscalYears')),
     monthlyBillings: readMonthlyBillings_(ss.getSheetByName('monthlyBillings')),
+    inboxItems: inboxOpenItems_(ss),
+    inboxFolders: settings.inboxFolders,
     company:  settings.company,
     plan:     settings.plan,
     nextProjectId: settings.nextProjectId,
@@ -295,7 +301,9 @@ function ledgerFromRow_(o) {
       calId: str_(o.calId),
       withWhom: str_(o.withWhom),
       persons: str_(o.persons) === '' ? '' : num_(o.persons),
-      receiptId: str_(o.receiptId)
+      receiptId: str_(o.receiptId),
+      payee: str_(o.payee),
+      docNo: str_(o.docNo)
     };
 }
 
@@ -308,7 +316,7 @@ function ledgerRow_(l) {
     (l.fixedCostId === null || l.fixedCostId === undefined || l.fixedCostId === '') ? '' : num_(l.fixedCostId),
     str_(l.visit), str_(l.purpose), str_(l.calId),
     str_(l.withWhom), (l.persons === null || l.persons === undefined || l.persons === '') ? '' : num_(l.persons),
-    str_(l.receiptId)];
+    str_(l.receiptId), str_(l.payee), str_(l.docNo)];
 }
 
 function readMonthlyBillings_(sh) {
@@ -366,6 +374,7 @@ function readSettings_(sh) {
   var finance = { loan: 0 };
   var mail = { lastDebitSync: '' };
   var bank = { lastCsvImportDate: '' };
+  var inboxFolders = { receipt: '', invoice: '' };
   var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15,
     calendarId: DEFAULT_CALENDAR_ID, fareCache: {} };
   // 税金設定は、シートに無い項目はキーごと返さない（アプリ側の初期値を潰さないため）
@@ -406,6 +415,8 @@ function readSettings_(sh) {
       mail.lastDebitSync = ymd_(value);
     } else if (key === 'bank.lastCsvImportDate') {
       bank.lastCsvImportDate = ymd_(value);
+    } else if (key === 'inboxFolders.receipt' || key === 'inboxFolders.invoice') {
+      inboxFolders[key.substring(13)] = str_(value);
     } else if (key === 'travel.googleMapsApiKey') {
       travel.googleMapsApiKey = str_(value);
     } else if (key === 'travel.gasolinePrice') {
@@ -463,6 +474,7 @@ function readSettings_(sh) {
     travel: travel,
     mail: mail,
     bank: bank,
+    inboxFolders: inboxFolders,
     taxSettings: taxSettings,
     bankBalance: bankBalance,
     currentFiscalYearId: currentFiscalYearId,
@@ -525,6 +537,9 @@ function writeAll_(data) {
   settings.push(['finance.loan', num_(fin.loan)]);
   settings.push(['mail.lastDebitSync', ymd_((data.mail || {}).lastDebitSync)]);
   settings.push(['bank.lastCsvImportDate', ymd_((data.bank || {}).lastCsvImportDate)]);
+  var ibf = data.inboxFolders || {};
+  settings.push(['inboxFolders.receipt', str_(ibf.receipt)]);
+  settings.push(['inboxFolders.invoice', str_(ibf.invoice)]);
   var tv = data.travel || {};
   settings.push(['travel.googleMapsApiKey', str_(tv.googleMapsApiKey)]);
   settings.push(['travel.gasolinePrice', num_(tv.gasolinePrice) || 175]);
@@ -682,10 +697,41 @@ function driveList_(folderId) {
   return out;
 }
 
-/** 1ファイルをAIで読み取って経費データにする。 */
-function driveExtract_(fileId) {
+/** Anthropic API を呼んで回答の本文を返す（ドライブ経費取込・領収書・受信箱で共通）。
+    content はメッセージの中身（画像・PDF・テキストのブロックの配列）。 */
+function callClaude_(content, maxTokens) {
   var key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
   if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY がスクリプト プロパティに設定されていません' };
+  var res;
+  try {
+    res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION },
+      payload: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: maxTokens || 1500, messages: [{ role: 'user', content: content }] }),
+      muteHttpExceptions: true
+    });
+  } catch (err) {
+    return { ok: false, error: 'APIに接続できませんでした: ' + (err && err.message || err) };
+  }
+  var code = res.getResponseCode();
+  var raw = res.getContentText();
+  var body;
+  try { body = JSON.parse(raw); } catch (err) { body = null; }
+  if (code !== 200) return { ok: false, error: apiErrorMessage_(code, body, raw), code: code };
+  var text = '';
+  ((body && body.content) || []).forEach(function (c) { if (c.type === 'text') text += c.text; });
+  return { ok: true, text: text };
+}
+
+/** Driveのファイル（画像・PDF）を AI に渡すブロックにする。 */
+function fileBlock_(mime, bytes) {
+  var source = { type: 'base64', media_type: mime, data: Utilities.base64Encode(bytes) };
+  return mime === 'application/pdf' ? { type: 'document', source: source } : { type: 'image', source: source };
+}
+
+/** 1ファイルをAIで読み取って経費データにする。 */
+function driveExtract_(fileId) {
   if (!fileId) return { ok: false, error: 'fileId がありません' };
 
   var file = DriveApp.getFileById(fileId);
@@ -697,40 +743,9 @@ function driveExtract_(fileId) {
     return { ok: false, error: 'ファイルが大きすぎます（' + Math.round(bytes.length / 1024 / 1024) + 'MB / 上限4MB）' };
   }
 
-  var source = { type: 'base64', media_type: mime, data: Utilities.base64Encode(bytes) };
-  var block = (mime === 'application/pdf')
-    ? { type: 'document', source: source }
-    : { type: 'image', source: source };
-
-  var payload = {
-    model: ANTHROPIC_MODEL,
-    max_tokens: 1024,
-    messages: [{ role: 'user', content: [block, { type: 'text', text: EXTRACT_PROMPT }] }]
-  };
-
-  var res;
-  try {
-    res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
-      method: 'post',
-      contentType: 'application/json',
-      headers: { 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION },
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    });
-  } catch (err) {
-    return { ok: false, error: 'APIに接続できませんでした: ' + (err && err.message || err) };
-  }
-
-  var code = res.getResponseCode();
-  var body;
-  try { body = JSON.parse(res.getContentText()); } catch (err) { body = null; }
-  if (code !== 200) {
-    return { ok: false, error: 'API エラー ' + code + ': ' + (body && body.error && body.error.message || res.getContentText().slice(0, 200)) };
-  }
-
-  var text = '';
-  (body.content || []).forEach(function (c) { if (c.type === 'text') text += c.text; });
-  var parsed = parseJsonLoose_(text);
+  var r = callClaude_([fileBlock_(mime, bytes), { type: 'text', text: EXTRACT_PROMPT }], 1024);
+  if (!r.ok) return r;
+  var parsed = parseJsonLoose_(r.text);
   if (!parsed) return { ok: false, error: 'AIの応答をJSONとして読み取れませんでした' };
 
   return {
@@ -782,14 +797,19 @@ function receiptAmount_(v) {
 }
 
 /** AIの返したオブジェクトを、アプリに返す形にそろえる。読めない項目は空（null / ''）のまま。 */
+/** 項目ごとの確信度を 高/中/低 にそろえる（わからなければ空） */
+function confidenceOf_(conf, fields) {
+  conf = conf || {};
+  var c = {};
+  fields.forEach(function (f) { c[f] = RECEIPT_CONFIDENCE[String(conf[f] || '').toLowerCase()] || RECEIPT_CONFIDENCE[String(conf[f] || '')] || ''; });
+  return c;
+}
+
 function normalizeReceipt_(p, categories) {
   p = p || {};
-  var conf = p.confidence || {};
-  var c = {};
-  RECEIPT_FIELDS.forEach(function (f) { c[f] = RECEIPT_CONFIDENCE[String(conf[f] || '').toLowerCase()] || RECEIPT_CONFIDENCE[String(conf[f] || '')] || ''; });
+  var c = confidenceOf_(p.confidence, RECEIPT_FIELDS);
   var taxType = nfkc_(p.taxType || '');
-  var inv = nfkc_(p.invoiceNo || '').replace(/[\s\-ー－]/g, '').toUpperCase();
-  var m = /T\d{13}/.exec(inv);
+  var m = registrationNo_(p.invoiceNo);
   var cat = str_(p.category);
   var taxes = (Array.isArray(p.taxes) ? p.taxes : []).map(function (t) {
     var rate = receiptAmount_(t && t.rate !== null && t.rate !== undefined ? nfkc_(t.rate).replace(/[%％]/g, '') : null);
@@ -802,7 +822,7 @@ function normalizeReceipt_(p, categories) {
     item: str_(p.item === null ? '' : p.item),
     taxType: /税抜|外税/.test(taxType) ? '税抜' : /税込|内税/.test(taxType) ? '税込' : '',
     taxes: taxes,
-    invoiceNo: m ? m[0] : '',
+    invoiceNo: m,
     paymentMethod: str_(p.paymentMethod === null ? '' : p.paymentMethod),
     category: (categories || []).indexOf(cat) >= 0 ? cat : '',
     confidence: c
@@ -826,41 +846,23 @@ function apiErrorMessage_(code, body, raw) {
   return 'API エラー ' + code + ': ' + msg;
 }
 
+/** インボイスの登録番号（T+13桁）を取り出す。無ければ空 */
+function registrationNo_(v) {
+  var m = /T\d{13}/.exec(nfkc_(v || '').replace(/[\s\-ー－]/g, '').toUpperCase());
+  return m ? m[0] : '';
+}
+
 /** 写真を読み取る。image は base64（data: の前置きがあっても可）。 */
 function receiptRead_(image, categories) {
-  var key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
-  if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY がスクリプト プロパティに設定されていません' };
   var data = String(image || '').replace(/^data:[^,]*,/, '');
   if (!data) return { ok: false, error: '写真がありません' };
   if (data.length * 3 / 4 > RECEIPT_MAX_BYTES) return { ok: false, error: '写真が大きすぎます（上限4MB）' };
-  var payload = {
-    model: ANTHROPIC_MODEL,
-    max_tokens: 1500,
-    messages: [{ role: 'user', content: [
-      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: data } },
-      { type: 'text', text: receiptPrompt_(categories) }
-    ] }]
-  };
-  var res;
-  try {
-    res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
-      method: 'post',
-      contentType: 'application/json',
-      headers: { 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION },
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    });
-  } catch (err) {
-    return { ok: false, error: 'APIに接続できませんでした: ' + (err && err.message || err) };
-  }
-  var code = res.getResponseCode();
-  var raw = res.getContentText();
-  var body;
-  try { body = JSON.parse(raw); } catch (err) { body = null; }
-  if (code !== 200) return { ok: false, error: apiErrorMessage_(code, body, raw), code: code };
-  var text = '';
-  ((body && body.content) || []).forEach(function (c) { if (c.type === 'text') text += c.text; });
-  return parseReceiptReply_(text, categories);
+  var r = callClaude_([
+    { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: data } },
+    { type: 'text', text: receiptPrompt_(categories) }
+  ], 1500);
+  if (!r.ok) return r;
+  return parseReceiptReply_(r.text, categories);
 }
 
 /** 保存するファイル名：YYYYMMDD_支払先_金額.jpg（使えない文字は _） */
@@ -879,8 +881,14 @@ function receiptMonthFolderName_(date) {
 function receiptRootFolder_() {
   var id = PropertiesService.getScriptProperties().getProperty('RECEIPT_FOLDER_ID');
   if (id) return DriveApp.getFolderById(id);
+  // 受信箱に「領収書」という名前のフォルダを使っていても、そこには保存しない（受信箱と保存先を混ぜない）
+  var inbox = inboxFolderIdList_();
   var it = DriveApp.getRootFolder().getFoldersByName(RECEIPT_ROOT_NAME);
-  return it.hasNext() ? it.next() : DriveApp.getRootFolder().createFolder(RECEIPT_ROOT_NAME);
+  while (it.hasNext()) {
+    var f = it.next();
+    if (inbox.indexOf(f.getId()) < 0) return f;
+  }
+  return DriveApp.getRootFolder().createFolder(RECEIPT_ROOT_NAME);
 }
 
 /** 写真を「領収書/年月」に保存して fileId を返す。body: {image, date, payee, amount} */
@@ -900,6 +908,406 @@ function receiptSave_(body) {
 function testReceiptFolder() {
   var root = receiptRootFolder_();
   Logger.log('OK: 保存先フォルダ「' + root.getName() + '」 ' + root.getUrl());
+}
+
+// ===== 受信箱フォルダの週次読み取り（取込待ち） =====================
+// 設定ページで指定した「領収書」「受取請求書」の受信箱フォルダ（settings の inboxFolders.*）を読み、
+// AIの読み取り結果を inbox シート（取込待ち）に書く。経費の登録はアプリで確認してから行う。
+// ★ GASがするのは「受信箱の読み取り」「処理済みサブフォルダへの移動と名前の変更」「inbox シートへの書き込み」だけ。
+//    ファイルは削除しない。inbox シートは writeAll_（アプリの保存）の対象外なので、保存で消えない。
+// 毎週月曜の朝に weeklyInboxScan を動かすトリガーは、GASエディタで setupWeeklyTrigger() を1回実行して作る。
+// planInboxScan_ / runInboxScan_ / normalizePayable_ / parsePayableReply_ / inboxConfidence_ は
+// GAS の API を使わない（runInboxScan_ は Drive・シート・AI を io で受け取る）。tests/inbox-scan.test.js がモックでテストする。
+
+var INBOX_SHEET = 'inbox';
+var INBOX_HEADERS = ['fileId', 'kind', 'fileName', 'mimeType', 'data', 'confidence', 'status', 'error',
+  'readAt', 'retries', 'folderId', 'doneName', 'updatedAt'];
+var INBOX_KIND_RECEIPT = '領収書';
+var INBOX_KIND_INVOICE = '受取請求書';
+var INBOX_MAX_PER_RUN = 8;        // 6分制限のため1回の実行で読むのは8ファイルまで（残りは次の実行へ）
+var INBOX_MAX_RETRIES = 3;        // 失敗したファイルの読み直しは3回まで
+var INBOX_DONE_FOLDER = '処理済み';
+var INBOX_MIMES = ['image/jpeg', 'image/png', 'application/pdf'];
+var INBOX_OPEN_STATES = ['ready', 'failed', 'unsupported'];   // 取込待ちに出す状態（registered / skipped は済み）
+// AIに選ばせる区分（アプリの経費区分。LEDGER_TYPES のうち ledgerGroup が expense のもの）
+var INBOX_CATEGORIES = ['家賃（レンタルオフィス利用料）', '通信料', 'システム利用料', '交通費', '交際費', 'その他経費'];
+// 一括登録の判定に使う、種別ごとの大事な項目（いちばん低い確信度を全体の確信度にする）
+var INBOX_KEY_FIELDS = {
+  '領収書': ['date', 'total', 'payee'],
+  '受取請求書': ['issuer', 'date', 'dueDate', 'total']
+};
+var PAYABLE_FIELDS = ['issuer', 'docNo', 'date', 'dueDate', 'total', 'tax', 'invoiceNo', 'item', 'category'];
+
+function payablePrompt_(categories) {
+  return 'この請求書（当社が受け取った請求書）から、次の項目を読み取ってJSONだけを返してください。\n'
+    + '{"issuer":"請求元（請求書を発行した会社名）","docNo":"請求書番号","date":"請求日 YYYY-MM-DD",'
+    + '"dueDate":"支払期限 YYYY-MM-DD","total":請求金額・税込(数値),"tax":消費税額(数値),'
+    + '"invoiceNo":"請求元のインボイス登録番号（T+13桁）","item":"請求の内容（何の費用か）","category":"区分",'
+    + '"confidence":{"issuer":"高|中|低","docNo":"高|中|低","date":"高|中|低","dueDate":"高|中|低","total":"高|中|低",'
+    + '"tax":"高|中|低","invoiceNo":"高|中|低","item":"高|中|低","category":"高|中|低"}}\n'
+    + '・区分は次から1つ選ぶ: ' + (categories || []).join(' / ') + '\n'
+    + '・請求元は宛先（当社）ではなく、請求書を出した側の名前\n'
+    + '・★ 読めない・記載がない項目は null にする。推測で埋めない（支払期限・日付・金額を推測しない）\n'
+    + '・confidence はそれぞれの項目をどれだけ確実に読めたか。\n'
+    + 'JSONのみ返してください。';
+}
+
+/** 受取請求書：AIの返したオブジェクトをそろえる。読めない項目は空（null / ''）のまま。 */
+function normalizePayable_(p, categories) {
+  p = p || {};
+  var cat = str_(p.category);
+  var text = function (v) { return v === null || v === undefined ? '' : str_(v); };
+  return {
+    issuer: text(p.issuer),
+    docNo: text(p.docNo),
+    date: p.date ? normalizeDate_(nfkc_(p.date)) : '',
+    dueDate: p.dueDate ? normalizeDate_(nfkc_(p.dueDate)) : '',
+    total: receiptAmount_(p.total),
+    tax: receiptAmount_(p.tax),
+    invoiceNo: registrationNo_(p.invoiceNo),
+    item: text(p.item),
+    category: (categories || []).indexOf(cat) >= 0 ? cat : '',
+    confidence: confidenceOf_(p.confidence, PAYABLE_FIELDS)
+  };
+}
+
+/** 受取請求書：AIの回答文から JSON を取り出して normalizePayable_ にかける。壊れていれば ok:false。 */
+function parsePayableReply_(text, categories) {
+  var parsed = parseJsonLoose_(text);
+  if (!parsed || typeof parsed !== 'object') return { ok: false, error: 'AIの応答をJSONとして読み取れませんでした。手入力で登録してください' };
+  return { ok: true, data: normalizePayable_(parsed, categories) };
+}
+
+/** 全体の確信度：大事な項目のうちいちばん低いもの（確信度が無い・項目が空なら「低」） */
+function inboxConfidence_(kind, data) {
+  var rank = { '低': 0, '中': 1, '高': 2 };
+  var worst = '高';
+  var conf = (data && data.confidence) || {};
+  (INBOX_KEY_FIELDS[kind] || []).forEach(function (f) {
+    var v = data ? data[f] : null;
+    var c = (v === null || v === undefined || v === '') ? '低' : (conf[f] || '低');
+    if (rank[c] < rank[worst]) worst = c;
+  });
+  return worst;
+}
+
+function inboxUnsupportedReason_(f) {
+  if (INBOX_MIMES.indexOf(f.mimeType) < 0) return '非対応の形式です（' + (f.mimeType || '不明') + '）。JPEG・PNG・PDFにして入れ直してください';
+  if (f.size > MAX_FILE_BYTES) return 'ファイルが大きすぎます（' + Math.round(f.size / 1024 / 1024) + 'MB / 上限4MB）';
+  return '';
+}
+
+/** 今回読むファイルを決める。
+    files: 受信箱の直下のファイル [{id,name,mimeType,size,kind,folderId}]（古い順）
+    rows: inbox シートの行 / doneIds: 「処理済み」サブフォルダにあるファイルID
+    ・取込待ちにも処理済みにもあるファイルは読まない（同じファイルを2回読まない）
+    ・失敗した行は読み直しが3回未満なら読み直す（新しいファイルが先）
+    ・非対応の形式は読まずに「非対応」として取込待ちに出す（AIを呼ばないので件数に数えない）
+    ・読むのは limit 件まで。残りは remaining として次の実行に回す */
+function planInboxScan_(files, rows, doneIds, limit) {
+  var byId = {};
+  (rows || []).forEach(function (r) { byId[r.fileId] = r; });
+  doneIds = doneIds || {};
+  var fresh = [], retry = [], unsupported = [];
+  (files || []).forEach(function (f) {
+    if (doneIds[f.id]) return;
+    var r = byId[f.id];
+    if (r) {
+      if (r.status === 'failed' && num_(r.retries) < INBOX_MAX_RETRIES) retry.push({ file: f, row: r });
+      return;
+    }
+    var why = inboxUnsupportedReason_(f);
+    if (why) unsupported.push({ file: f, reason: why });
+    else fresh.push({ file: f, row: null });
+  });
+  var all = fresh.concat(retry);
+  var n = limit || INBOX_MAX_PER_RUN;
+  return { read: all.slice(0, n), unsupported: unsupported, remaining: Math.max(0, all.length - n) };
+}
+
+function inboxRowFor_(file, o) {
+  return {
+    fileId: file.id, kind: file.kind, fileName: file.name, mimeType: file.mimeType, folderId: file.folderId || '',
+    data: o.data || null, confidence: o.confidence || '', status: o.status, error: o.error || '',
+    readAt: o.readAt || '', retries: o.retries || 0, doneName: '', updatedAt: o.readAt || ''
+  };
+}
+
+/** 1ファイル読んで inbox の行にする。row があれば読み直し（retries を1つ増やす） */
+function readInboxEntry_(io, file, row, now) {
+  var res;
+  try { res = io.read(file); } catch (err) { res = { ok: false, error: String(err && err.message || err) }; }
+  var retries = row ? num_(row.retries) + 1 : 0;
+  if (res && res.ok) {
+    return inboxRowFor_(file, { status: 'ready', data: res.data, confidence: inboxConfidence_(file.kind, res.data), readAt: now, retries: retries });
+  }
+  return inboxRowFor_(file, { status: 'failed', error: (res && res.error) || '読み取りに失敗しました', readAt: now, retries: retries });
+}
+
+/** 受信箱を読んで取込待ちに入れる本体。io: {listFiles, doneIds, readRows, saveRow, read, now} */
+function runInboxScan_(io, limit) {
+  var plan = planInboxScan_(io.listFiles(), io.readRows(), io.doneIds(), limit);
+  var now = io.now();
+  var out = { ok: true, read: 0, ready: 0, failed: 0, unsupported: 0, remaining: plan.remaining };
+  plan.unsupported.forEach(function (u) {
+    io.saveRow(inboxRowFor_(u.file, { status: 'unsupported', error: u.reason, readAt: now }));
+    out.unsupported++;
+  });
+  plan.read.forEach(function (x) {
+    var row = readInboxEntry_(io, x.file, x.row, now);
+    io.saveRow(row);
+    out.read++;
+    if (row.status === 'ready') out.ready++; else out.failed++;
+  });
+  return out;
+}
+
+/** settings シートの受信箱フォルダID {receipt, invoice} */
+function inboxConfig_(ss) {
+  return readSettings_((ss || openSpreadsheet_()).getSheetByName('settings')).inboxFolders || { receipt: '', invoice: '' };
+}
+
+/** 受信箱のフォルダIDの一覧（読めなければ空。領収書の保存先探しで使う） */
+function inboxFolderIdList_() {
+  try {
+    var c = inboxConfig_();
+    return [c.receipt, c.invoice].filter(function (v) { return !!v; });
+  } catch (err) {
+    return [];
+  }
+}
+
+function inboxKinds_(cfg) {
+  var out = [];
+  if (cfg.receipt) out.push({ kind: INBOX_KIND_RECEIPT, folderId: cfg.receipt });
+  if (cfg.invoice) out.push({ kind: INBOX_KIND_INVOICE, folderId: cfg.invoice });
+  return out;
+}
+
+/** 受信箱の設定の確認。問題があれば理由（無ければ空） */
+function inboxConfigError_(cfg) {
+  if (!cfg.receipt && !cfg.invoice) return '受信箱フォルダが設定されていません（アプリの設定ページで「領収書」「受取請求書」のフォルダを指定してください）';
+  if (cfg.receipt && cfg.receipt === cfg.invoice) return '「領収書」と「受取請求書」に同じフォルダが指定されています';
+  var saveId = PropertiesService.getScriptProperties().getProperty('RECEIPT_FOLDER_ID');
+  if (saveId && (saveId === cfg.receipt || saveId === cfg.invoice)) return '受信箱に、領収書の保存先（RECEIPT_FOLDER_ID）と同じフォルダが指定されています。別のフォルダにしてください';
+  return '';
+}
+
+/** 受信箱の直下のファイル（サブフォルダの中は見ない）。古い順 */
+function listInboxFiles_(cfg) {
+  var out = [];
+  inboxKinds_(cfg).forEach(function (k) {
+    var it = DriveApp.getFolderById(k.folderId).getFiles();
+    while (it.hasNext()) {
+      var f = it.next();
+      out.push({ id: f.getId(), name: f.getName(), mimeType: f.getMimeType(), size: f.getSize(),
+        created: f.getDateCreated().getTime(), kind: k.kind, folderId: k.folderId });
+    }
+  });
+  out.sort(function (a, b) { return a.created - b.created; });
+  return out;
+}
+
+/** 受信箱の「処理済み」サブフォルダにあるファイルID */
+function inboxDoneIds_(cfg) {
+  var ids = {};
+  inboxKinds_(cfg).forEach(function (k) {
+    var fit = DriveApp.getFolderById(k.folderId).getFoldersByName(INBOX_DONE_FOLDER);
+    while (fit.hasNext()) {
+      var it = fit.next().getFiles();
+      while (it.hasNext()) ids[it.next().getId()] = true;
+    }
+  });
+  return ids;
+}
+
+function readInboxFile_(f) {
+  var file = DriveApp.getFileById(f.id);
+  var bytes = file.getBlob().getBytes();
+  if (bytes.length > MAX_FILE_BYTES) return { ok: false, error: 'ファイルが大きすぎます（上限4MB）' };
+  var invoice = f.kind === INBOX_KIND_INVOICE;
+  var r = callClaude_([fileBlock_(f.mimeType, bytes),
+    { type: 'text', text: invoice ? payablePrompt_(INBOX_CATEGORIES) : receiptPrompt_(INBOX_CATEGORIES) }], 1500);
+  if (!r.ok) return r;
+  return invoice ? parsePayableReply_(r.text, INBOX_CATEGORIES) : parseReceiptReply_(r.text, INBOX_CATEGORIES);
+}
+
+/** inbox シート。無ければ作る。足りない列は右端に足す（既存の列・データは動かさない） */
+function inboxSheet_(ss) {
+  var sh = ss.getSheetByName(INBOX_SHEET);
+  if (!sh) sh = ss.insertSheet(INBOX_SHEET);
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h || '').trim(); }) : [];
+  if (!headers.join('')) headers = [];
+  INBOX_HEADERS.forEach(function (h) { if (headers.indexOf(h) < 0) headers.push(h); });
+  sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+  ['fileId', 'data', 'readAt', 'updatedAt', 'retries'].forEach(function (h) {
+    sh.getRange(1, headers.indexOf(h) + 1, sh.getMaxRows(), 1).setNumberFormat('@');
+  });
+  sh.setFrozenRows(1);
+  return sh;
+}
+
+function inboxFromRow_(o) {
+  var data = null;
+  try { data = o.data ? JSON.parse(String(o.data)) : null; } catch (err) { data = null; }
+  return {
+    fileId: str_(o.fileId), kind: str_(o.kind), fileName: str_(o.fileName), mimeType: str_(o.mimeType),
+    data: data, confidence: str_(o.confidence), status: str_(o.status), error: str_(o.error),
+    readAt: str_(o.readAt), retries: num_(o.retries), folderId: str_(o.folderId),
+    doneName: str_(o.doneName), updatedAt: str_(o.updatedAt)
+  };
+}
+
+function readInboxRows_(sh) {
+  return rowObjects_(sh, INBOX_HEADERS).map(inboxFromRow_).filter(function (r) { return r.fileId !== ''; });
+}
+
+/** inbox シートに1行書く（同じファイルIDの行があれば上書き、無ければ追加） */
+function saveInboxRow_(sh, row) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var lastCol = sh.getLastColumn();
+    var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h || '').trim(); });
+    var idCol = headers.indexOf('fileId') + 1;
+    var lastRow = sh.getLastRow();
+    var at = 0;
+    if (lastRow > 1) {
+      var ids = sh.getRange(2, idCol, lastRow - 1, 1).getValues();
+      for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === row.fileId) { at = i + 2; break; }
+    }
+    var values = headers.map(function (h) {
+      if (h === 'data') return row.data ? JSON.stringify(row.data) : '';
+      var v = row[h];
+      return v === null || v === undefined ? '' : String(v);
+    });
+    sh.getRange(at || lastRow + 1, 1, 1, headers.length).setValues([values]);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** 取込待ち（読み取り済み・失敗・非対応）の行。シートが無ければ空 */
+function inboxOpenItems_(ss) {
+  try {
+    var sh = (ss || openSpreadsheet_()).getSheetByName(INBOX_SHEET);
+    if (!sh) return [];
+    return readInboxRows_(sh).filter(function (r) { return INBOX_OPEN_STATES.indexOf(r.status) >= 0; });
+  } catch (err) {
+    return [];
+  }
+}
+
+function inboxNow_(ss) {
+  return Utilities.formatDate(new Date(), timezone_(ss), 'yyyy-MM-dd HH:mm:ss');
+}
+
+/** 毎週月曜の朝にトリガーから動く（アプリの「📥 今すぐ読み取る」も同じ関数）。1回で8ファイルまで。 */
+function weeklyInboxScan() {
+  var props = PropertiesService.getScriptProperties();
+  var running = Number(props.getProperty('INBOX_SCAN_RUNNING') || 0);
+  if (running && Date.now() - running < 7 * 60 * 1000) {
+    return { ok: false, error: '別の読み取りを実行中です。数分たってからやり直してください' };
+  }
+  var ss = openSpreadsheet_();
+  var cfg = inboxConfig_(ss);
+  var err = inboxConfigError_(cfg);
+  if (err) { Logger.log(err); return { ok: false, error: err }; }
+  props.setProperty('INBOX_SCAN_RUNNING', String(Date.now()));
+  try {
+    var sh = inboxSheet_(ss);
+    var result = runInboxScan_({
+      listFiles: function () { return listInboxFiles_(cfg); },
+      doneIds: function () { return inboxDoneIds_(cfg); },
+      readRows: function () { return readInboxRows_(sh); },
+      saveRow: function (row) { saveInboxRow_(sh, row); },
+      read: readInboxFile_,
+      now: function () { return inboxNow_(ss); }
+    });
+    Logger.log(JSON.stringify(result));
+    return result;
+  } catch (e) {
+    return { ok: false, error: String(e && e.message || e) };
+  } finally {
+    props.deleteProperty('INBOX_SCAN_RUNNING');
+  }
+}
+
+/** 失敗したファイルを1つ読み直す（読み直しは3回まで） */
+function inboxRetry_(fileId) {
+  var ss = openSpreadsheet_();
+  var sh = inboxSheet_(ss);
+  var row = readInboxRows_(sh).filter(function (r) { return r.fileId === fileId; })[0];
+  if (!row) return { ok: false, error: '取込待ちに見つかりません' };
+  if (num_(row.retries) >= INBOX_MAX_RETRIES) return { ok: false, error: '読み直しは' + INBOX_MAX_RETRIES + '回までです。手入力で登録してください' };
+  var f = DriveApp.getFileById(fileId);
+  var file = { id: fileId, name: f.getName(), mimeType: f.getMimeType(), size: f.getSize(), kind: row.kind, folderId: row.folderId };
+  var why = inboxUnsupportedReason_(file);
+  if (why) return { ok: false, error: why };
+  var next = readInboxEntry_({ read: readInboxFile_ }, file, row, inboxNow_(ss));
+  saveInboxRow_(sh, next);
+  return { ok: true, item: next };
+}
+
+/** 処理済みのファイル名：YYYYMMDD_支払先_金額.拡張子（日付も金額も無ければ元の名前のまま） */
+function inboxDoneName_(name, mime, date, payee, amount) {
+  if (!date && !receiptAmount_(amount)) return name;
+  var ext = mime === 'application/pdf' ? '.pdf' : mime === 'image/png' ? '.png' : '.jpg';
+  return receiptFileName_(date, payee, amount).replace(/\.jpg$/, ext);
+}
+
+/** 登録・スキップしたファイルを受信箱の「処理済み」へ移動して名前を変える。
+    body: {fileId, status:'registered'|'skipped', date, payee, amount}。ファイルは消さない */
+function inboxDone_(body) {
+  var fileId = body && body.fileId;
+  if (!fileId) return { ok: false, error: 'fileId がありません' };
+  var status = body.status === 'registered' ? 'registered' : 'skipped';
+  var ss = openSpreadsheet_();
+  var sh = inboxSheet_(ss);
+  var row = readInboxRows_(sh).filter(function (r) { return r.fileId === fileId; })[0];
+  var f = DriveApp.getFileById(fileId);
+  var folderId = (row && row.folderId) || '';
+  if (!folderId) {
+    var cfg = inboxConfig_(ss);
+    var parents = f.getParents();
+    while (parents.hasNext()) {
+      var pid = parents.next().getId();
+      if (pid === cfg.receipt || pid === cfg.invoice) { folderId = pid; break; }
+    }
+  }
+  if (!folderId) return { ok: false, error: '受信箱のフォルダが分かりません' };
+  var inbox = DriveApp.getFolderById(folderId);
+  var it = inbox.getFoldersByName(INBOX_DONE_FOLDER);
+  var done = it.hasNext() ? it.next() : inbox.createFolder(INBOX_DONE_FOLDER);
+  var name = inboxDoneName_(f.getName(), f.getMimeType(), body.date, body.payee, body.amount);
+  if (name !== f.getName()) f.setName(name);
+  f.moveTo(done);
+  var now = inboxNow_(ss);
+  var next = row || inboxRowFor_({ id: fileId, kind: '', name: name, mimeType: f.getMimeType(), folderId: folderId }, { status: status, readAt: now });
+  next.status = status;
+  next.doneName = name;
+  next.updatedAt = now;
+  saveInboxRow_(sh, next);
+  return { ok: true, name: name };
+}
+
+/** 毎週月曜の朝（7〜8時）に weeklyInboxScan を動かすトリガーを作る。GASエディタで1回だけ手動実行する。
+    すでにあれば作らない（重複させない） */
+function setupWeeklyTrigger() {
+  var exists = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'weeklyInboxScan'; });
+  if (exists) { Logger.log('weeklyInboxScan のトリガーはすでにあります（重複して作りません）'); return; }
+  ScriptApp.newTrigger('weeklyInboxScan').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(7).create();
+  Logger.log('毎週月曜 7〜8時に weeklyInboxScan を実行するトリガーを作りました');
+}
+
+/** weeklyInboxScan のトリガーを削除する（自動読み取りを止めたいとき） */
+function deleteWeeklyTrigger() {
+  var n = 0;
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'weeklyInboxScan') { ScriptApp.deleteTrigger(t); n++; }
+  });
+  Logger.log('weeklyInboxScan のトリガーを ' + n + '件 削除しました');
 }
 
 /** 登録済みファイルに「処理済み_」を付けてリネームする。 */
