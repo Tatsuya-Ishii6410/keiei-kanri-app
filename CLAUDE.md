@@ -907,6 +907,19 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 固定ナビに隠れないよう .dash-v2 の section・details・あいさつ行に scroll-margin-top
 - ★ スマホの左端の影：画面外にあるサイドバーの box-shadow がはみ出していた。閉じているときは box-shadow:none、開いたとき（.sidebar.open）だけ影を付ける
 
+## 共通ナビ（全画面の上部バー）
+- 新ダッシュボードの上部ナビの見た目を全画面で使う。body.tbn-on（旧ダッシュボードの表示中だけ外す。syncDv2Body が placeDashboard / showPage のたびに付け外し）
+  ★ body に付けるクラスを部品のクラス（.tb-new）と同じ名前にしないこと（.tb-new{display:none} が body に効いて画面が消える）
+- .tb-new（tbn-on のとき表示）：≡（スマホだけ。aria-label「メニュー」・toggleSidebar）／タイトル（PAGE_TITLES のまま。長ければ「…」）／
+  同期の状態 #tb-sync／ロック #tb-lock（開いた鍵の線画。logout()＝確認のあとログアウト）
+  .tb-v2（dv2-on のときだけ）：ベル・アバター・スクロール後の月チップ（新ダッシュボード固有。変更なし）
+- 同期の状態は setSyncStatus がそのまま決める（判定は変えていない）。#tb-sync に is-ok／is-sync／is-off／is-err を付けるだけ：
+  同期済み＝緑の点 8px（#10B981）／同期中・ローカル保存＝灰色の点（#64748B）／同期エラー＝赤の文字「同期エラー」（#DC2626）。aria-label に状態の名前
+  新ダッシュボードではあいさつ行に出すので #tb-sync は出さない
+- 旧ヘッダー（☰ メニュー・保存状態・🔓 ログアウト）は旧ダッシュボードでだけ見える（要素は残してある）
+- 見た目：56px＋safe-area-inset-top、sticky、白、下の線 rgba(23,35,61,.06)、スクロールしたときだけ薄い影（.is-scrolled）。
+  アイコンは線画 20px・線1.75px・#17233D、押すと #F1F5FB（120ms）、フォーカスは #3976F6 の2px。移動先が隠れないように scroll-margin-top
+
 ## 新ダッシュボード第4次（v2.0との照合の仕上げ）
 - 長い金額の欠け防止：KPIの金額は「…」で切らない。表示の長さで段階的に小さく（dv2FitClass：10文字〜 fit-1／12文字〜 fit-2／14文字〜 fit-3。最小16px）、
   入りきらなければ折り返す。山の数値（確定実績・目標・予測）は行ごとに折り返し、アクションセンター・ミッション・ハイライトの文字も途中で折り返せる。

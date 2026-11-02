@@ -250,18 +250,29 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .dv2-pchip select{position:absolute;inset:0;width:100%;height:100%;min-height:0;opacity:0;border:0;padding:0;margin:0;font-size:16px;cursor:pointer;-webkit-appearance:none;appearance:none}
 .dv2-pchip:focus-within{outline:2px solid #3976F6;outline-offset:2px}
 .dash-v2 section,.dash-v2 details,.dash-v2 .dv2-head{scroll-margin-top:calc(64px + env(safe-area-inset-top))}
-/* ===== 上部バー（新ダッシュボードの表示中だけ。body.dv2-on） =====
-   既存のメニュー・ロック（ログアウト）・通知・期／月の選択の処理はそのまま。見た目と配置だけ */
-.tb-v2{display:none!important}
+/* ===== 上部バー（共通ナビ）。body.tbn-on＝旧ダッシュボード以外の全画面。body.dv2-on＝新ダッシュボードの表示中（固有の要素だけ） =====
+   既存のメニュー・ロック（ログアウト）・同期の判定・通知・期／月の選択の処理はそのまま。見た目と配置だけ
+   .tb-new（body.tbn-on のとき表示）：≡（スマホだけ）・タイトル・同期の点・ロック／tb-v2：ベル・アバター・スクロール後の月チップ（新ダッシュボードだけ） */
+.tb-v2,.tb-new{display:none!important}
+body.tbn-on .tb-new{display:inline-flex!important}
 body.dv2-on .tb-v2{display:inline-flex!important}
 body.dv2-on #tb-month-chip[hidden]{display:none!important}
-body.dv2-on .topbar{background:#FFFFFF;border-bottom:1px solid rgba(23,35,61,.06);box-shadow:none;height:calc(56px + env(safe-area-inset-top));
+body.tbn-on .topbar{background:#FFFFFF;border-bottom:1px solid rgba(23,35,61,.06);box-shadow:none;height:calc(56px + env(safe-area-inset-top));
   padding-top:env(safe-area-inset-top);transition:box-shadow 120ms ease}
-body.dv2-on .topbar.is-scrolled{box-shadow:0 1px 6px rgba(23,35,61,.06)}
-body.dv2-on .topbar .save-indicator,body.dv2-on .topbar .tb-logout,body.dv2-on .menu-btn{display:none!important}
-body.dv2-on .topbar-title{color:#17233D}
-body.dv2-on .topbar-right{gap:2px}
-body.dv2-on .tb-menu{display:none!important}
+body.tbn-on .topbar.is-scrolled{box-shadow:0 1px 6px rgba(23,35,61,.06)}
+body.tbn-on .topbar .save-indicator,body.tbn-on .topbar .tb-logout,body.tbn-on .menu-btn{display:none!important}
+body.tbn-on .tb-left{flex:1;min-width:0}
+body.tbn-on .topbar-title{color:#17233D;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.tbn-on .topbar-right{gap:2px;flex:none}
+body.tbn-on .tb-menu{display:none!important}
+/* 同期の状態：同期済み＝緑の点（8px）／同期中・ローカル保存＝灰色の点／同期エラー＝赤の文字。新ダッシュボードはあいさつ行に出すので出さない */
+.tb-sync{align-items:center;justify-content:center;min-width:28px;height:44px;padding:0 6px;font-size:12px;font-weight:700;color:#DC2626;white-space:nowrap}
+.tb-sync-dot{width:8px;height:8px;border-radius:50%;background:#64748B}
+.tb-sync.is-ok .tb-sync-dot{background:#10B981}
+.tb-sync.is-err .tb-sync-dot{display:none}
+body.dv2-on .tb-sync{display:none!important}
+/* 固定ナビの下に、移動先の先頭が隠れないように */
+body.tbn-on .content :is(.page,.section-header,.card,.report-card,.tab-group){scroll-margin-top:calc(64px + env(safe-area-inset-top))}
 .tb-icon{position:relative;width:44px;height:44px;flex:none;align-items:center;justify-content:center;border:0;border-radius:12px;background:transparent;color:#17233D;
   cursor:pointer;padding:0;-webkit-appearance:none;appearance:none;transition:background-color 120ms ease}
 .tb-icon:active{background:#F1F5FB}
@@ -506,8 +517,8 @@ body.dv2-on .tb-menu{display:none!important}
   .dash-v2{margin:-16px -12px;padding:12px 16px 32px}
   .dash-v2 .dv2-hero{grid-template-columns:minmax(0,1fr)}
   .dash-v2 .dv2-mtn{max-height:140px}
-  body.dv2-on .tb-menu{display:inline-flex!important}
-  body.dv2-on .topbar{padding-left:4px;padding-right:4px}
+  body.tbn-on .tb-menu{display:inline-flex!important}
+  body.tbn-on .topbar{padding-left:4px;padding-right:4px}
 }
 @media (max-width:480px){
   .dash-v2{margin:-12px -10px;padding:10px 16px 28px}
@@ -961,7 +972,7 @@ body.dv2-on .tb-menu{display:none!important}
 <header class="topbar" id="topbar">
   <div class="tb-left" style="display:flex;align-items:center;gap:10px">
     <button class="menu-btn" onclick="toggleSidebar()">☰ メニュー</button>
-    <button class="tb-icon tb-v2 tb-menu" onclick="toggleSidebar()" aria-label="メニューを開く"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <button class="tb-icon tb-new tb-menu" onclick="toggleSidebar()" aria-label="メニュー"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <span class="topbar-title" id="topbar-title">ダッシュボード</span>
   </div>
   <div class="topbar-right">
@@ -969,7 +980,8 @@ body.dv2-on .tb-menu{display:none!important}
     <span class="save-indicator" id="save-indicator" title="データの保存状態"></span>
     <button class="btn sm tb-logout" onclick="logout()" title="ログアウト">🔓 <span class="si-text">ログアウト</span></button>
     <button class="tb-icon tb-v2" id="dv2-bell" onclick="dv2Scroll('dv2-actions')" aria-label="要対応"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="tb-badge" id="dv2-bell-n" style="display:none"></span></button>
-    <button class="tb-icon tb-v2" id="tb-lock" onclick="logout()" aria-label="ロック解除中（押すとログアウトして画面をロックします）" title="ロック解除中（押すとログアウト）"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.75-1.4"/></svg></button>
+    <span class="tb-sync tb-new" id="tb-sync" role="img" aria-label="ローカル保存" title="ローカル保存"><span class="tb-sync-dot" aria-hidden="true"></span><span class="tb-sync-t"></span></span>
+    <button class="tb-icon tb-new" id="tb-lock" onclick="logout()" aria-label="ロック解除中（押すとログアウトして画面をロックします）" title="ロック解除中（押すとログアウト）"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.75-1.4"/></svg></button>
     <span class="dv2-menu-wrap tb-v2">
       <button class="tb-icon dv2-avatar" id="dv2-avatar" aria-haspopup="true" aria-expanded="false" aria-label="ユーザーメニュー" onclick="dv2Menu()"><img class="dv2-avatar-img" src="images/icons/avatar-112.webp?v=20261103" srcset="images/icons/avatar-112.webp?v=20261103 1x, images/icons/avatar-224.webp?v=20261103 2x" width="40" height="40" alt="" onerror="this.remove()"><span id="dv2-avatar-t">？</span></button>
       <div class="dv2-menu" id="dv2-menu" hidden>
@@ -3110,6 +3122,12 @@ function setSyncStatus(state,detail){
   });
   if(dot)dot.className='sync-dot '+m.cls;
   if(txt)txt.textContent=m.long+(detail?'（'+detail+'）':'');
+  const tbs=document.getElementById('tb-sync');
+  if(tbs){
+    tbs.className='tb-sync tb-new is-'+(state in map?state:'off');
+    tbs.setAttribute('aria-label',m.short);tbs.title=m.long+(detail?'\n'+detail:'');
+    tbs.querySelector('.tb-sync-t').textContent=state==='err'?'同期エラー':'';
+  }
   dv2SyncState=state;
   if(typeof renderDv2HelloSub==='function')renderDv2HelloSub();
 }
@@ -13425,6 +13443,8 @@ function dv2SyncSelects(){
 function syncDv2Body(v2){
   const on=(v2===undefined?dashVersion===2:v2)&&document.getElementById('page-dashboard').classList.contains('active');
   document.body.classList.toggle('dv2-on',!!on);
+  const dash=document.getElementById('page-dashboard').classList.contains('active');
+  document.body.classList.toggle('tbn-on',!dash||(v2===undefined?dashVersion===2:!!v2));
   if(!on){const c=document.getElementById('tb-month-chip');if(c)c.hidden=true;}
 }
 // あいさつ行の補助テキスト：「11月3日（火）・同期済み」。同期エラーは赤
