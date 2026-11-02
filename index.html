@@ -171,7 +171,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   --ui-border-solid:#E3E7EF;--ui-line:#EEF1F6;
   /* 第2弾：淡い色のカード（青・紫）と、その上でも 4.5:1 以上になる文字色 */
   --ui-tint-blue:#EEF3FF;--ui-tint-purple:#F4EFFF;--ui-muted-strong:#4A5670;--ui-accent-text:#2557D6;--ui-plan-text:#6A3FD8;   /* 不透明の枠・区切り線（半透明の重なりで線が濃く見えないように） */
-  --ui-radius-card:18px;--ui-shadow-card:0 1px 2px rgba(23,35,61,.04),0 4px 14px rgba(23,35,61,.05);
+  --ui-radius-card:22px;--ui-shadow-card:0 1px 2px rgba(23,35,61,.04),0 4px 14px rgba(23,35,61,.05);
 }
 .sc-wrap{position:relative}
 .sc-list{position:absolute;left:0;right:0;top:calc(100% + var(--ui-space-1));z-index:40;
@@ -319,7 +319,7 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .dv2-ms-cel{animation:dv2-cel 500ms ease-out 1}
 @keyframes dv2-cel{0%{transform:scale(.6);opacity:.4}60%{transform:scale(1.35);opacity:1}100%{transform:scale(1)}}
 /* KPI（スマホ2列・PC4列。淡い色は青と紫を交互） */
-.dash-v2 .dv2-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.dash-v2 .dv2-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 @media (min-width:1024px){.dash-v2 .dv2-kpis{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}}
 .dash-v2 .dv2-kpi{position:relative;padding:12px;cursor:pointer;transition:transform 200ms ease}
 .dash-v2 .dv2-kpi:active{transform:scale(.98)}
@@ -450,14 +450,14 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .dv2-skel.h-hero{height:208px}.dash-v2 .dv2-skel.h-trend{height:355px}.dash-v2 .dv2-skel.h-miss{height:230px}
 @media (max-width:768px){.dash-v2 .dv2-skel.h-hero{height:306px}.dash-v2 .dv2-skel.h-trend{height:349px}.dash-v2 .dv2-skel.h-kpi{height:205px}}
 @media (max-width:768px){
-  .dash-v2{margin:-16px -12px;padding:12px 12px 32px}
+  .dash-v2{margin:-16px -12px;padding:12px 16px 32px}
   .dash-v2 .dv2-hero{grid-template-columns:minmax(0,1fr)}
   .dash-v2 .dv2-mtn{max-height:140px}
   body.dv2-on .tb-menu{display:inline-flex!important}
   body.dv2-on .topbar{padding-left:4px;padding-right:4px}
 }
 @media (max-width:480px){
-  .dash-v2{margin:-12px -10px;padding:10px 10px 28px}
+  .dash-v2{margin:-12px -10px;padding:10px 16px 28px}
   .dash-v2 .dv2-card{padding:12px}
   .dash-v2 .dv2-hello{font-size:19px}
   .dash-v2 .dv2-big{font-size:32px}
