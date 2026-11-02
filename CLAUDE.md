@@ -39,6 +39,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   ※ keiei-kanri.html を直したら `cp keiei-kanri.html index.html` で揃えてからコミットする
   （揃え忘れてもデプロイ時にワークフローが keiei-kanri.html から作り直すので、公開版は常に最新）
 - gas-code.js：Google Apps Script用のコード（GASエディタに貼り付けて使う。ブラウザからは読み込まれない）
+- tests/debit-import.test.js：取込の判定のテスト。`node tests/debit-import.test.js` で実行する
 - .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
 - netlify.toml：旧Netlify用の設定（移行後も念のため残している）
 
@@ -215,6 +216,42 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 区分は摘要のキーワードから推測（BANK_RULES）。該当なしの支出は「その他経費」
 - 同じ日付・金額・摘要が既にledgerにあれば「重複の可能性あり」として未選択にする
 - 文字コードは readCsvFile() が UTF-8 → Shift-JIS の順で自動判別する
+- 区分の推測・重複判定・認証判定は keiei-kanri.html の「@import-rules-begin〜end」の範囲に集約
+  （guessExpenseType / bankGuessType / bankDupFlags / isAuthLike / debitRowsFrom）。
+  キーワードは NFKC正規化＋大文字化して部分一致で比べる（半角ｶﾅ・全角英字の表記ゆれを吸収）
+  ★ この範囲はテストが切り出して Node で読むので、DOM や S を直接触らないこと（ledger は引数で渡す）
+- 重複は2種類。dup＝同日・同金額・同摘要（従来）／mailDup＝同日×同金額のデビット通知取込済み経費
+  （calId が 'mail:' で始まる actual の経費）。どちらもチェックOFF。
+  mailDup はデビット通知とCSVで摘要の文言が違うため、従来の判定では二重計上になるのを防ぐ
+- 10円以下の支出行には「認証の可能性」バッジ（CSVはチェックは外さない。口座から実際に出た記録のため）
+- 登録したら bank.lastCsvImportDate を今日（ローカル日付）にする
+
+### 銀行明細の最終取込日（ダッシュボード）
+- ダッシュボードの期間メトリクスの下に「🏦 銀行明細 最終取込：{日付}」（renderBankImportStatus）
+  7日超＝アンバー／14日超＝赤／未設定＝「未取込」赤
+- state の bank.lastCsvImportDate、settingsシートは bank.lastCsvImportDate
+
+## デビット通知から取込（CF管理）
+- CF管理の「📧 デビット通知から取込」。GMOあおぞらネット銀行の
+  「Visaデビットご利用のお知らせ」メールから経費の実績を作る
+- ★ Gmailは読み取りのみ（GmailApp.search と getter だけ。ラベル変更・既読化・削除はしない）。
+  メール本文はアプリに返さず、GASの debitMails（doGet）が抽出した
+  messageId / datetime / amount / merchant / account だけを返す
+  初回はGASエディタで testGmailAccess() を実行して権限を承認する
+- 本文は「【ラベル】値」の行ごとに読み、値は改行まで（parseDebitMail_）。
+  【ご利用店舗情報】のURLや【メモ欄】は店名に混ぜない。
+  店名は NFKC正規化し、前後の空白と末尾の記号を外す（normalizeMerchant_。ＮＥＸＴ→NEXT）
+- 金額・日時が取れないメール（為替差額の追加引落しなど）と差出人がGMOあおぞらでないメールは
+  「読み取れなかったメール」として件名・受信日時だけを出す（buildDebitResult_）
+- 期間は Gmail の after/before を1日広めに取り、本文の処理日時で絞る
+- 外部IDは 'mail:{messageId}' を ledger の calId 列に入れる（列は増やさず流用）。
+  登録済みの外部IDは取得時に除外する。同日×同金額の経費があれば「重複の可能性あり」でチェックOFF
+- 区分は guessExpenseType（銀行明細と共通）。該当なしは「その他経費」＋「要確認」。
+  10円以下は「認証の可能性」でチェックOFF
+- 登録は status=actual・memo='メール取込'・摘要「{店名}（Visaデビット）」。残高予測の式は従来どおり
+- mail.lastDebitSync は取込済みの最終日。既定の期間は「その翌日〜今日」（初回は当月1日〜）。
+  ★ 今日の分はまだ通知が届くので、更新するのは最大でも昨日まで
+  （今日にしてしまうと、翌日の既定期間から今日の残りの通知が漏れる。登録済みは外部IDで除外される）
 
 ## 期（会計年度）
 - fiscalYears:[{id,name,startMonth,endMonth,salesTarget,profitTarget,active}]、

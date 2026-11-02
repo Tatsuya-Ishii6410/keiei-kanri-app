@@ -555,6 +555,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div style="font-size:11px;color:var(--text-muted);margin:-12px 0 16px">
     ※売上は案件発生ベース。経費・役員報酬・税金・公課はCF管理の実績値。入金待ちはCF管理の入金予定
   </div>
+  <div id="d-bank-import" style="font-size:13px;margin:-8px 0 16px"></div>
   <div class="two-col">
     <div class="card">
       <div class="card-header">
@@ -713,8 +714,9 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       </select>
       <span id="ledger-summary" style="font-size:12px;color:var(--text-secondary);white-space:nowrap"></span>
     </div>
-    <div style="display:flex;gap:8px;align-items:center">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn" onclick="openDriveImportModal()">☁️ ドライブから取込</button>
+      <button class="btn" onclick="openDebitImportModal()">📧 デビット通知から取込</button>
       <button class="btn" onclick="openFixedCostsModal()">🔁 固定費管理</button>
       <button class="btn primary" onclick="openLedgerModal(null,'actual')">+ 実績入力</button>
       <button class="btn" onclick="openLedgerModal(null,'planned_in')">+ 入金予定</button>
@@ -1285,6 +1287,28 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </div>
 </div>
 
+<div class="modal-overlay" id="modal-debit-import">
+<div class="modal wide" style="max-width:980px">
+  <div class="modal-header"><span class="modal-title">📧 デビット通知から取込</span><button class="btn sm" onclick="closeModal('modal-debit-import')">✕</button></div>
+  <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
+    GMOあおぞらネット銀行の「Visaデビットご利用のお知らせ」メールを読み取ります（ラベル変更・既読化・削除はしません）。
+    メール本文はアプリに送られず、日時・金額・店名だけを受け取ります。
+  </div>
+  <div class="form-row three">
+    <div class="form-group"><label class="form-label">期間（から）</label><input id="di-from" type="date"></div>
+    <div class="form-group"><label class="form-label">期間（まで）</label><input id="di-to" type="date"></div>
+    <div class="form-group"><label class="form-label">&nbsp;</label>
+      <button class="btn primary" id="di-fetch" onclick="fetchDebitMails()">メールを取得</button></div>
+  </div>
+  <div id="di-msg" style="margin:8px 0"></div>
+  <div id="di-body"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-debit-import')">閉じる</button>
+    <button class="btn primary" id="di-submit" onclick="registerDebitRows()" disabled>選択を登録</button>
+  </div>
+</div>
+</div>
+
 <div class="modal-overlay" id="modal-drive-import">
 <div class="modal wide">
   <div class="modal-header"><span class="modal-title">ドライブから経費を取込</span><button class="btn sm" onclick="closeModal('modal-drive-import')">✕</button></div>
@@ -1843,6 +1867,8 @@ const defaultState={
   bankBalance:0,
   // 交通費の計算設定
   travel:{googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15,calendarId:DEFAULT_CALENDAR_ID,fareCache:{}},
+  mail:{lastDebitSync:''},        // デビット通知メールの取込済みの最終日（YYYY-MM-DD）
+  bank:{lastCsvImportDate:''},    // 銀行明細CSVを最後に登録した日（YYYY-MM-DD）
   // 財務情報（融資力診断で使う）
   finance:{loan:0},
   /* 税金・社会保険の計算設定。
@@ -1982,6 +2008,8 @@ function mergeState(parsed){
   }
   s.travel=Object.assign({googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15,calendarId:DEFAULT_CALENDAR_ID,fareCache:{}},(parsed&&parsed.travel)||{});
   s.travel.calendarId=s.travel.calendarId||DEFAULT_CALENDAR_ID;
+  s.mail={lastDebitSync:String(((parsed&&parsed.mail)||{}).lastDebitSync||'')};
+  s.bank={lastCsvImportDate:String(((parsed&&parsed.bank)||{}).lastCsvImportDate||'')};
   if(!s.travel.fareCache||typeof s.travel.fareCache!=='object')s.travel.fareCache={};
   s.travel.gasolinePrice=parseInt(s.travel.gasolinePrice)||175;
   s.travel.fuelEfficiency=parseFloat(s.travel.fuelEfficiency)||15;
@@ -2079,7 +2107,7 @@ function keepLocalWhenMissing(remote){
   ['nextBillingId','nextFiscalYearId','nextFixedCostId','bankBalance'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
-  ['travel','finance','taxSettings'].forEach(k=>{
+  ['travel','finance','taxSettings','mail','bank'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
   if(d.travel&&S.travel&&d.travel!==S.travel){
@@ -2598,7 +2626,25 @@ function statusBadge(s){
    経費・役員報酬・税金 …… CF管理の実績（ledger の status=actual）
    入金待ち …… CF管理の入金予定（planned_in）の合計
    ★ 選択中の期から正しい年を導いて（dashMonthYear）年と月の両方で絞る。 */
+// 銀行明細CSVの最終取込日。7日を超えたらアンバー、14日を超えたら赤、未取込は赤
+function renderBankImportStatus(){
+  const el=document.getElementById('d-bank-import');
+  if(!el)return;
+  const last=S.bank&&S.bank.lastCsvImportDate;
+  if(!last){
+    el.innerHTML='🏦 銀行明細 最終取込：<span class="badge badge-red">未取込</span>';
+    return;
+  }
+  const p=last.split('-').map(Number);
+  const now=new Date();
+  const days=Math.round((new Date(now.getFullYear(),now.getMonth(),now.getDate())-new Date(p[0],p[1]-1,p[2]))/86400000);
+  const cls=days>14?'badge-red':days>7?'badge-amber':'badge-green';
+  el.innerHTML=`🏦 銀行明細 最終取込：<span class="badge ${cls}">${last}</span>`
+    +`<span style="font-size:11px;color:var(--text-muted);margin-left:6px">（${days}日前）</span>`;
+}
+
 function updateDashboard(){
+  renderBankImportStatus();
   const mi=getMonth();
   const fy=dashboardFiscalYear();
   const yr=dashMonthYear(mi);
@@ -3080,6 +3126,170 @@ async function gasCall(body){
 }
 
 function driveMsg(html){document.getElementById('drive-msg').innerHTML=html||''}
+
+/* ===== デビット通知から取込（CF管理） =================================
+   GASの debitMails（Gmailは読み取りのみ）で利用通知の日時・金額・店名を受け取り、
+   経費の実績として登録する。判定（区分・重複・認証）は @import-rules の関数を使う。
+   外部IDは 'mail:{messageId}' を ledger の calId 列に入れる。
+   =================================================================== */
+
+let debitRows=[];        // プレビュー行（debitRowsFrom の戻り値）
+let debitUnreadable=[];  // 読み取れなかったメール {subject,received,reason}
+let debitSkipped=0;      // 外部IDが登録済みで除外した件数
+let debitPeriodTo='';    // 取得した期間の終わり（lastDebitSync の更新に使う）
+
+// ブラウザのローカル日付で YYYY-MM-DD（toISOString は UTC なので朝9時前に前日になる）
+function localYmd(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function localToday(){return localYmd(new Date())}
+function shiftYmd(ymd,days){
+  const p=String(ymd).split('-').map(Number);
+  return localYmd(new Date(p[0],p[1]-1,p[2]+days));
+}
+
+function debitMsg(html){document.getElementById('di-msg').innerHTML=html||''}
+
+function openDebitImportModal(){
+  const last=S.mail&&S.mail.lastDebitSync;
+  const t=localToday();
+  // 既定：前回取込日の翌日〜今日。初回は当月1日から
+  document.getElementById('di-from').value=last?shiftYmd(last,1):t.slice(0,8)+'01';
+  document.getElementById('di-to').value=t;
+  debitRows=[];debitUnreadable=[];debitSkipped=0;debitPeriodTo='';
+  debitMsg(last?`前回の取込：${last} まで`:'');
+  renderDebitPreview();
+  openModal('modal-debit-import');
+}
+
+async function fetchDebitMails(){
+  const since=document.getElementById('di-from').value;
+  const until=document.getElementById('di-to').value;
+  if(!since||!until){alert('期間を入力してください');return;}
+  if(since>until){alert('期間の終わりが始まりより前です');return;}
+  const btn=document.getElementById('di-fetch');
+  btn.disabled=true;
+  debitMsg('<div class="alert alert-info"><span class="spinner"></span> メールを読み取っています...</div>');
+  try{
+    const json=await gasGet({action:'debitMails',since,until});
+    if(!json||!json.ok)throw new Error((json&&json.error)||'メールを取得できませんでした');
+    const r=debitRowsFrom(json.items,S.ledger);
+    debitRows=r.rows;debitSkipped=r.skipped;
+    debitUnreadable=json.unreadable||[];
+    debitPeriodTo=until;
+    debitMsg(`<div class="alert alert-success">✓ ${(json.items||[]).length}件の利用通知を読み取りました`
+      +(debitSkipped?`（登録済み ${debitSkipped}件は除外）`:'')+'</div>'
+      +(json.truncated?'<div class="alert alert-warning">メールが多いため一部しか読めていない可能性があります。期間を短くしてください。</div>':''));
+  }catch(e){
+    debitMsg(`<div class="alert alert-error">❌ ${e.message}<br><small>初めて使うときは、GASエディタで testGmailAccess を実行して権限を承認し、新しいバージョンでデプロイしてください。</small></div>`);
+  }
+  btn.disabled=false;
+  renderDebitPreview();
+}
+
+function debitBadges(r){
+  return[
+    r.dup?'<span class="badge badge-amber">重複の可能性あり</span>':'',
+    r.auth?AUTH_BADGE:'',
+    r.needsCheck?'<span class="badge badge-red">要確認</span>':''
+  ].filter(Boolean).join(' ');
+}
+
+// 表とカードの両方に入力欄があるので、値はデータ側（debitRows）に入れる
+function debitEdit(i,field,el){
+  const r=debitRows[i];
+  if(!r)return;
+  if(field==='checked')r.checked=el.checked;
+  else if(field==='amount')r.amount=parseInt(el.value)||0;
+  else{
+    r[field]=el.value;
+    if(field==='type')r.needsCheck=false; // 自分で選んだ区分は確認済み
+  }
+  renderDebitPreview();
+}
+
+function debitTypeOptions(cur){
+  return LEDGER_TYPES.filter(t=>t!=='売上').map(t=>`<option ${t===cur?'selected':''}>${t}</option>`).join('');
+}
+
+function renderDebitPreview(){
+  const body=document.getElementById('di-body');
+  const sel=debitRows.filter(r=>r.checked);
+  document.getElementById('di-submit').disabled=sel.length===0;
+  const unread=debitUnreadable.length===0?'':`<details style="margin:10px 0;font-size:13px" open>
+    <summary style="cursor:pointer">読み取れなかったメール ${debitUnreadable.length}件</summary>
+    <div style="margin-top:6px">${debitUnreadable.map(u=>`<div style="padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">
+      ${u.received} ／ ${u.subject}<span style="color:var(--text-muted)">（${u.reason||'読み取れませんでした'}）</span></div>`).join('')}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">為替差額の追加引落しなど形式が違うメールです。必要なら「+ 実績入力」で登録してください。</div>
+  </details>`;
+  if(debitRows.length===0){
+    body.innerHTML=unread+(debitPeriodTo?'<div class="empty-state">新しく登録できる利用通知はありません。</div>':'');
+    return;
+  }
+  const total=sel.reduce((a,r)=>a+r.amount,0);
+  const auth=debitRows.some(r=>r.auth);
+  body.innerHTML=(auth?`<div class="alert alert-warning" style="font-size:12px">${AUTH_NOTE}</div>`:'')
+    +`<div class="table-wrap mob-table"><table>
+      <thead><tr><th></th><th>日時</th><th>店名</th><th>区分</th><th style="text-align:right">金額</th><th>摘要</th><th></th></tr></thead>
+      <tbody>${debitRows.map((r,i)=>`<tr>
+        <td><input type="checkbox" ${r.checked?'checked':''} onchange="debitEdit(${i},'checked',this)" style="width:auto"></td>
+        <td style="font-size:12px;white-space:nowrap">${r.datetime}</td>
+        <td style="font-size:12px">${r.merchant||'-'}</td>
+        <td><select onchange="debitEdit(${i},'type',this)" style="font-size:12px;padding:4px">${debitTypeOptions(r.type)}</select></td>
+        <td><input type="number" value="${r.amount}" onchange="debitEdit(${i},'amount',this)" style="width:96px;font-size:12px;padding:4px 6px;text-align:right"></td>
+        <td><input type="text" value="${escAttr(r.desc)}" onchange="debitEdit(${i},'desc',this)" style="min-width:180px;font-size:12px;padding:4px 6px"></td>
+        <td>${debitBadges(r)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <div class="mob-cards">${debitRows.map((r,i)=>mobCard(
+      `<div class="mob-check">
+        <input type="checkbox" ${r.checked?'checked':''} onchange="debitEdit(${i},'checked',this)">
+        <div style="flex:1;font-size:13px">${r.datetime}<br><strong>${r.merchant||'-'}</strong></div>
+      </div>`
+      +(debitBadges(r)?`<div style="margin-top:6px">${debitBadges(r)}</div>`:'')
+      +`<div style="margin-top:8px"><select onchange="debitEdit(${i},'type',this)">${debitTypeOptions(r.type)}</select></div>`
+      +`<div style="margin-top:6px"><input type="number" value="${r.amount}" onchange="debitEdit(${i},'amount',this)" style="font-size:14px;font-weight:700"></div>`
+      +`<div style="margin-top:6px"><input type="text" value="${escAttr(r.desc)}" onchange="debitEdit(${i},'desc',this)"></div>`)).join('')}</div>`
+    +`<div style="text-align:right;font-size:14px;margin-top:10px">選択 ${sel.length}件　合計 <strong style="font-size:17px">${fmt(total)}</strong></div>`
+    +unread;
+}
+
+function registerDebitRows(){
+  const sel=debitRows.filter(r=>r.checked&&r.date&&r.amount);
+  if(sel.length===0){alert('登録する行を選択してください');return;}
+  if(!confirm(`${sel.length}件を経費（実績）として登録します。よろしいですか？`))return;
+  const known={};
+  S.ledger.forEach(l=>{if(l.calId)known[l.calId]=true;});
+  let added=0;
+  sel.forEach(r=>{
+    if(known[r.extId])return; // 念のため外部IDで二重登録を防ぐ
+    S.ledger.push({
+      id:S.nextLedgerId++,
+      date:r.date,
+      expectedDate:'',
+      type:r.type,
+      desc:r.desc.trim()||(r.merchant+'（Visaデビット）'),
+      amount:r.amount,
+      memo:'メール取込',
+      status:'actual',
+      calId:r.extId
+    });
+    known[r.extId]=true;
+    added++;
+  });
+  // 取込済みの最終日。今日はまだ通知が届くかもしれないので、最大でも昨日までとする
+  const yesterday=shiftYmd(localToday(),-1);
+  const covered=debitPeriodTo&&debitPeriodTo<yesterday?debitPeriodTo:yesterday;
+  if(!S.mail.lastDebitSync||covered>S.mail.lastDebitSync)S.mail.lastDebitSync=covered;
+  const done={};
+  sel.forEach(r=>{done[r.extId]=true;});
+  debitRows=debitRows.filter(r=>!done[r.extId]);
+  debitSkipped+=added;
+  saveState();
+  refreshAll();
+  debitMsg(`<div class="alert alert-success">✓ ${added}件を経費として登録しました</div>`);
+  renderDebitPreview();
+}
 
 function openDriveImportModal(){
   driveFiles=[];driveRows=[];
@@ -7693,7 +7903,7 @@ function bankCardHtml(r,i){
       ${r.income?'<span class="badge badge-green">収入</span>':'<span class="badge badge-red">支出</span>'}
     </div>`
     +`<div style="font-size:12px;margin-top:8px;word-break:break-word">${r.desc}</div>`
-    +(r.dup?'<div style="margin-top:4px"><span class="badge badge-amber">重複の可能性あり</span></div>':'')
+    +(bankBadges(r)?`<div style="margin-top:4px">${bankBadges(r)}</div>`:'')
     +`<div style="margin-top:8px">
       <select oninput="bankRows[${i}].type=this.value" onchange="bankRows[${i}].type=this.value" style="font-size:12px">${opts}</select>
     </div>`
@@ -8889,9 +9099,19 @@ function confirmClearData(){
 
 let bankRows=[];
 
-// 摘要のキーワードから区分を推測する（上から順に判定）
+// ===== 取込の判定（銀行明細CSV・デビット通知で共通） ===== @import-rules-begin
+// tests/debit-import.test.js がこの範囲を切り出して Node で読むので、
+// DOM や S を直接触らない（ledger は引数で受け取る）。
+
+// 判定用の文字列：NFKC正規化（半角ｶﾅ→全角、全角英数→半角）して大文字に
+function normKey(v){
+  const s=String(v==null?'':v);
+  return(s.normalize?s.normalize('NFKC'):s).toUpperCase();
+}
+
+// 摘要・店名のキーワードから区分を推測する（上から順に判定。部分一致）
 const BANK_RULES=[
-  {types:['ｵｵｸﾞﾛ','OOGURO','ANTHROPIC','GOOGLE','ｸﾗｳﾄﾞ','クラウド'],type:'システム利用料'},
+  {types:['ｵｵｸﾞﾛ','OOGURO','ANTHROPIC','GOOGLE','VERCEL','NETLIFY','GITHUB','CLOUDFLARE','OPENAI','ｸﾗｳﾄﾞ','クラウド'],type:'システム利用料'},
   {types:['ﾎｹｯﾄ','通信','ｿﾌﾄﾊﾞﾝｸ','ソフトバンク','ﾄﾞｺﾓ','ドコモ','AU'],type:'通信料'},
   {types:['ﾀｸｼｰ','タクシー','鉄道','ﾊﾞｽ','バス','ｴｷ','交通'],type:'交通費'},
   {types:['飲食','ﾚｽﾄﾗﾝ','レストラン','ｲｻﾞｶﾔ','居酒屋','ｶﾌｪ','カフェ'],type:'交際費'},
@@ -8902,15 +9122,75 @@ const BANK_RULES=[
 ];
 const BANK_SALES_WORDS=['振込','ﾌﾘｺﾐ','ｳﾘｱｹﾞ','売上'];
 
-function bankGuessType(desc,isIncome){
-  const d=String(desc||'').toUpperCase();
-  if(isIncome)return'売上';
+// 経費の区分を推測する。該当なしは「その他経費」で matched=false（要確認）
+function guessExpenseType(text){
+  const d=normKey(text);
   for(const r of BANK_RULES){
-    if(r.types.some(k=>d.indexOf(k.toUpperCase())>=0))return r.type;
+    if(r.types.some(k=>d.indexOf(normKey(k))>=0))return{type:r.type,matched:true};
   }
-  if(BANK_SALES_WORDS.some(k=>d.indexOf(k.toUpperCase())>=0))return'売上';
-  return'その他経費';
+  return{type:'その他経費',matched:false};
 }
+
+function bankGuessType(desc,isIncome){
+  if(isIncome)return'売上';
+  const g=guessExpenseType(desc);
+  if(g.matched)return g.type;
+  const d=normKey(desc);
+  if(BANK_SALES_WORDS.some(k=>d.indexOf(normKey(k))>=0))return'売上';
+  return g.type;
+}
+
+// 10円以下の利用はカードの認証（実際の支出ではない）の可能性がある
+const AUTH_MAX_AMOUNT=10;
+function isAuthLike(amount){
+  return amount>0&&amount<=AUTH_MAX_AMOUNT;
+}
+
+// デビット通知メールから取り込んだ収支の外部ID（ledger の calId 列を流用）
+const MAIL_EXT_PREFIX='mail:';
+function mailExtId(messageId){return MAIL_EXT_PREFIX+messageId}
+function isMailImported(l){return String(l.calId||'').indexOf(MAIL_EXT_PREFIX)===0}
+
+function isActualExpenseEntry(l){
+  return(l.status||'actual')==='actual'&&l.type!=='売上';
+}
+
+/* 銀行明細CSVの1行の重複判定
+   dup     … 同じ日付・金額・摘要の収支がすでにある（従来どおり）
+   mailDup … 同日×同金額のデビット通知取込済みの経費がある（摘要が違うので従来の判定では漏れる） */
+function bankDupFlags(ledger,date,amount,desc,income){
+  const dup=ledger.some(l=>l.date===date&&l.amount===amount&&l.desc===desc);
+  const mailDup=!income&&ledger.some(l=>isMailImported(l)&&isActualExpenseEntry(l)&&l.date===date&&l.amount===amount);
+  return{dup,mailDup};
+}
+
+/* デビット通知（GASの debitMails の items）をプレビュー行にする
+   外部IDが登録済みのメールは除外し、同日×同金額の経費があれば重複の可能性、
+   10円以下は認証の可能性としてチェックを外す。 */
+function debitRowsFrom(items,ledger){
+  const known={};
+  ledger.forEach(l=>{if(l.calId)known[l.calId]=true;});
+  const rows=[];
+  let skipped=0;
+  (items||[]).forEach(it=>{
+    const extId=mailExtId(it.messageId);
+    if(known[extId]){skipped++;return;}
+    const date=String(it.datetime||'').slice(0,10);
+    const amount=parseInt(it.amount)||0;
+    const merchant=String(it.merchant||'');
+    const g=guessExpenseType(merchant);
+    const dup=ledger.some(l=>isActualExpenseEntry(l)&&l.date===date&&l.amount===amount);
+    const auth=isAuthLike(amount);
+    rows.push({
+      extId,messageId:it.messageId,datetime:it.datetime||'',date,merchant,
+      type:g.type,needsCheck:!g.matched,amount,
+      desc:(merchant||'店名不明')+'（Visaデビット）',
+      dup,auth,checked:!dup&&!auth
+    });
+  });
+  return{rows,skipped};
+}
+// ===== @import-rules-end
 
 // 文字コードを判定して読む（UTF-8で読めなければShift-JIS）
 function readCsvFile(file){
@@ -8945,11 +9225,6 @@ function bankDate(v){
   m=/^(\d{4})(\d{2})(\d{2})$/.exec(s);
   if(m)return m[1]+'-'+m[2]+'-'+m[3];
   return'';
-}
-
-// 同じ日付・金額・摘要の収支がすでにあるか
-function bankIsDuplicate(date,amount,desc){
-  return S.ledger.some(l=>l.date===date&&l.amount===amount&&l.desc===desc);
 }
 
 async function bankHandleFile(file){
@@ -8992,11 +9267,14 @@ async function bankHandleFile(file){
     const amount=income?inc:out;
     // 入金は、税込金額が近い未入金案件を突合候補として探す
     const match=income?matchProjectByPayment(amount,date):null;
+    const f=bankDupFlags(S.ledger,date,amount,desc,income);
     bankRows.push({
       date,desc,amount,income,
       type:bankGuessType(desc,income),
-      dup:bankIsDuplicate(date,amount,desc),
-      checked:!bankIsDuplicate(date,amount,desc),
+      dup:f.dup,
+      mailDup:f.mailDup,
+      auth:!income&&isAuthLike(amount),
+      checked:!f.dup&&!f.mailDup,
       matchId:match?match.p.id:null,
       matchYm:match?match.ym:null,        // 推定した対象月（YYYY-MM）
       matchGross:match?match.gross:0,     // 突合に使った税込金額
@@ -9017,11 +9295,13 @@ function renderBankPreview(){
   const dates=bankRows.map(r=>r.date).sort();
   const inSum=bankRows.filter(r=>r.income).reduce((a,r)=>a+r.amount,0);
   const outSum=bankRows.filter(r=>!r.income).reduce((a,r)=>a+r.amount,0);
-  const dup=bankRows.filter(r=>r.dup).length;
+  const dup=bankRows.filter(r=>r.dup||r.mailDup).length;
+  const auth=bankRows.some(r=>r.auth);
 
   document.getElementById('bank-msg').innerHTML=
     `<div class="alert alert-success">✓ ${bankRows.length}件の明細を読み込みました`
     +(dup>0?`（うち ${dup}件は重複の可能性があるため未選択）`:'')+'</div>'
+    +(auth?`<div class="alert alert-warning" style="font-size:12px">${AUTH_NOTE}</div>`:'')
     +`<div class="metric-grid">
       <div class="metric-card"><div class="metric-label">取引件数</div><div class="metric-value" style="font-size:20px">${bankRows.length}件</div></div>
       <div class="metric-card"><div class="metric-label">期間</div><div class="metric-value" style="font-size:15px">${dates[0]}<br>〜 ${dates[dates.length-1]}</div></div>
@@ -9038,7 +9318,7 @@ function renderBankPreview(){
     +bankRows.map((r,i)=>`<tr>
       <td><input type="checkbox" class="bank-check" ${r.checked?'checked':''} onchange="bankRows[${i}].checked=this.checked" style="width:auto"></td>
       <td><input type="date" value="${r.date}" oninput="bankRows[${i}].date=this.value" style="font-size:12px"></td>
-      <td style="font-size:11px">${r.desc}${r.dup?'<br><span class="badge badge-amber">重複の可能性あり</span>':''}</td>
+      <td style="font-size:11px">${r.desc}${bankBadges(r)?'<br>'+bankBadges(r):''}</td>
       <td><select oninput="bankRows[${i}].type=this.value" onchange="bankRows[${i}].type=this.value" style="font-size:12px">${opts(r.type)}</select></td>
       <td><input type="number" value="${r.amount}" oninput="bankRows[${i}].amount=parseInt(this.value)||0" style="font-size:12px"></td>
       <td>${r.income?'<span class="badge badge-green">収入</span>':'<span class="badge badge-red">支出</span>'}</td>
@@ -9064,6 +9344,17 @@ function bankMatchCell(r,i){
       <input type="checkbox" ${r.applyMatch?'checked':''} onchange="bankRows[${i}].applyMatch=this.checked" style="width:auto">
       この案件の入金として登録する
     </label>`;
+}
+
+const AUTH_NOTE='1円などの利用は実際の支出ではなく認証の可能性があります';
+const AUTH_BADGE=`<span class="badge badge-amber" title="${AUTH_NOTE}">認証の可能性</span>`;
+
+function bankBadges(r){
+  return[
+    r.dup?'<span class="badge badge-amber">重複の可能性あり</span>':'',
+    r.mailDup?'<span class="badge badge-amber">メール取込済みの可能性</span>':'',
+    r.auth?AUTH_BADGE:''
+  ].filter(Boolean).join(' ');
 }
 
 function setBankCheckAll(checked){
@@ -9093,6 +9384,7 @@ function bankRegister(){
     }
     S.ledger.push(entry);
   });
+  S.bank.lastCsvImportDate=localToday();
   saveState();
   alert(rows.length+'件を収支に登録しました'
     +(matched>0?`\n（${matched}件を案件の入金として突合しました）`:'')

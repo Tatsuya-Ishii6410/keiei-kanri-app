@@ -86,6 +86,7 @@ function doGet(e) {
     var action = params.action || 'load';
     if (action === 'ping') return respond_({ ok: true, message: 'pong' }, callback);
     if (action === 'calendarEvents') return respond_(calendarEvents_(params.from, params.to, params.calendarId), callback);
+    if (action === 'debitMails') return respond_(debitMails_(params.since, params.until), callback);
     if (action !== 'load') throw new Error('不明なaction: ' + action);
     return respond_({ ok: true, data: readAll_() }, callback);
   } catch (err) {
@@ -176,6 +177,8 @@ function readAll_() {
     nextBillingId: settings.nextBillingId,
     finance: settings.finance,
     travel: settings.travel,
+    mail: settings.mail,
+    bank: settings.bank,
     taxSettings: settings.taxSettings,
     bankBalance: settings.bankBalance,
     currentFiscalYearId: settings.currentFiscalYearId,
@@ -305,6 +308,8 @@ function readSettings_(sh) {
   var legacyPlan = null; // 月の区別が無かった頃の形式
   var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1, nextFixedCostId = 1, nextBillingId = 1;
   var finance = { loan: 0 };
+  var mail = { lastDebitSync: '' };
+  var bank = { lastCsvImportDate: '' };
   var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15,
     calendarId: DEFAULT_CALENDAR_ID, fareCache: {} };
   // 税金設定は、シートに無い項目はキーごと返さない（アプリ側の初期値を潰さないため）
@@ -341,6 +346,10 @@ function readSettings_(sh) {
       nextBillingId = num_(value) || 1;
     } else if (key === 'finance.loan') {
       finance.loan = num_(value);
+    } else if (key === 'mail.lastDebitSync') {
+      mail.lastDebitSync = ymd_(value);
+    } else if (key === 'bank.lastCsvImportDate') {
+      bank.lastCsvImportDate = ymd_(value);
     } else if (key === 'travel.googleMapsApiKey') {
       travel.googleMapsApiKey = str_(value);
     } else if (key === 'travel.gasolinePrice') {
@@ -396,6 +405,8 @@ function readSettings_(sh) {
     nextBillingId: nextBillingId,
     finance: finance,
     travel: travel,
+    mail: mail,
+    bank: bank,
     taxSettings: taxSettings,
     bankBalance: bankBalance,
     currentFiscalYearId: currentFiscalYearId,
@@ -471,6 +482,8 @@ function writeAll_(data) {
   settings.push(['nextBillingId', num_(data.nextBillingId) || 1]);
   var fin = data.finance || {};
   settings.push(['finance.loan', num_(fin.loan)]);
+  settings.push(['mail.lastDebitSync', ymd_((data.mail || {}).lastDebitSync)]);
+  settings.push(['bank.lastCsvImportDate', ymd_((data.bank || {}).lastCsvImportDate)]);
   var tv = data.travel || {};
   settings.push(['travel.googleMapsApiKey', str_(tv.googleMapsApiKey)]);
   settings.push(['travel.gasolinePrice', num_(tv.gasolinePrice) || 175]);
@@ -1022,6 +1035,127 @@ function testCalendarAccess() {
   Logger.log('OK: ' + cal.getName() + '（' + id + '）今後7日間の予定 ' + n + '件');
 }
 
+// ===== Visaデビット利用通知メール（読み取り専用） ===================
+// GmailApp は search と getter だけを使う。ラベル変更・既読化・削除はしない。
+// メール本文はアプリに返さず、抽出した項目（日時・金額・店名・口座）だけを返す。
+// parseDebitMail_ / buildDebitResult_ は GAS の API を使わない純粋な関数
+// （tests/debit-import.test.js が Node で読み込んでテストする）。
+
+var DEBIT_SUBJECT = 'Visaデビットご利用のお知らせ';
+var DEBIT_SENDER_RE = /gmo-aozora|あおぞら/i;
+var DEBIT_MAX_THREADS = 500;
+
+function nfkc_(v) {
+  var s = String(v == null ? '' : v);
+  return s.normalize ? s.normalize('NFKC') : s;
+}
+
+/** 店名：NFKC正規化し、前後の空白と末尾の記号（. , など）を外す。ＮＥＸＴ→NEXT、VERCEL INC.→VERCEL INC */
+function normalizeMerchant_(v) {
+  return nfkc_(v).replace(/^\s+|\s+$/g, '').replace(/[\s.,。、・:;]+$/, '');
+}
+
+/** 本文から【処理日時】【引落し金額】【ご利用店名】【ご利用口座】を取る。値はその行の改行まで。 */
+function parseDebitMail_(body) {
+  var out = { datetime: '', date: '', amount: null, merchant: '', account: '' };
+  var seen = {};
+  String(body == null ? '' : body).split(/\r\n|\r|\n/).forEach(function (line) {
+    var m = /^\s*【([^】]+)】(.*)$/.exec(line);
+    if (!m) return;
+    var label = nfkc_(m[1]).replace(/\s/g, '');
+    var value = nfkc_(m[2]).replace(/^\s+|\s+$/g, '');
+    var key = /処理日時/.test(label) ? 'datetime'
+      : (/引落/.test(label) && /金額/.test(label)) ? 'amount'
+      : /店名/.test(label) ? 'merchant'
+      : /口座/.test(label) ? 'account' : '';
+    if (!key || seen[key]) return; // 同じラベルが2回出ても最初の行だけ使う
+    seen[key] = true;
+    if (key === 'datetime') {
+      var d = /(\d{4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})日?\s*(\d{1,2})\s*[:時]\s*(\d{1,2})(?:\s*[:分]\s*(\d{1,2}))?/.exec(value);
+      if (d) {
+        var p2 = function (n) { return ('0' + n).slice(-2); };
+        out.date = d[1] + '-' + p2(d[2]) + '-' + p2(d[3]);
+        out.datetime = out.date + ' ' + p2(d[4]) + ':' + p2(d[5]) + ':' + p2(d[6] || 0);
+      }
+    } else if (key === 'amount') {
+      var a = /^(\d[\d,]*)\s*円/.exec(value);
+      if (a) out.amount = parseInt(a[1].replace(/,/g, ''), 10);
+    } else if (key === 'merchant') {
+      out.merchant = normalizeMerchant_(value);
+    } else {
+      out.account = value;
+    }
+  });
+  out.ok = !!out.date && out.amount !== null && !isNaN(out.amount);
+  return out;
+}
+
+/**
+ * messages: [{id, subject, received('yyyy-MM-dd HH:mm:ss'), from, body}]
+ * since / until: YYYY-MM-DD（until は省略可、どちらもその日を含む）
+ * 金額・日時が取れないメールは unreadable（件名と受信日時だけ）に入れる。
+ */
+function buildDebitResult_(messages, since, until) {
+  var items = [], unreadable = [];
+  var inRange = function (d) { return d && (!since || d >= since) && (!until || d <= until); };
+  (messages || []).forEach(function (m) {
+    var subject = String(m.subject || '');
+    if (subject.indexOf(DEBIT_SUBJECT) < 0) return;
+    var received = String(m.received || '');
+    var p = parseDebitMail_(m.body);
+    var day = p.ok ? p.date : received.slice(0, 10);
+    if (!inRange(day)) return;
+    if (!DEBIT_SENDER_RE.test(String(m.from || ''))) {
+      unreadable.push({ messageId: m.id, subject: subject, received: received, reason: '差出人がGMOあおぞらネット銀行ではありません' });
+      return;
+    }
+    if (!p.ok) {
+      unreadable.push({ messageId: m.id, subject: subject, received: received, reason: '金額・日時を読み取れませんでした' });
+      return;
+    }
+    items.push({ messageId: m.id, datetime: p.datetime, amount: p.amount, merchant: p.merchant, account: p.account });
+  });
+  items.sort(function (a, b) { return a.datetime < b.datetime ? -1 : a.datetime > b.datetime ? 1 : 0; });
+  return { items: items, unreadable: unreadable };
+}
+
+function debitMails_(since, until) {
+  var re = /^\d{4}-\d{2}-\d{2}$/;
+  since = str_(since); until = str_(until);
+  if (!re.test(since)) return { ok: false, error: 'since は YYYY-MM-DD で指定してください' };
+  if (until && !re.test(until)) return { ok: false, error: 'until は YYYY-MM-DD で指定してください' };
+  var tz = Session.getScriptTimeZone();
+  var shift = function (ymd, days) {
+    var p = ymd.split('-');
+    return Utilities.formatDate(new Date(+p[0], +p[1] - 1, +p[2] + days), tz, 'yyyy/MM/dd');
+  };
+  // Gmail の after/before は日付の境目があいまいなので1日広めに探し、日付は本文の処理日時で絞る
+  var query = 'subject:"' + DEBIT_SUBJECT + '" after:' + shift(since, -1) + (until ? ' before:' + shift(until, 2) : '');
+  var threads = GmailApp.search(query, 0, DEBIT_MAX_THREADS);
+  var messages = [];
+  threads.forEach(function (th) {
+    th.getMessages().forEach(function (m) {
+      messages.push({
+        id: m.getId(),
+        subject: m.getSubject(),
+        received: Utilities.formatDate(m.getDate(), tz, 'yyyy-MM-dd HH:mm:ss'),
+        from: m.getFrom(),
+        body: m.getPlainBody()
+      });
+    });
+  });
+  var r = buildDebitResult_(messages, since, until);
+  return { ok: true, items: r.items, unreadable: r.unreadable, truncated: threads.length >= DEBIT_MAX_THREADS };
+}
+
+/** GASエディタから手動で実行し、Gmailの読み取り権限を承認するための関数。 */
+function testGmailAccess() {
+  var threads = GmailApp.search('subject:"' + DEBIT_SUBJECT + '"', 0, 5);
+  var n = 0;
+  threads.forEach(function (th) { n += th.getMessageCount(); });
+  Logger.log('OK: 「' + DEBIT_SUBJECT + '」のスレッド ' + threads.length + '件（メール ' + n + '通）を読み取れました');
+}
+
 /** 2地点間の走行距離（km）を Google Maps から取得する。 */
 function distanceLookup_(origin, destination, apiKey) {
   origin = str_(origin); destination = str_(destination); apiKey = str_(apiKey);
@@ -1157,6 +1291,12 @@ function num_(v) {
   var s = String(v === null || v === undefined ? '' : v).replace(/[^0-9.\-]/g, '');
   var n = parseFloat(s);
   return isNaN(n) ? 0 : Math.round(n);
+}
+
+/** セルの値を YYYY-MM-DD に（日付として解釈されていても str_ が整形する）。それ以外は空文字。 */
+function ymd_(v) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str_(v));
+  return m ? m[1] + '-' + m[2] + '-' + m[3] : '';
 }
 
 /** セルの値を YYYY-MM に。日付として解釈されていた場合も整形する。 */
