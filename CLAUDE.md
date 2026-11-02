@@ -45,6 +45,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - tests/inbox-scan.test.js：受信箱の週次読み取り・取込待ちからの登録・一括登録・重複判定のテスト（AI・Driveはモック）
 - tests/ops-checks.test.js：週次バックアップ・入金遅延・月次締めチェックのテスト（Drive・GASはモック）
 - tests/travel-suggest.test.js：交通費の訪問先の候補（駅名・訪問先の正規化・自宅駅の除外・並び順）・用件の選択式・帰りの行の自動入力・同じ区間の過去の運賃のテスト
+- tests/dashboard-v2.test.js：新ダッシュボードの判定（達成率・マイルストーン・着地予測・KPI・ミッション）と期のKPI目標の往復のテスト
+- tests/dashboard-v2-compare.html：新旧ダッシュボードの数字の突き合わせ（ブラウザで開く。手順は「新ダッシュボード」の節）
 - .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
 - netlify.toml：旧Netlify用の設定（移行後も念のため残している）
 
@@ -801,3 +803,41 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   精算（settlementMonth）が登録されている月の行と日付が読めない行は対象外（安全側）。「適用」で件数を確認してから、
   摘要の（手段）だけを書き換える（relabelTravelMode。往復の印・区間はそのまま）。適用するまでデータは変えない
 - 一覧・スマホのカード・PDF・CSV・精算モーダル・月次締めは、保存された手段をそのまま表示する
+
+## 新ダッシュボード（デザイン刷新・第1段階）
+- ダッシュボードのページだけ。サイドバー・他のタブ・モーダルは変えていない。見た目は .dash-v2（.ui-scope）の中だけに効かせる
+- 右上の「旧ダッシュボードに切り替え」／旧の「✨ 新ダッシュボードに切り替え」で切り替える。どちらを出すかは
+  このブラウザの localStorage（bizapp_dash_version_v1）に記憶（既定は新）。setDashVersion / initDashVersion
+- ★ 旧の表示項目は消していない。要素ごと新画面の枠へ移す（placeDashboard）。中身を描く関数・押したときの遷移先は旧のまま
+  #dv-status（状態の行6つ：銀行明細・バックアップ・入金遅延・月次締め・取込待ち・請求書）→「要対応」の帯
+  #dv-metrics（メトリクス7枚）→ 帯の「詳細指標」／ #dv-summary（期間サマリー）・#dv-rest（計画差異・月次推移・進行中の案件・更新アラート）→ 下の「旧ダッシュボードの詳細」
+  旧に戻すと #dvh-* の元の場所に戻る。月次推移の Canvas は「詳細」を開いたときに描き直す
+- ★ 数字は既存の関数だけ。dashMonthNumbers(abs)＝projectSalesAtAbsTotal＋sumLedgerAbs＋operatingProfit
+  （旧の updateDashboard もこれを使うので、旧の「売上」「営業利益」と新のKPIは必ず一致する）。
+  期の累計・達成率＝fiscalTotals(fy).sales と pct()（期間サマリーと同じ）。入金待ち＝awaitingPayment、入金遅延＝overdueNow、
+  未作成の請求書＝missingInvoiceTargets（renderInvoiceDocStatus と同じ請求月）、月次締め＝closeChecksFor(前月)、取込待ち＝inboxItems
+- 期・月のセレクトは旧の #fiscal-select / #month-select が正。新画面のセレクトは写し（dv2SyncSelects / dv2SetPeriod）
+- ヘッダー：あいさつ（dashGreeting）・一言（dashHeadline：入金遅延 → 前月比±5%）・🔔要対応の件数（未完了のミッション。売上目標は除く）・
+  代表者名（company.rep）の頭文字
+- ヒーロー（山頂）：山頂＝選択中の期の売上目標（fiscalYears.salesTarget。新しい設定は作らない）。未設定なら「期の設定で目標を入れる」（dv2GoFiscal）
+  現在地＝達成率（期間サマリーと同じ）。マイルストーン25・50・75・100%（dashMilestones）、位置は routePoint
+  ★ 期間サマリーの売上は期の全月の合計で、翌月以降は契約にもとづく予定額を含む。ヒーローでは「確定（前月まで）」「予定（予測）」の内訳を
+  色とラベルで分けて出す（forecastSplit）。「集計期間と売上の定義」で確認できる。100%達成のお祝いは期ごとに1回（localStorage）・動きを減らす設定では出さない
+- KPIカード4枚：月間売上・営業利益（前月比）、売上目標達成率（目標比）、現預金残高（bankBalance。履歴が無いので推移・前月比は「推移データなし」）。
+  小さな推移グラフは直近6か月（SVG）。押すと案件／CF管理／レポートの案件予実／CF管理へ。「計算根拠」で期間と使った項目を出す。
+  カウントアップは400ms・1回だけ（dv2Counted）
+- 売上・利益の推移（SVG）：12か月＝選択中の期の月、6か月＝選択中の月までの6か月。当月より後の月は「予測」（契約の予定額）として色と「*」で分ける。
+  営業利益の線は実績の月だけ。前年同月（projectSalesAtAbsTotal(abs-12)）は、どこかの月にデータがあるときだけ出す（無ければ「データ不足」）
+- 重要KPI（@dash-rules）：新規顧客数（newCustomerCount：期に初めて受注案件が始まった取引先。normClientName で表記ゆれをまとめる）、
+  継続率（retentionRate：前の期に売上があった取引先のうち今期も売上がある割合。前の期が無ければデータ不足）、
+  成約率（winRate：(契約済＋進行中＋完了)÷(＋失注)、開始月で期に絞る。★ 失注が0件なら「データ不足（失注の記録なし）」）。
+  目標は期の newCustomerTarget / retentionTarget / winRateTarget（任意。空なら「目標未設定」でリングを描かない）。ringState で色と文字（達成・あと少し・要注意）
+- 着地予測：案件ベースだけ（入金予定は混ぜない）。確定（前月まで）＋予測（当月から期末：請求レコード、無い月は案件の月額）＝fiscalTotals と同じ合計。
+  統計的な外挿はしない。「予測の前提」で範囲と元データを出す
+- 経営ミッション（dashMissions）：売上目標まであと○円／入金遅延／未作成の請求書／取込待ち／月次締めの未解決。件数は上の既存の集計をそのまま渡す
+- 自動チェックのひとこと（dashAdvice）：前月比・入金待ち・入金遅延・確定売上のペース（期の経過と比べる）。「自動チェック（AI分析ではありません）」と出す
+- 期の設定（modal-fiscal）に「新規顧客目標数」「継続率目標（%）」「成約率目標（%）」。GASの fiscalYears シートに列を足した（optNum_：空は空のまま、小数可）
+- --ui- 変数は .ui-scope に足した（--ui-page / --ui-purple / --ui-good* / --ui-caution* / --ui-warn* / --ui-plan* / --ui-radius-card / --ui-shadow-card）
+- テスト：tests/dashboard-v2.test.js（@dash-rules と GAS の期の往復）。新旧の数字の突き合わせは tests/dashboard-v2-compare.html
+  （リポジトリ直下で `python -m http.server 8765` → http://localhost:8765/tests/dashboard-v2-compare.html。GAS_URL を空にして読むのでシートには触らない。
+  ?narrow でスマホ幅、?tall で縦長）

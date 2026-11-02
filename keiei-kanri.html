@@ -162,6 +162,13 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   --ui-accent-soft:rgba(57,118,246,.10);--ui-border:rgba(23,35,61,.10);
   --ui-radius-list:12px;--ui-radius-item:8px;--ui-shadow:0 6px 20px rgba(23,35,61,.10);
   --ui-space-1:4px;--ui-space-2:8px;--ui-space-3:12px;--ui-motion:150ms;--ui-on-accent:#FFFFFF;
+  /* 新ダッシュボードで足した意味（背景・紫・好調・注意・警告・カードの角丸と影・予測） */
+  --ui-page:#F8FAFF;--ui-purple:#8758F5;
+  --ui-good:#10B981;--ui-good-soft:rgba(16,185,129,.12);--ui-good-text:#047857;
+  --ui-caution:#F59E0B;--ui-caution-soft:rgba(245,158,11,.14);--ui-caution-text:#B45309;
+  --ui-warn:#F43F5E;--ui-warn-soft:rgba(244,63,94,.12);--ui-warn-text:#BE123C;
+  --ui-plan:#8758F5;--ui-plan-soft:rgba(135,88,245,.12);--ui-border-strong:rgba(23,35,61,.18);
+  --ui-radius-card:18px;--ui-shadow-card:0 1px 2px rgba(23,35,61,.04),0 4px 14px rgba(23,35,61,.05);
 }
 .sc-wrap{position:relative}
 .sc-list{position:absolute;left:0;right:0;top:calc(100% + var(--ui-space-1));z-index:40;
@@ -183,6 +190,169 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   font-size:12px;cursor:pointer;max-width:100%;text-align:left}
 .sc-chip:hover{color:var(--ui-accent);border-color:var(--ui-accent)}
 .te-home-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+/* ===== 新ダッシュボード（.dash-v2 の中だけ） =====
+   色・角丸・影は .ui-scope の --ui- 変数（上で定義）を使う。新しい意味の変数だけを .ui-scope に足している */
+.dash-v2{background:var(--ui-page);color:var(--ui-text);margin:-24px;padding:24px 24px 40px;min-height:100vh;
+  font-family:'Noto Sans JP','Inter',sans-serif;font-size:14px}
+.dash-v2 .dv2-num{font-family:'Inter','Noto Sans JP',sans-serif;font-variant-numeric:tabular-nums;font-weight:700}
+.dash-v2 .dv2-muted{color:var(--ui-muted)}
+.dash-v2 .dv2-note{font-size:11px;color:var(--ui-muted);line-height:1.6}
+.dash-v2 .dv2-card{background:var(--ui-bg);border:1px solid var(--ui-border);border-radius:var(--ui-radius-card);box-shadow:var(--ui-shadow-card);padding:20px;min-width:0}
+.dash-v2 .dv2-h2{font-size:18px;font-weight:700;margin:4px 0 10px}
+.dash-v2 .dv2-h3{font-size:15px;font-weight:700;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.dash-v2 .dv2-btn{border:1px solid var(--ui-border);background:var(--ui-bg);color:var(--ui-text);border-radius:999px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer;min-height:36px}
+.dash-v2 .dv2-btn.primary{background:var(--ui-accent);border-color:var(--ui-accent);color:var(--ui-on-accent);font-weight:700}
+.dash-v2 .dv2-link{background:none;border:0;padding:6px 0;color:var(--ui-accent);font:inherit;font-size:12px;cursor:pointer}
+.dash-v2 .dv2-basis{margin-top:6px;padding:10px 12px;border-radius:var(--ui-radius-item);background:var(--ui-accent-soft);font-size:12px;line-height:1.7;color:var(--ui-text)}
+.dash-v2 .dv2-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:var(--ui-accent-soft);color:var(--ui-accent);white-space:nowrap}
+.dash-v2 .dv2-chip.dv2-actual{background:var(--ui-accent);color:var(--ui-on-accent)}
+.dash-v2 .dv2-chip.dv2-plan{background:var(--ui-plan-soft);color:var(--ui-plan);border:1px dashed var(--ui-plan)}
+/* ヘッダー */
+.dash-v2 .dv2-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.dash-v2 .dv2-hello{font-size:22px;font-weight:700}
+.dash-v2 .dv2-line{color:var(--ui-muted);margin-top:2px}
+.dash-v2 .dv2-head-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dash-v2 .dv2-head-r select{width:auto;border-radius:999px;border:1px solid var(--ui-border);background:var(--ui-bg);color:var(--ui-text);font-size:13px;padding:6px 10px;min-height:36px}
+.dash-v2 .dv2-icon{position:relative;width:40px;height:40px;border-radius:50%;border:1px solid var(--ui-border);background:var(--ui-bg);cursor:pointer;font-size:16px}
+.dash-v2 .dv2-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--ui-warn);color:#fff;font-size:11px;font-weight:700;line-height:18px;font-family:'Inter',sans-serif}
+.dash-v2 .dv2-avatar{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:700;
+  background:linear-gradient(135deg,var(--ui-accent),var(--ui-purple))}
+/* ヒーロー */
+.dash-v2 .dv2-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,420px);gap:20px;align-items:center;margin-bottom:16px;
+  background:linear-gradient(135deg,var(--ui-bg) 55%,var(--ui-accent-soft))}
+.dash-v2 .dv2-kicker{font-size:12px;color:var(--ui-muted);font-weight:700}
+.dash-v2 .dv2-hero-rate{display:flex;align-items:baseline;gap:8px;margin:4px 0}
+.dash-v2 .dv2-big{font-size:44px;line-height:1.1;background:linear-gradient(90deg,var(--ui-accent),var(--ui-purple));-webkit-background-clip:text;background-clip:text;color:transparent}
+.dash-v2 .dv2-unit{color:var(--ui-muted);font-weight:700}
+.dash-v2 .dv2-hero-row{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;color:var(--ui-muted)}
+.dash-v2 .dv2-hero-row b{color:var(--ui-text);font-size:16px}
+.dash-v2 .dv2-split{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.dash-v2 .dv2-ms-list{display:flex;gap:10px;list-style:none;padding:0;margin:10px 0 0;font-size:12px;color:var(--ui-muted);flex-wrap:wrap}
+.dash-v2 .dv2-ms-list li.done{color:var(--ui-good);font-weight:700}
+.dash-v2 .dv2-mtn{width:100%;height:auto;max-height:260px}
+.dash-v2 .dv2-mtn-back{fill:var(--ui-accent-soft)}
+.dash-v2 .dv2-route{fill:none;stroke:var(--ui-muted);stroke-width:2;stroke-dasharray:4 4}
+.dash-v2 .dv2-ms{fill:var(--ui-bg);stroke:var(--ui-muted);stroke-width:1.5}
+.dash-v2 .dv2-ms-done{fill:var(--ui-good)}
+.dash-v2 .dv2-ms-check{fill:none;stroke:#fff;stroke-width:1.8}
+.dash-v2 .dv2-ms-t{font-size:9px;fill:var(--ui-muted);font-family:'Inter',sans-serif}
+.dash-v2 .dv2-flag{fill:var(--ui-warn);stroke:var(--ui-text);stroke-width:1}
+.dash-v2 .dv2-snow{fill:#fff;opacity:.9}
+.dash-v2 .dv2-me circle{fill:var(--ui-accent);stroke:#fff;stroke-width:3}
+.dash-v2 .dv2-me text{font-size:7px;fill:#fff}
+.dash-v2 .dv2-spark text{fill:var(--ui-caution);font-size:12px;animation:dv2-twinkle 1.2s ease-out 1 both}
+@keyframes dv2-twinkle{0%{opacity:0;transform:translateY(4px)}40%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}
+/* 要対応の帯（旧の状態の行・メトリクス7枚をそのまま入れる） */
+.dash-v2 .dv2-band{background:var(--ui-bg);border:1px solid var(--ui-border);border-left:4px solid var(--ui-caution);border-radius:var(--ui-radius-card);
+  box-shadow:var(--ui-shadow-card);padding:14px 18px;margin-bottom:16px}
+.dash-v2 .dv2-band-title{font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.dash-v2 #dv-status{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:6px 18px}
+.dash-v2 #dv-status>div{margin:0!important;padding:6px 0;border-bottom:1px dashed var(--ui-border)}
+.dash-v2 #dv-status>div:empty{display:none}
+.dash-v2 .dv2-band details summary,.dash-v2 .dv2-more summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--ui-accent);padding:8px 0}
+.dash-v2 #dv-metrics .metric-grid{margin-bottom:8px}
+.dash-v2 #dv-metrics .metric-card{border-radius:var(--ui-radius-item)}
+/* KPIカード */
+.dash-v2 .dv2-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.dash-v2 .dv2-kpi{cursor:pointer;transition:box-shadow 200ms ease,transform 200ms ease}
+.dash-v2 .dv2-kpi:hover{box-shadow:0 8px 24px rgba(23,35,61,.10);transform:translateY(-1px)}
+.dash-v2 .dv2-kpi:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+.dash-v2 .dv2-kpi-top{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.dash-v2 .dv2-kpi-label{font-size:12px;color:var(--ui-muted);font-weight:700}
+.dash-v2 .dv2-kpi-val{font-size:26px;margin:8px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-v2 .dv2-status{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.dash-v2 .dv2-status.good{background:var(--ui-good-soft);color:var(--ui-good-text)}
+.dash-v2 .dv2-status.caution{background:var(--ui-caution-soft);color:var(--ui-caution-text)}
+.dash-v2 .dv2-status.warn{background:var(--ui-warn-soft);color:var(--ui-warn-text)}
+.dash-v2 .dv2-status.none{background:var(--ui-accent-soft);color:var(--ui-muted)}
+.dash-v2 .dv2-delta{font-size:12px;font-weight:700}
+.dash-v2 .dv2-delta.good{color:var(--ui-good-text)}.dash-v2 .dv2-delta.warn{color:var(--ui-warn-text)}.dash-v2 .dv2-delta.none{color:var(--ui-muted);font-weight:400}
+.dash-v2 .dv2-sparkline{width:100%;height:34px;margin-top:8px}
+.dash-v2 .dv2-sparkline polyline{fill:none;stroke:var(--ui-accent);stroke-width:2;vector-effect:non-scaling-stroke}
+.dash-v2 .dv2-sparkline.green polyline{stroke:var(--ui-good)}
+.dash-v2 .dv2-spark-none{height:34px;margin-top:8px;display:flex;align-items:center;font-size:11px;color:var(--ui-muted)}
+/* 経営分析・ミッション */
+.dash-v2 .dv2-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 340px;grid-template-areas:"trend trend miss" "ring fc miss";gap:16px;margin-bottom:16px}
+.dash-v2 #dv2-trend{grid-area:trend}.dash-v2 #dv2-rings{grid-area:ring}.dash-v2 #dv2-forecast{grid-area:fc}.dash-v2 #dv2-missions{grid-area:miss}
+.dash-v2 .dv2-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.dash-v2 .dv2-seg{display:inline-flex;border:1px solid var(--ui-border);border-radius:999px;padding:2px}
+.dash-v2 .dv2-seg button{border:0;background:none;border-radius:999px;padding:6px 12px;font:inherit;font-size:12px;cursor:pointer;color:var(--ui-muted);min-height:32px}
+.dash-v2 .dv2-seg button.on{background:var(--ui-accent);color:var(--ui-on-accent);font-weight:700}
+.dash-v2 .dv2-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--ui-muted);margin:4px 0 6px}
+.dash-v2 .dv2-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.dash-v2 .lg-bar{background:var(--ui-accent)}.dash-v2 .lg-plan{background:var(--ui-plan-soft);border:1px dashed var(--ui-plan)}
+.dash-v2 .lg-line{background:var(--ui-good);height:3px!important;vertical-align:2px!important}.dash-v2 .lg-prev{background:var(--ui-border-strong)}
+.dash-v2 .dv2-chart{position:relative}
+.dash-v2 .dv2-chart svg{width:100%;height:auto;display:block}
+.dash-v2 .dv2-grid{stroke:var(--ui-border);stroke-width:1}
+.dash-v2 .dv2-axis{font-size:11px;fill:var(--ui-muted);font-family:'Inter','Noto Sans JP',sans-serif}
+.dash-v2 .dv2-bar{fill:var(--ui-accent)}
+.dash-v2 .dv2-bar-plan{fill:var(--ui-plan-soft);stroke:var(--ui-plan);stroke-width:1;stroke-dasharray:3 2}
+.dash-v2 .dv2-bar-prev{fill:var(--ui-border-strong)}
+.dash-v2 .dv2-line{fill:none;stroke:var(--ui-good);stroke-width:2.5}
+.dash-v2 .dv2-dot{fill:var(--ui-bg);stroke:var(--ui-good);stroke-width:2}
+.dash-v2 .dv2-hit{fill:transparent;cursor:pointer}
+.dash-v2 .dv2-col:hover .dv2-hit{fill:var(--ui-accent-soft)}
+.dash-v2 .dv2-tip{position:absolute;top:0;min-width:180px;background:var(--ui-text);color:#fff;border-radius:var(--ui-radius-item);padding:8px 10px;font-size:12px;line-height:1.6;pointer-events:none;font-variant-numeric:tabular-nums}
+.dash-v2 .dv2-rings{display:flex;flex-direction:column;gap:12px}
+.dash-v2 .dv2-ring-item{display:flex;gap:12px;align-items:center}
+.dash-v2 .dv2-ring{width:64px;height:64px;flex:none}
+.dash-v2 .dv2-ring .bg{fill:none;stroke:var(--ui-accent-soft);stroke-width:8}
+.dash-v2 .dv2-ring .fg{fill:none;stroke-width:8;stroke-linecap:round;transition:stroke-dasharray 400ms ease}
+.dash-v2 .dv2-ring.good .fg{stroke:var(--ui-good)}.dash-v2 .dv2-ring.caution .fg{stroke:var(--ui-caution)}.dash-v2 .dv2-ring.warn .fg{stroke:var(--ui-warn)}
+.dash-v2 .dv2-ring-none{width:64px;height:64px;flex:none;border-radius:50%;border:2px dashed var(--ui-border);display:flex;align-items:center;justify-content:center;color:var(--ui-muted)}
+.dash-v2 .dv2-ring-text{min-width:0}
+.dash-v2 .dv2-ring-val{font-size:20px}
+.dash-v2 .dv2-fc-total{font-size:30px;margin:4px 0;color:var(--ui-plan)}
+.dash-v2 .dv2-stack{display:flex;height:12px;border-radius:999px;overflow:hidden;background:var(--ui-accent-soft);margin:12px 0}
+.dash-v2 .dv2-stack-a{background:var(--ui-accent)}
+.dash-v2 .dv2-stack-p{background:repeating-linear-gradient(45deg,var(--ui-plan-soft),var(--ui-plan-soft) 4px,var(--ui-bg) 4px,var(--ui-bg) 8px)}
+.dash-v2 .dv2-fc-rows>div{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--ui-border)}
+.dash-v2 .dv2-missions-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.dash-v2 .dv2-missions-list button{width:100%;display:flex;gap:10px;align-items:flex-start;text-align:left;background:var(--ui-page);border:1px solid var(--ui-border);
+  border-radius:var(--ui-radius-item);padding:10px 12px;font:inherit;color:var(--ui-text);cursor:pointer;min-height:44px}
+.dash-v2 .dv2-missions-list li.done button{opacity:.75}
+.dash-v2 .dv2-m-icon{width:22px;height:22px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;
+  border:2px solid var(--ui-muted);color:var(--ui-muted)}
+.dash-v2 li.done .dv2-m-icon{background:var(--ui-good);border-color:var(--ui-good);color:#fff}
+.dash-v2 .dv2-m-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.dash-v2 .dv2-m-title{font-weight:700;font-size:13px}
+.dash-v2 .dv2-m-bar{height:6px;border-radius:999px;background:var(--ui-accent-soft);overflow:hidden}
+.dash-v2 .dv2-m-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--ui-accent),var(--ui-purple))}
+.dash-v2 li.done .dv2-m-bar span{background:var(--ui-good)}
+.dash-v2 .dv2-m-go{color:var(--ui-muted);font-size:18px;align-self:center}
+.dash-v2 .dv2-advice{margin-bottom:16px;padding:14px 18px}
+.dash-v2 .dv2-advice-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.dash-v2 .dv2-advice p{margin:0;line-height:1.8}
+.dash-v2 .dv2-more{background:var(--ui-bg);border:1px solid var(--ui-border);border-radius:var(--ui-radius-card);padding:6px 18px 12px}
+.dash-v2 .dv2-more[open]{padding-bottom:18px}
+/* 読み込み中（スケルトン） */
+.dash-v2 .dv2-skel{border-radius:var(--ui-radius-card);background:linear-gradient(90deg,var(--ui-accent-soft) 25%,var(--ui-bg) 50%,var(--ui-accent-soft) 75%);
+  background-size:200% 100%;animation:dv2-shimmer 1.2s linear infinite;min-height:120px}
+@keyframes dv2-shimmer{to{background-position:-200% 0}}
+/* タブレット・スマホ：カードを縦に並べる */
+@media (max-width:1200px){
+  .dash-v2 .dv2-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-v2 .dv2-main{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"trend trend" "ring fc" "miss miss"}
+}
+@media (max-width:768px){
+  .dash-v2{margin:-16px -12px;padding:16px 12px 32px}
+  .dash-v2 .dv2-hero{grid-template-columns:1fr}
+  .dash-v2 .dv2-big{font-size:36px}
+  .dash-v2 .dv2-mtn{max-height:200px}
+  .dash-v2 .dv2-main{grid-template-columns:minmax(0,1fr);grid-template-areas:"trend" "ring" "fc" "miss"}
+  .dash-v2 .dv2-head-r select{font-size:16px}
+}
+@media (max-width:480px){
+  .dash-v2{margin:-12px -10px;padding:12px 10px 28px}
+  .dash-v2 .dv2-kpis{grid-template-columns:minmax(0,1fr)}
+  .dash-v2 .dv2-card{padding:16px}
+  .dash-v2 .dv2-hello{font-size:19px}
+}
+@media (prefers-reduced-motion:reduce){
+  .dash-v2 *,.dash-v2 *::before,.dash-v2 *::after{animation:none!important;transition:none!important}
+}
+
 /* 部品：選択チップ（横並び・1つだけ選ぶ。もう一度押すと外れる） */
 .ui-chips{display:flex;gap:var(--ui-space-1);flex-wrap:wrap}
 .ui-chip{flex:1 1 auto;min-height:44px;padding:0 var(--ui-space-2);border:1px solid var(--ui-border);border-radius:var(--ui-radius-item);
@@ -573,9 +743,40 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 
 <!-- DASHBOARD -->
 <div id="page-dashboard" class="page active">
-  <div class="section-header">
+  <div id="dash-v2" class="dash-v2 ui-scope dv2-loading" style="display:none">
+    <header class="dv2-head">
+      <div><div class="dv2-hello" id="dv2-hello">　</div><div class="dv2-line" id="dv2-line">　</div></div>
+      <div class="dv2-head-r">
+        <select id="dv2-fy" onchange="dv2SetPeriod()" aria-label="期"></select>
+        <select id="dv2-month" onchange="dv2SetPeriod()" aria-label="対象月"></select>
+        <button class="dv2-icon" id="dv2-bell" onclick="document.getElementById('dv2-band').scrollIntoView({behavior:'smooth',block:'start'})">🔔<span class="dv2-badge" id="dv2-bell-n" style="display:none"></span></button>
+        <span class="dv2-avatar" id="dv2-avatar" aria-hidden="true">？</span>
+        <button class="dv2-btn" onclick="setDashVersion(1)">旧ダッシュボードに切り替え</button>
+      </div>
+    </header>
+    <section class="dv2-card dv2-hero" id="dv2-hero"><div class="dv2-skel"></div></section>
+    <section class="dv2-band" id="dv2-band" aria-label="要対応">
+      <div class="dv2-band-title">⚠ 要対応・状況（旧ダッシュボードの状態の行）</div>
+      <div id="dv2-slot-status"></div>
+      <details id="dv2-metrics-box"><summary>詳細指標（旧ダッシュボードのメトリクス7項目）</summary><div id="dv2-slot-metrics"></div></details>
+    </section>
+    <section class="dv2-kpis" id="dv2-kpis"><div class="dv2-skel"></div><div class="dv2-skel"></div><div class="dv2-skel"></div><div class="dv2-skel"></div></section>
+    <div class="dv2-main">
+      <section class="dv2-card" id="dv2-trend"><div class="dv2-skel"></div></section>
+      <section class="dv2-card" id="dv2-rings"><div class="dv2-skel"></div></section>
+      <section class="dv2-card" id="dv2-forecast"><div class="dv2-skel"></div></section>
+      <aside class="dv2-card" id="dv2-missions"><div class="dv2-skel"></div></aside>
+    </div>
+    <section class="dv2-card dv2-advice" id="dv2-advice"></section>
+    <details class="dv2-more" id="dv2-more" ontoggle="if(this.open)drawMonthlyChart()">
+      <summary>旧ダッシュボードの詳細（期間サマリー・計画差異・月次推移・進行中の案件・更新アラート）</summary>
+      <div id="dv2-slot-summary"></div><div id="dv2-slot-rest"></div>
+    </details>
+  </div>
+  <div class="section-header" id="dash-v1-head">
     <h1 class="section-title">経営ダッシュボード</h1>
-    <div style="display:flex;gap:8px;align-items:center">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button class="btn" onclick="setDashVersion(2)">✨ 新ダッシュボードに切り替え</button>
     <select id="fiscal-select" onchange="updateDashboard()" style="width:auto;font-size:13px"></select>
     <select id="month-select" onchange="updateDashboard()" style="width:auto;font-size:13px">
       <option value="0">1月</option><option value="1">2月</option><option value="2">3月</option>
@@ -585,10 +786,13 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     </select>
     </div>
   </div>
+  <div id="dvh-summary"><div id="dv-summary">
   <div class="card">
     <div class="card-header"><span class="card-title">📊 期間サマリー</span></div>
     <div id="fiscal-summary"></div>
   </div>
+  </div></div>
+  <div id="dvh-metrics"><div id="dv-metrics">
   <div class="metric-grid two-by">
     <div class="metric-card"><div class="metric-label">売上</div><div class="metric-value blue" id="d-sales">¥0</div><div class="metric-sub" id="d-sales-year">年間累計: ¥0</div><div class="metric-sub" id="d-sales-diff">計画比: -</div></div>
     <div class="metric-card"><div class="metric-label">経費合計<span style="font-size:10px;font-weight:400;color:var(--text-muted)">（CF管理）</span></div><div class="metric-value" id="d-expense">¥0</div><div class="metric-sub" id="d-expense-year">年間累計: ¥0</div><div class="metric-sub" id="d-expense-diff">計画比: -</div></div>
@@ -604,12 +808,16 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div style="font-size:11px;color:var(--text-muted);margin:-12px 0 16px">
     ※売上は案件発生ベース。経費・役員報酬・税金・公課はCF管理の実績値。入金待ちはCF管理の入金予定
   </div>
+  </div></div>
+  <div id="dvh-status"><div id="dv-status">
   <div id="d-bank-import" style="font-size:13px;margin:-8px 0 6px"></div>
   <div id="d-backup-status" style="font-size:13px;margin:0 0 6px"></div>
   <div id="d-overdue-status" style="font-size:13px;margin:0 0 6px"></div>
   <div id="d-close-status" style="font-size:13px;margin:0 0 6px"></div>
   <div id="d-inbox-status" style="font-size:13px;margin:0 0 6px"></div>
   <div id="d-invoice-status" style="font-size:13px;margin:0 0 16px"></div>
+  </div></div>
+  <div id="dvh-rest"><div id="dv-rest">
   <div class="two-col">
     <div class="card">
       <div class="card-header">
@@ -649,6 +857,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="card-header"><span class="card-title">⚠️ 更新アラート（30日以内）</span></div>
     <div id="renewal-alerts"><div class="empty-state">更新予定の案件はありません</div></div>
   </div>
+  </div></div>
 </div>
 
 <!-- PROJECTS -->
@@ -1808,6 +2017,12 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="form-group"><label class="form-label">売上目標（円）</label><input id="fy-sales" type="number" placeholder="6500000"></div>
     <div class="form-group"><label class="form-label">利益目標（円）</label><input id="fy-profit" type="number" placeholder="1060000"></div>
   </div>
+  <div class="form-label" style="margin-top:6px">重要KPIの目標（任意。新ダッシュボードのリングに使います）</div>
+  <div class="form-row three">
+    <div class="form-group"><label class="form-label">新規顧客目標数（社）</label><input id="fy-newcust" type="number" min="0" placeholder="5"></div>
+    <div class="form-group"><label class="form-label">継続率目標（%）</label><input id="fy-retention" type="number" min="0" max="100" step="0.1" placeholder="80"></div>
+    <div class="form-group"><label class="form-label">成約率目標（%）</label><input id="fy-winrate" type="number" min="0" max="100" step="0.1" placeholder="40"></div>
+  </div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-fiscal')">キャンセル</button>
     <button class="btn primary" id="fy-submit" onclick="saveFiscal()">+ 追加</button>
@@ -2663,6 +2878,18 @@ function keepLocalWhenMissing(remote){
       ['status','revision','history','billingMonth','billingKey','cancelReason','issuedAt'].forEach(f=>{
         if(x[f]===undefined&&o[f]!==undefined)x[f]=o[f];
       });
+      return x;
+    });
+  }
+  // fiscalYears の列が足りない古いデプロイでも、KPIの目標を消さない
+  if(Array.isArray(d.fiscalYears)&&Array.isArray(S.fiscalYears)){
+    const local={};
+    S.fiscalYears.forEach(f=>{local[f.id]=f;});
+    d.fiscalYears=d.fiscalYears.map(r=>{
+      const o=local[r.id];
+      if(!o)return r;
+      const x=Object.assign({},r);
+      ['newCustomerTarget','retentionTarget','winRateTarget'].forEach(f=>{if(x[f]===undefined&&o[f]!==undefined)x[f]=o[f];});
       return x;
     });
   }
@@ -3546,6 +3773,7 @@ function reviewMark(ids,on){
 }
 
 function updateDashboard(){
+  if(dashVersion===null)initDashVersion();
   renderBankImportStatus();
   renderBackupStatus();
   renderOverdueStatus();
@@ -3555,9 +3783,11 @@ function updateDashboard(){
   const mi=getMonth();
   const fy=dashboardFiscalYear();
   const yr=dashMonthYear(mi);
-  const sales=salesAtMonth(mi,yr);
-  const exp=cfExpenseByMonth(mi,yr),lab=cfLaborByMonth(mi,yr),tax=cfTaxByMonth(mi,yr);
-  const profit=operatingProfit(sales,exp,lab,tax);
+  // salesAtMonth / cfExpenseByMonth / cfLaborByMonth / cfTaxByMonth と同じ値（新ダッシュボードと共通）
+  const nums=dashMonthNumbers(absOfMonth(mi,yr));
+  const sales=nums.sales;
+  const exp=nums.expense,lab=nums.labor,tax=nums.tax;
+  const profit=nums.profit;
   const margin=sales>0?Math.round(profit/sales*100):0;
   document.getElementById('d-sales').textContent=fmt(sales);
   document.getElementById('d-expense').textContent=fmt(exp);
@@ -3615,6 +3845,7 @@ function updateDashboard(){
   document.getElementById('dash-projects-empty').style.display=active.length===0?'':'none';
   document.getElementById('dash-active-count').textContent='進行中 '+active.length+'件';
   renderAlerts();
+  renderDashV2();
 }
 
 // 計画差異の表示モード（月間 / 年間）
@@ -8242,6 +8473,9 @@ function openFiscalForm(id){
   document.getElementById('fy-end').value=fy?fy.endMonth:'';
   document.getElementById('fy-sales').value=fy?fy.salesTarget:'';
   document.getElementById('fy-profit').value=fy?fy.profitTarget:'';
+  document.getElementById('fy-newcust').value=fy&&fy.newCustomerTarget!==undefined?fy.newCustomerTarget:'';
+  document.getElementById('fy-retention').value=fy&&fy.retentionTarget!==undefined?fy.retentionTarget:'';
+  document.getElementById('fy-winrate').value=fy&&fy.winRateTarget!==undefined?fy.winRateTarget:'';
   document.getElementById('fy-title').textContent=fy?'期を編集':'期を追加';
   document.getElementById('fy-submit').textContent=fy?'✓ 保存':'+ 追加';
   openModal('modal-fiscal');
@@ -8256,7 +8490,10 @@ function saveFiscal(){
   if(!name||!startMonth||!endMonth){alert('期の名前・開始月・終了月を入力してください');return;}
   if(ymToAbs(endMonth)<ymToAbs(startMonth)){alert('終了月は開始月と同じか、それより後にしてください');return;}
 
-  const values={name,startMonth,endMonth,salesTarget,profitTarget};
+  // KPIの目標は任意。空なら ''（未設定）で持つ
+  const opt=id=>{const v=document.getElementById(id).value.trim();return v===''?'':(parseFloat(v)||0);};
+  const values={name,startMonth,endMonth,salesTarget,profitTarget,
+    newCustomerTarget:opt('fy-newcust'),retentionTarget:opt('fy-retention'),winRateTarget:opt('fy-winrate')};
   if(editFiscalId!==null){
     const fy=fiscalById(editFiscalId);
     if(!fy){alert('対象の期が見つかりませんでした');return;}
@@ -12342,6 +12579,632 @@ function closeChecks(D,ym,todayYmd,opt){
 }
 
 // ===== @ops-rules-end
+
+// ===== 新ダッシュボードの判定 ===== @dash-rules-begin
+/* テスト（tests/dashboard-v2.test.js）が切り出して Node で読む。DOM や S を直接触らないこと。
+   ★ 金額は既存の関数（projectSalesAtAbsTotal / sumLedgerAbs / operatingProfit / fiscalTotals / pct）で
+     出したものを受け取るだけ。ここで売上・経費を計算し直さない */
+
+// 時間帯のあいさつ（5〜10時／11〜17時／それ以外）
+function dashGreeting(hour){
+  if(hour>=5&&hour<11)return'おはようございます';
+  if(hour>=11&&hour<18)return'こんにちは';
+  return'お疲れさまです';
+}
+
+// 前月比（%・小数1桁）。前月が0以下なら null（比べられない）
+function monthOverMonth(cur,prev){
+  if(!(prev>0))return null;
+  return Math.round((cur-prev)/prev*1000)/10;
+}
+
+// ヘッダーの一言（ルール）：入金遅延 → 前月比 → それ以外
+function dashHeadline(x){
+  if(x.overdueCount>0)return'入金の確認が必要です';
+  const d=monthOverMonth(x.salesThis,x.salesPrev);
+  if(d===null)return'今月の数字を確認しましょう';
+  if(d>=5)return'売上は前月より好調です';
+  if(d<=-5)return'売上が前月より下がっています';
+  return'売上は前月並みで推移しています';
+}
+
+// マイルストーン（25・50・75・100%）。rate は達成率（%）。目標が無ければ rate は null
+const DASH_MILESTONES=[25,50,75,100];
+function dashMilestones(rate){
+  return DASH_MILESTONES.map(p=>({p,done:rate!==null&&rate!==undefined&&rate>=p}));
+}
+
+// 登山ルート（折れ線）の上で、割合 frac（0〜1）の位置。points は [[x,y],...]
+function routePoint(points,frac){
+  const f=Math.max(0,Math.min(1,frac||0));
+  const seg=[];let total=0;
+  for(let i=1;i<points.length;i++){
+    const l=Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);
+    seg.push(l);total+=l;
+  }
+  let d=f*total;
+  for(let i=0;i<seg.length;i++){
+    if(d<=seg[i]||i===seg.length-1){
+      const t=seg[i]?Math.min(1,d/seg[i]):0;
+      return[points[i][0]+(points[i+1][0]-points[i][0])*t,points[i][1]+(points[i+1][1]-points[i][1])*t];
+    }
+    d-=seg[i];
+  }
+  return points[0].slice();
+}
+
+/* 期の売上を「確定」と「予定」に分ける（着地予測）。
+   absMonths は期の絶対月、currentAbs は今月。前月までが確定、当月以降が予定（契約ベース）。
+   salesOf(abs) は projectSalesAtAbsTotal（期間サマリー・案件予実と同じ）。合計は fiscalTotals(fy).sales と一致する */
+function forecastSplit(absMonths,currentAbs,salesOf){
+  const out={confirmed:0,planned:0,total:0,confirmedMonths:[],plannedMonths:[]};
+  (absMonths||[]).forEach(a=>{
+    const v=salesOf(a)||0;
+    if(a<currentAbs){out.confirmed+=v;out.confirmedMonths.push(a);}
+    else{out.planned+=v;out.plannedMonths.push(a);}
+    out.total+=v;
+  });
+  return out;
+}
+
+// 取引先名をそろえる（比べるときだけ）：全角半角・空白、前後の「株式会社」「(株)」「㈱」を除く
+function normClientName(s){
+  let v=String(s||'').normalize('NFKC').replace(/\s+/g,'');
+  let prev;
+  do{
+    prev=v;
+    v=v.replace(/^(株式会社|\(株\))/,'').replace(/(株式会社|\(株\))$/,'').replace(/(様|御中)$/,'');
+  }while(v!==prev);
+  return v.toLowerCase();
+}
+
+/* 新規顧客数：期（s〜e の絶対月）に初めて案件が始まった取引先の数（前の期までに案件がない取引先）。
+   info=[{client, startAbs, billable}]。受注済み（契約済・進行中・完了＝billable）の案件だけで判定する */
+function newCustomerCount(info,s,e){
+  const first={};
+  (info||[]).forEach(x=>{
+    if(!x.billable||x.startAbs===null||x.startAbs===undefined)return;
+    const k=normClientName(x.client);
+    if(!k)return;
+    if(first[k]===undefined||x.startAbs<first[k])first[k]=x.startAbs;
+  });
+  return Object.keys(first).filter(k=>first[k]>=s&&first[k]<=e).length;
+}
+
+/* 継続率（%）：前の期に売上があった取引先のうち、今期も売上がある割合。prev/cur は取引先名の配列
+   前の期が無い・前の期に売上の取引先が無いときは null（データ不足） */
+function retentionRate(prevClients,curClients){
+  if(!prevClients)return null;
+  const prev={},cur={};
+  prevClients.forEach(c=>{const k=normClientName(c);if(k)prev[k]=true;});
+  curClients.forEach(c=>{const k=normClientName(c);if(k)cur[k]=true;});
+  const keys=Object.keys(prev);
+  if(!keys.length)return null;
+  return Math.round(keys.filter(k=>cur[k]).length/keys.length*1000)/10;
+}
+
+/* 成約率（%）：(契約済＋進行中＋完了) ÷ (それ＋失注)。商談中は数えない。案件の開始月が期（s〜e）に入るもの
+   ★ 失注が1件も無いときは出さない（失注が未記録だと100%になって誤認させるため）
+   返り値 {rate, won, lost, reason}（rate が null なら reason にデータ不足の理由） */
+function winRate(info,s,e){
+  let won=0,lost=0;
+  (info||[]).forEach(x=>{
+    if(x.startAbs===null||x.startAbs===undefined||x.startAbs<s||x.startAbs>e)return;
+    if(x.status==='契約済'||x.status==='進行中'||x.status==='完了')won++;
+    else if(x.status==='失注')lost++;
+  });
+  if(!lost)return{rate:null,won,lost,reason:won?'データ不足（失注の記録なし）':'データ不足'};
+  return{rate:Math.round(won/(won+lost)*1000)/10,won,lost,reason:''};
+}
+
+/* リングの状態：value と目標から進捗（%）と色・文字。目標が無ければ level='none'（リングは描かない）
+   100%以上＝good「達成」／70%以上＝caution「あと少し」／それ未満＝warn「要注意」 */
+function ringState(value,target){
+  if(value===null||value===undefined)return{level:'nodata',pct:null,label:'データ不足'};
+  if(!(target>0))return{level:'none',pct:null,label:'目標未設定'};
+  const p=Math.round(value/target*1000)/10;
+  if(p>=100)return{level:'good',pct:p,label:'達成'};
+  if(p>=70)return{level:'caution',pct:p,label:'あと少し'};
+  return{level:'warn',pct:p,label:'要注意'};
+}
+
+/* 経営ミッション。件数は既存の集計（入金遅延 overdueReceivables・未作成の請求書 missingInvoiceTargets・
+   取込待ち inboxItems・月次締め closeChecks）の結果をそのまま受け取る（ここでは数え直さない）
+   返り値 [{key,title,detail,progress(0〜100),done,go}] */
+function dashMissions(x){
+  const out=[];
+  if(x.target>0){
+    const left=Math.max(0,x.target-x.sales);
+    const p=x.rate===null?0:Math.min(100,x.rate);
+    out.push({key:'target',title:left>0?`売上目標まであと ¥${left.toLocaleString('ja-JP')}`:'売上目標を達成しました',
+      detail:`達成率 ${x.rate===null?'-':x.rate.toFixed(1)}%`,progress:p,done:left<=0,go:'forecast'});
+  }else{
+    out.push({key:'target',title:'期の売上目標を設定する',detail:'目標未設定',progress:0,done:false,go:'fiscal'});
+  }
+  const count=(key,n,title,doneTitle,go,detail)=>out.push({key,title:n>0?title.replace('○',n):doneTitle,
+    detail:detail||'',progress:n>0?0:100,done:!(n>0),go});
+  count('overdue',x.overdue,'入金遅延 ○件を確認','入金遅延はありません','overdue',x.overdueTotal>0?`合計 ¥${x.overdueTotal.toLocaleString('ja-JP')}`:'');
+  count('invoice',x.missingInvoices,'未作成の請求書 ○件','未作成の請求書はありません','invoice',x.draftInvoices>0?`下書き ${x.draftInvoices}件`:'');
+  if(x.inbox!==null&&x.inbox!==undefined)count('inbox',x.inbox,'取込待ち ○件を登録','取込待ちはありません','inbox');
+  count('close',x.closeOpen,'月次締めの未解決 ○件','月次締めの未解決はありません','close',x.closeYmLabel||'');
+  return out;
+}
+
+/* 自動チェックのひとこと（ルール。AI分析ではない）。返り値は文の配列 */
+function dashAdvice(x){
+  const out=[];
+  const d=monthOverMonth(x.salesThis,x.salesPrev);
+  if(d===null)out.push('今月の売上は、前月と比べられるデータがありません。');
+  else if(d>=5)out.push(`今月の売上は前月より ${d.toFixed(1)}% 増えていて、好調です。`);
+  else if(d<=-5)out.push(`今月の売上は前月より ${Math.abs(d).toFixed(1)}% 減っています。`);
+  else out.push('今月の売上は前月並みです。');
+  if(x.awaitingTotal>0)out.push(`一方、入金待ちが ¥${x.awaitingTotal.toLocaleString('ja-JP')}（${x.awaitingCount}件）あります。`);
+  if(x.overdue>0)out.push(`入金遅延が ${x.overdue}件あります。早めの確認をおすすめします。`);
+  if(x.paceRate!==null&&x.paceRate!==undefined&&x.elapsedRate!==null&&x.elapsedRate!==undefined){
+    if(x.paceRate+10<x.elapsedRate)out.push(`確定した売上は年間目標の ${x.paceRate.toFixed(1)}%（期の経過 ${x.elapsedRate.toFixed(1)}%）で、ペースが遅れています。`);
+    else if(x.paceRate>=x.elapsedRate)out.push(`確定した売上は年間目標の ${x.paceRate.toFixed(1)}%（期の経過 ${x.elapsedRate.toFixed(1)}%）で、順調なペースです。`);
+  }
+  return out;
+}
+// ===== @dash-rules-end
+
+
+/* ===== 新ダッシュボード（第1段階） =====================================
+   ・旧ダッシュボード（#dash-v1）はそのまま残し、右上のボタンで切り替える（このブラウザの localStorage に記憶）
+   ・旧の表示項目（メトリクス7枚・状態の行・期間サマリー・計画差異・月次推移・進行中の案件・更新アラート）は、
+     要素ごと新画面の枠に移す（placeDashboard）。中身を描く関数も遷移先も旧のまま
+   ・数字は既存の関数（dashMonthNumbers＝旧のメトリクスと同じ・fiscalTotals・pct・awaitingPayment・overdueNow など）
+   ・判定（あいさつ・マイルストーン・着地予測・KPI・ミッション・ひとこと）は @dash-rules
+   ・見た目は .dash-v2（.ui-scope の --ui- 変数）の中だけ
+   ===================================================================== */
+const DASH_VERSION_KEY='bizapp_dash_version_v1';
+let dashVersion=null;          // 1=旧 / 2=新
+let dv2TrendMonths=12;
+const dv2Counted={};           // カウントアップ済み（1回だけ）
+const dv2Open={};              // 計算根拠を開いているカード
+const DASH_PARTS=['summary','metrics','status','rest'];
+
+function dv2ReducedMotion(){return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)}
+
+function setDashVersion(v,noSave){
+  dashVersion=v===1?1:2;
+  if(!noSave){try{localStorage.setItem(DASH_VERSION_KEY,String(dashVersion))}catch(e){}}
+  placeDashboard();
+  updateDashboard();
+  window.scrollTo(0,0);
+}
+
+function initDashVersion(){
+  let v=2;
+  try{if(localStorage.getItem(DASH_VERSION_KEY)==='1')v=1}catch(e){}
+  dashVersion=v;
+  placeDashboard();
+}
+
+// 旧の表示項目を、新画面の枠（dv2-slot-*）か元の場所（dvh-*）に移す
+function placeDashboard(){
+  const v2=dashVersion===2;
+  document.getElementById('dash-v2').style.display=v2?'':'none';
+  document.getElementById('dash-v1-head').style.display=v2?'none':'';
+  DASH_PARTS.forEach(k=>{
+    const node=document.getElementById('dv-'+k);
+    const to=document.getElementById((v2?'dv2-slot-':'dvh-')+k);
+    if(node&&to&&node.parentNode!==to)to.appendChild(node);
+  });
+}
+
+// 旧のセレクト（期・月）を正とし、新画面のセレクトは写しにする
+function dv2SyncSelects(){
+  [['fiscal-select','dv2-fy'],['month-select','dv2-month']].forEach(([a,b])=>{
+    const src=document.getElementById(a),dst=document.getElementById(b);
+    if(!src||!dst)return;
+    const html=src.innerHTML;
+    if(dst.dataset.src!==html){dst.innerHTML=html;dst.dataset.src=html;}
+    dst.value=src.value;
+  });
+}
+function dv2SetPeriod(){
+  document.getElementById('fiscal-select').value=document.getElementById('dv2-fy').value;
+  document.getElementById('month-select').value=document.getElementById('dv2-month').value;
+  updateDashboard();
+}
+
+// ¥1,234,567（負は −）
+function dv2Yen(n){return(n<0?'−':'')+'¥'+Math.abs(Math.round(n||0)).toLocaleString('ja-JP')}
+function dv2YmLabel(abs){return`${Math.floor(abs/12)}年${abs%12+1}月`}
+function dv2Short(abs){return`${abs%12+1}月`}
+function dv2Man(n){const v=Math.round((n||0)/10000);return(v<0?'−':'')+Math.abs(v).toLocaleString('ja-JP')+'万'}
+
+/* その絶対月の数字（旧ダッシュボードのメトリクスと同じ関数）
+   売上＝projectSalesAtAbsTotal（salesAtMonth と同じ）、経費・役員報酬・税金＝sumLedgerAbs（cfExpenseByMonth などと同じ） */
+function dashMonthNumbers(abs){
+  const t=sumLedgerAbs(abs);
+  const sales=projectSalesAtAbsTotal(abs);
+  return{sales,expense:t.expense,labor:t.labor,tax:t.tax,profit:operatingProfit(sales,t.expense,t.labor,t.tax)};
+}
+
+// 案件の情報（KPIリング用）
+function dv2ProjectInfo(){
+  return S.projects.map(p=>{
+    const r=projectMonthRange(p);
+    return{client:p.client||'',startAbs:r?r[0]:null,status:p.status,billable:billableProject(p),p};
+  });
+}
+// 期の中で売上（案件ベース）がある取引先
+function dv2ClientsWithSales(fy){
+  const months=fiscalAbsMonths(fy);
+  const out=[];
+  S.projects.forEach(p=>{
+    if(!billableProject(p)||!p.client)return;
+    if(months.some(a=>projectSalesAtAbs(p,a)>0))out.push(p.client);
+  });
+  return out;
+}
+// 選択中の期の1つ前の期（開始月が前で、いちばん近いもの）
+function dv2PrevFiscal(fy){
+  const s=ymToAbs(fy&&fy.startMonth);
+  if(s===null)return null;
+  return fiscalList().filter(f=>ymToAbs(f.startMonth)!==null&&ymToAbs(f.startMonth)<s)
+    .sort((a,b)=>ymToAbs(b.startMonth)-ymToAbs(a.startMonth))[0]||null;
+}
+
+// 画面全体の数字をまとめて作る（描画とテストで共通）
+function dashV2Data(){
+  const mi=getMonth();
+  const fy=dashboardFiscalYear();
+  const yr=dashMonthYear(mi);
+  const abs=absOfMonth(mi,yr);
+  const now=new Date();
+  const curAbs=now.getFullYear()*12+now.getMonth();
+  const month=dashMonthNumbers(abs),prev=dashMonthNumbers(abs-1);
+  const fiscal=fy?fiscalTotals(fy):null;                       // 期間サマリーと同じ
+  const target=fy?(parseInt(fy.salesTarget)||0):0;
+  const rate=fy&&target>0?pct(fiscal.sales,target):null;        // 期間サマリーと同じ達成率
+  const split=fy?forecastSplit(fiscalAbsMonths(fy),curAbs,projectSalesAtAbsTotal):null;
+  const aw=awaitingPayment();
+  const od=overdueNow();
+  const invYm=invoiceDetectYm(localToday())||localToday().slice(0,7);
+  const missing=missingInvoiceTargets(S,invYm).length;
+  const drafts=S.quotes.filter(q=>isInvoiceDoc(q)&&docStatusOf(q)==='draft').length;
+  const closeYm=prevYm(localToday());
+  const closeOpen=closeChecksFor(closeYm).filter(x=>x.status==='ng').length;
+  const months=fy?fiscalAbsMonths(fy):[];
+  const elapsed=months.filter(a=>a<curAbs).length;
+  return{mi,fy,yr,abs,curAbs,month,prev,fiscal,target,rate,split,aw,od,invYm,missing,drafts,closeYm,closeOpen,
+    elapsedRate:months.length?Math.round(elapsed/months.length*1000)/10:null,
+    paceRate:split&&target>0?pct(split.confirmed,target):null,
+    cash:bankBalance()};
+}
+
+/* ---- 描画 ---- */
+function renderDashV2(){
+  if(dashVersion!==2)return;
+  const root=document.getElementById('dash-v2');
+  if(!root)return;
+  dv2SyncSelects();
+  const D=dashV2Data();
+  const missions=dashMissions({target:D.target,sales:D.fiscal?D.fiscal.sales:0,rate:D.rate,
+    overdue:D.od.length,overdueTotal:D.od.reduce((a,x)=>a+x.amount,0),missingInvoices:D.missing,draftInvoices:D.drafts,
+    inbox:Array.isArray(inboxItems)?inboxItems.length:null,closeOpen:D.closeOpen,closeYmLabel:invYmJp(D.closeYm)+'分'});
+  const open=missions.filter(m=>m.key!=='target'&&!m.done).length;
+  renderDv2Head(D,open);
+  renderDv2Hero(D);
+  renderDv2Kpis(D);
+  renderDv2Trend(D);
+  renderDv2Rings(D);
+  renderDv2Forecast(D);
+  renderDv2Missions(missions);
+  renderDv2Advice(D);
+  root.classList.remove('dv2-loading');
+}
+
+function renderDv2Head(D,open){
+  const h=new Date().getHours();
+  document.getElementById('dv2-hello').textContent=dashGreeting(h);
+  document.getElementById('dv2-line').textContent=dashHeadline({overdueCount:D.od.length,salesThis:D.month.sales,salesPrev:D.prev.sales});
+  const n=document.getElementById('dv2-bell-n');
+  n.textContent=open?String(open):'';
+  n.style.display=open?'':'none';
+  document.getElementById('dv2-bell').setAttribute('aria-label',`要対応 ${open}件`);
+  document.getElementById('dv2-bell').title=`要対応 ${open}件（押すと要対応の帯へ）`;
+  const rep=String((S.company&&S.company.rep)||'').trim();
+  const av=document.getElementById('dv2-avatar');
+  av.textContent=rep?Array.from(rep)[0]:'？';
+  av.title=rep?`代表者：${rep}`:'設定ページの会社情報で代表者名を入れると頭文字が出ます';
+}
+
+// 山と登山ルート（SVG）
+const DV2_ROUTE=[[40,178],[112,160],[92,140],[162,118],[142,96],[202,76],[187,57],[230,26]];
+function renderDv2Hero(D){
+  const el=document.getElementById('dv2-hero');
+  const fy=D.fy;
+  if(!fy){
+    el.innerHTML=`<div class="dv2-hero-empty"><div class="dv2-h2">期が登録されていません</div>
+      <button class="dv2-btn primary" onclick="dv2GoFiscal()">期の設定で目標を入れる</button></div>`;
+    return;
+  }
+  const rate=D.rate;
+  const ms=dashMilestones(rate);
+  const pos=routePoint(DV2_ROUTE,rate===null?0:Math.min(100,rate)/100);
+  const msMarks=ms.map(m=>{
+    const [x,y]=routePoint(DV2_ROUTE,m.p/100);
+    return`<g><circle cx="${x}" cy="${y}" r="7" class="${m.done?'dv2-ms-done':'dv2-ms'}"/>`
+      +(m.done?`<path d="M${x-3} ${y} l2 2.5 l4 -4.5" class="dv2-ms-check"/>`:'')
+      +`<text x="${x+10}" y="${y+4}" class="dv2-ms-t">${m.p}%</text></g>`;
+  }).join('');
+  const sp=D.split;
+  const celebrate=rate!==null&&rate>=100&&dv2ShouldCelebrate(fy);
+  el.innerHTML=`
+    <div class="dv2-hero-text">
+      <div class="dv2-kicker">${escAttr(fy.name)}の売上目標（山頂）</div>
+      ${D.target>0?`
+        <div class="dv2-hero-rate"><span class="dv2-num dv2-big" data-count="${rate}" data-fmt="pct" data-key="hero-rate">${rate.toFixed(1)}%</span><span class="dv2-unit">達成</span></div>
+        <div class="dv2-hero-row"><span>累計</span><b class="dv2-num">${dv2Yen(D.fiscal.sales)}</b><span class="dv2-sep">／</span><span>目標</span><b class="dv2-num">${dv2Yen(D.target)}</b></div>
+        <div class="dv2-split" aria-label="確定と予定の内訳">
+          <span class="dv2-chip dv2-actual">確定 ${dv2Yen(sp.confirmed)}</span>
+          <span class="dv2-chip dv2-plan">予定（予測） ${dv2Yen(sp.planned)}</span>
+        </div>
+        <ul class="dv2-ms-list">${ms.map(m=>`<li class="${m.done?'done':''}">${m.done?'✓':'○'} ${m.p}%</li>`).join('')}</ul>`
+      :`<div class="dv2-h2">売上目標が未設定です</div>
+        <div class="dv2-muted">期の売上累計（期間サマリーと同じ）：<b class="dv2-num">${dv2Yen(D.fiscal.sales)}</b></div>
+        <button class="dv2-btn primary" onclick="dv2GoFiscal()">期の設定で目標を入れる</button>`}
+      <button class="dv2-link" onclick="dv2Toggle('hero')" aria-expanded="${!!dv2Open.hero}">集計期間と売上の定義 ${dv2Open.hero?'▲':'▼'}</button>
+      ${dv2Open.hero?`<div class="dv2-basis">
+        <div>集計期間：${escAttr(fiscalLabel(fy))}（${escAttr(fy.name)}）</div>
+        <div>売上の定義：ダッシュボード・期間サマリーと同じ案件ベース（発生ベース）。請求レコードがあればその金額、無ければ案件の月額（fiscalTotals）</div>
+        <div>★ 期間サマリーの値は期の全月の合計で、翌月以降は契約にもとづく予定額を含みます。内訳：確定（前月まで ${sp.confirmedMonths.length}か月）／予定（当月から期末 ${sp.plannedMonths.length}か月）</div>
+        <div>達成率＝累計 ÷ 期の売上目標（小数1桁。期間サマリーと同じ）</div>
+      </div>`:''}
+    </div>
+    <svg class="dv2-mtn${celebrate?' dv2-celebrate':''}" viewBox="0 0 260 190" role="img" aria-label="売上目標の山。現在地は達成率 ${rate===null?'未設定':rate.toFixed(1)+'%'}">
+      <defs><linearGradient id="dv2g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--ui-accent)"/><stop offset="1" stop-color="var(--ui-purple)"/></linearGradient></defs>
+      <path d="M0 185 L48 128 L78 150 L128 92 L150 112 L170 96 L170 185 Z" class="dv2-mtn-back"/>
+      <path d="M8 185 L230 20 L260 70 L260 185 Z" fill="url(#dv2g)" opacity=".22"/>
+      <path d="M212 34 L230 20 L246 44 L236 40 L228 48 L220 40 Z" class="dv2-snow"/>
+      <polyline points="${DV2_ROUTE.map(p=>p.join(',')).join(' ')}" class="dv2-route"/>
+      ${msMarks}
+      <path d="M230 28 L230 6 L246 12 L230 18" class="dv2-flag"/>
+      ${rate!==null?`<g class="dv2-me"><circle cx="${pos[0]}" cy="${pos[1]}" r="9"/><text x="${pos[0]}" y="${pos[1]+4}" text-anchor="middle">●</text></g>`:''}
+      ${celebrate?'<g class="dv2-spark"><text x="214" y="20">✦</text><text x="246" y="34">✧</text><text x="222" y="44">✦</text></g>':''}
+    </svg>`;
+}
+function dv2ShouldCelebrate(fy){
+  if(dv2ReducedMotion())return false;
+  const k='bizapp_dash_celebrated_'+fy.id;
+  try{if(localStorage.getItem(k))return false;localStorage.setItem(k,'1');}catch(e){return false}
+  return true;
+}
+function dv2Toggle(k){dv2Open[k]=!dv2Open[k];renderDashV2();}
+function dv2GoFiscal(){
+  showPage('settings',document.querySelectorAll('.nav-btn')[6]);
+  const fy=dashboardFiscalYear();
+  openFiscalForm(fy?fy.id:null);
+}
+function dv2GoForecast(){
+  showPage('report',document.querySelectorAll('.nav-btn')[5]);
+  const b=[...document.querySelectorAll('#page-report .tab-group .tab')].find(t=>/forecast/.test(t.getAttribute('onclick')||''));
+  if(b)switchReportTab('forecast',b);
+}
+
+// 小さな推移グラフ（SVG）。values が null の月は描かない
+function dv2Spark(values,cls){
+  const v=values.filter(x=>x!==null);
+  if(v.length<2)return'<div class="dv2-spark-none">推移データなし</div>';
+  const max=Math.max(...v),min=Math.min(0,...v);
+  const W=120,H=34,step=W/(values.length-1);
+  const y=x=>H-2-((x-min)/((max-min)||1))*(H-4);
+  const pts=values.map((x,i)=>x===null?null:`${(i*step).toFixed(1)},${y(x).toFixed(1)}`).filter(Boolean).join(' ');
+  return`<svg class="dv2-sparkline ${cls||''}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}"/></svg>`;
+}
+
+// 前月比などの表示（色＋矢印＋文字）
+function dv2Delta(d,label){
+  if(d===null||d===undefined)return`<span class="dv2-delta none">${label}：比較できません</span>`;
+  if(d===0)return`<span class="dv2-delta none">● ${label} ±0.0%（横ばい）</span>`;
+  const cls=d>=0?'good':'warn';
+  return`<span class="dv2-delta ${cls}">${d>=0?'▲':'▼'} ${label} ${d>=0?'+':''}${d.toFixed(1)}%（${d>=0?'増加':'減少'}）</span>`;
+}
+
+function renderDv2Kpis(D){
+  const el=document.getElementById('dv2-kpis');
+  const last6=[5,4,3,2,1,0].map(i=>D.abs-i);
+  const nums=last6.map(a=>dashMonthNumbers(a));
+  const ym=dv2YmLabel(D.abs);
+  const mom=monthOverMonth(D.month.sales,D.prev.sales);
+  const pmom=D.prev.profit!==0?Math.round((D.month.profit-D.prev.profit)/Math.abs(D.prev.profit)*1000)/10:null;
+  const cards=[
+    {key:'sales',label:'月間売上',value:D.month.sales,fmt:'yen',
+      sub:dv2Delta(mom,'前月比'),status:mom===null?['none','－','比較なし']:mom>0?['good','▲','前月より増加']:mom===0?['none','●','横ばい']:['warn','▼','前月より減少'],
+      spark:dv2Spark(nums.map(n=>n.sales),'blue'),go:"showPage('projects',document.querySelectorAll('.nav-btn')[1])",
+      basis:`${ym}の売上（案件ベース・発生ベース）。旧ダッシュボードの「売上」と同じ（salesAtMonth）。前月比は${dv2YmLabel(D.abs-1)}と比較。推移は直近6か月`},
+    {key:'profit',label:'営業利益',value:D.month.profit,fmt:'yen',
+      sub:dv2Delta(pmom,'前月比'),status:D.month.profit>=0?['good','●','黒字']:['warn','▼','赤字'],
+      spark:dv2Spark(nums.map(n=>n.profit),'green'),go:"showPage('ledger',document.querySelectorAll('.nav-btn')[3])",
+      basis:`${ym}の営業利益＝売上 −（経費合計＋役員報酬＋税金・公課）。経費などはCF管理の実績。旧ダッシュボードの「営業利益」と同じ（operatingProfit）`},
+    {key:'rate',label:'売上目標達成率',value:D.rate,fmt:'pct',
+      sub:D.target>0?`<span class="dv2-delta none">目標 ${dv2Yen(D.target)}</span>`:'<span class="dv2-delta none">目標未設定</span>',
+      status:D.rate===null?['none','－','未設定']:D.rate>=100?['good','✓','達成']:D.rate>=70?['caution','!','あと少し']:['warn','!','要注意'],
+      spark:'',go:'dv2GoForecast()',
+      basis:D.fy?`${escAttr(D.fy.name)}（${escAttr(fiscalLabel(D.fy))}）の売上累計 ÷ 売上目標。期間サマリーと同じ値（期の全月。翌月以降は契約の予定額を含む）`:'期が未登録'},
+    {key:'cash',label:'現預金残高',value:D.cash,fmt:'yen',
+      sub:'<span class="dv2-delta none">前月比：推移データなし</span>',status:['none','●','現在の値'],
+      spark:'',go:"showPage('ledger',document.querySelectorAll('.nav-btn')[3])",
+      basis:'CF管理の口座残高（設定の財務情報と共通の1つの値）。履歴を持たないため、推移と前月比は出しません'}
+  ];
+  el.innerHTML=cards.map(c=>{
+    const valTxt=c.value===null?'未設定':c.fmt==='pct'?c.value.toFixed(1)+'%':dv2Yen(c.value);
+    return`<article class="dv2-card dv2-kpi" role="button" tabindex="0" onclick="${c.go}" onkeydown="if(event.key==='Enter')${c.go}">
+      <div class="dv2-kpi-top"><span class="dv2-kpi-label">${c.label}</span>
+        <span class="dv2-status ${c.status[0]}" title="${c.status[2]}"><span aria-hidden="true">${c.status[1]}</span> ${c.status[2]}</span></div>
+      <div class="dv2-num dv2-kpi-val ${c.value===null?'dv2-muted':''}" ${c.value===null?'':`data-count="${c.value}" data-fmt="${c.fmt}" data-key="kpi-${c.key}"`}>${valTxt}</div>
+      <div class="dv2-kpi-sub">${c.sub}</div>
+      ${c.spark}
+      <button class="dv2-link" onclick="event.stopPropagation();dv2Toggle('kpi-${c.key}')">計算根拠 ${dv2Open['kpi-'+c.key]?'▲':'▼'}</button>
+      ${dv2Open['kpi-'+c.key]?`<div class="dv2-basis" onclick="event.stopPropagation()">${c.basis}</div>`:''}
+    </article>`;
+  }).join('');
+  dv2CountUp(el);
+}
+
+// 数値のカウントアップ（400ms・1回だけ。動きを減らす設定のときはしない）
+function dv2CountUp(root){
+  if(dv2ReducedMotion())return;
+  root.querySelectorAll('[data-count]').forEach(el=>{
+    const key=el.dataset.key;
+    if(!key||dv2Counted[key])return;
+    dv2Counted[key]=true;
+    const to=parseFloat(el.dataset.count),f=el.dataset.fmt;
+    if(isNaN(to))return;
+    const t0=performance.now();
+    const step=t=>{
+      const k=Math.min(1,(t-t0)/400),v=to*(1-Math.pow(1-k,3));
+      el.textContent=f==='pct'?v.toFixed(1)+'%':dv2Yen(v);
+      if(k<1)requestAnimationFrame(step);else el.textContent=f==='pct'?to.toFixed(1)+'%':dv2Yen(to);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+/* A. 売上・利益の推移（SVG）。12か月＝選択中の期の月、6か月＝選択中の月までの6か月
+   当月より後の月は「予測」（契約にもとづく予定額）として色とラベルを変える。営業利益は実績の月だけ */
+function setDv2Trend(n){dv2TrendMonths=n;renderDashV2();}
+function renderDv2Trend(D){
+  const el=document.getElementById('dv2-trend');
+  const months=dv2TrendMonths===12&&D.fy?fiscalAbsMonths(D.fy).slice(0,12):[5,4,3,2,1,0].map(i=>D.abs-i);
+  const rows=months.map(a=>{
+    const n=dashMonthNumbers(a);
+    const prevYear=projectSalesAtAbsTotal(a-12);
+    return{a,sales:n.sales,profit:a<=D.curAbs?n.profit:null,plan:a>D.curAbs,prevYear};
+  });
+  const hasPrev=rows.some(r=>r.prevYear>0);
+  const W=640,H=230,L=46,R=10,T=14,B=34;
+  const vals=rows.flatMap(r=>[r.sales,r.profit===null?0:r.profit,hasPrev?r.prevYear:0]);
+  const max=Math.max(1,...vals),min=Math.min(0,...vals);
+  const y=v=>T+(max-v)/((max-min)||1)*(H-T-B);
+  const bw=(W-L-R)/rows.length;
+  const ticks=[max,(max+min)/2,min].map(v=>`<g><line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" class="dv2-grid"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end" class="dv2-axis">${dv2Man(v)}</text></g>`).join('');
+  const bars=rows.map((r,i)=>{
+    const x=L+i*bw,w=Math.max(4,bw*(hasPrev?0.36:0.56));
+    const prevBar=hasPrev?`<rect x="${x+bw/2-w-1}" y="${y(Math.max(0,r.prevYear))}" width="${w}" height="${Math.abs(y(0)-y(Math.max(0,r.prevYear)))}" class="dv2-bar-prev"/>`:'';
+    const bx=hasPrev?x+bw/2+1:x+(bw-w)/2;
+    return`<g class="dv2-col" data-i="${i}">${prevBar}
+      <rect x="${bx}" y="${y(Math.max(0,r.sales))}" width="${w}" height="${Math.abs(y(0)-y(Math.max(0,r.sales)))}" class="${r.plan?'dv2-bar-plan':'dv2-bar'}"/>
+      <text x="${x+bw/2}" y="${H-B+16}" text-anchor="middle" class="dv2-axis">${dv2Short(r.a)}${r.plan?'*':''}</text>
+      <rect x="${x}" y="${T}" width="${bw}" height="${H-T-B}" class="dv2-hit" onmouseenter="dv2Tip(${i})" onclick="dv2Tip(${i})"><title>${dv2YmLabel(r.a)}</title></rect></g>`;
+  }).join('');
+  const pts=rows.map((r,i)=>r.profit===null?null:[L+i*bw+bw/2,y(r.profit)]).filter(Boolean);
+  const line=pts.length>1?`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" class="dv2-line"/>`:'';
+  const dots=pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="3" class="dv2-dot"/>`).join('');
+  dv2TrendRows=rows;
+  el.innerHTML=`<div class="dv2-card-head"><h3 class="dv2-h3">売上・利益の推移</h3>
+      <div class="dv2-seg" role="group" aria-label="期間">
+        <button class="${dv2TrendMonths===12?'on':''}" aria-pressed="${dv2TrendMonths===12}" onclick="setDv2Trend(12)">12か月</button>
+        <button class="${dv2TrendMonths===6?'on':''}" aria-pressed="${dv2TrendMonths===6}" onclick="setDv2Trend(6)">6か月</button></div></div>
+    <div class="dv2-legend"><span><i class="lg-bar"></i>売上（実績）</span><span><i class="lg-plan"></i>売上（予測・*）</span><span><i class="lg-line"></i>営業利益（実績）</span>
+      ${hasPrev?'<span><i class="lg-prev"></i>前年同月の売上</span>':'<span class="dv2-muted">前年同月：データ不足</span>'}</div>
+    <div class="dv2-chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="月別の売上と営業利益">${ticks}${bars}${line}${dots}</svg>
+      <div class="dv2-tip" id="dv2-tip" hidden></div></div>
+    <div class="dv2-note">* は当月より後の月（契約にもとづく予定額＝予測）。営業利益は実績の月だけ。</div>`;
+}
+let dv2TrendRows=[];
+function dv2Tip(i){
+  const r=dv2TrendRows[i],tip=document.getElementById('dv2-tip');
+  if(!r||!tip)return;
+  const yoy=r.prevYear>0?Math.round((r.sales-r.prevYear)/r.prevYear*1000)/10:null;
+  tip.innerHTML=`<b>${dv2YmLabel(r.a)}</b>${r.plan?' <span class="dv2-chip dv2-plan">予測</span>':' <span class="dv2-chip dv2-actual">実績</span>'}<br>
+    売上 ${dv2Yen(r.sales)}<br>営業利益 ${r.profit===null?'－（予測の月は出しません）':dv2Yen(r.profit)}<br>
+    前年同月 ${r.prevYear>0?dv2Yen(r.prevYear)+'（'+(yoy>=0?'+':'')+yoy.toFixed(1)+'%）':'データ不足'}`;
+  tip.hidden=false;
+  const n=dv2TrendRows.length;
+  tip.style.left=Math.min(70,Math.max(0,(i+0.5)/n*100-15))+'%';
+}
+
+// B. 重要KPIのリング
+function renderDv2Rings(D){
+  const el=document.getElementById('dv2-rings');
+  const fy=D.fy;
+  if(!fy){el.innerHTML='<h3 class="dv2-h3">重要KPI</h3><div class="dv2-muted">期が未登録です</div>';return;}
+  const s=ymToAbs(fy.startMonth),e=ymToAbs(fy.endMonth);
+  const info=dv2ProjectInfo();
+  const prevFy=dv2PrevFiscal(fy);
+  const nc=newCustomerCount(info,s,e);
+  const rr=prevFy?retentionRate(dv2ClientsWithSales(prevFy),dv2ClientsWithSales(fy)):null;
+  const wr=winRate(info,s,e);
+  const items=[
+    {label:'新規顧客数',value:nc,unit:'社',target:parseFloat(fy.newCustomerTarget)||0,why:'',basis:'この期に初めて案件（契約済・進行中・完了）が始まった取引先'},
+    {label:'継続率',value:rr,unit:'%',target:parseFloat(fy.retentionTarget)||0,why:prevFy?'':'前の期がありません',basis:'前の期に売上があった取引先のうち、今期も売上がある割合'},
+    {label:'成約率',value:wr.rate,unit:'%',target:parseFloat(fy.winRateTarget)||0,why:wr.rate===null?wr.reason:'',basis:`開始月がこの期の案件。受注 ${wr.won}件／失注 ${wr.lost}件（商談中は数えない）`}
+  ];
+  el.innerHTML=`<h3 class="dv2-h3">重要KPI</h3><div class="dv2-rings">`+items.map(it=>{
+    const st=ringState(it.value,it.target);
+    const valTxt=it.value===null?'データ不足':(it.unit==='%'?it.value.toFixed(1)+'%':it.value+it.unit);
+    let ring='';
+    if(st.pct!==null){
+      const C=2*Math.PI*30,p=Math.min(100,st.pct);
+      ring=`<svg viewBox="0 0 76 76" class="dv2-ring ${st.level}" aria-hidden="true"><circle cx="38" cy="38" r="30" class="bg"/>
+        <circle cx="38" cy="38" r="30" class="fg" stroke-dasharray="${(C*p/100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 38 38)"/></svg>`;
+    }
+    return`<div class="dv2-ring-item">${ring||'<div class="dv2-ring-none" aria-hidden="true">－</div>'}
+      <div class="dv2-ring-text"><div class="dv2-kpi-label">${it.label}</div>
+        <div class="dv2-num dv2-ring-val">${valTxt}</div>
+        <div class="dv2-status ${st.level==='good'?'good':st.level==='caution'?'caution':st.level==='warn'?'warn':'none'}">
+          ${st.pct!==null?`目標 ${it.unit==='%'?it.target+'%':it.target+it.unit}・${st.pct.toFixed(1)}%（${st.label}）`:(it.value===null?(it.why||'データ不足'):'目標未設定')}</div>
+        <div class="dv2-note">${escAttr(it.basis)}</div></div></div>`;
+  }).join('')+`</div>
+    ${(fy.newCustomerTarget||fy.retentionTarget||fy.winRateTarget)?'':'<button class="dv2-link" onclick="dv2GoFiscal()">期の設定でKPIの目標を入れる</button>'}`;
+}
+
+// C. 着地予測（案件ベース。確定＋予定。入金予定は混ぜない）
+function renderDv2Forecast(D){
+  const el=document.getElementById('dv2-forecast');
+  if(!D.fy){el.innerHTML='<h3 class="dv2-h3">着地予測</h3><div class="dv2-muted">期が未登録です</div>';return;}
+  const sp=D.split;
+  const tot=sp.total||0;
+  const cw=tot>0?sp.confirmed/tot*100:0;
+  const recs=billingList().filter(b=>sp.plannedMonths.indexOf(ymToAbs(b.billingMonth))>=0&&(parseInt(b.amount)||0)>0).length;
+  const lm=sp.confirmedMonths.length?`${dv2YmLabel(sp.confirmedMonths[0])}〜${dv2YmLabel(sp.confirmedMonths[sp.confirmedMonths.length-1])}`:'なし';
+  const pm=sp.plannedMonths.length?`${dv2YmLabel(sp.plannedMonths[0])}〜${dv2YmLabel(sp.plannedMonths[sp.plannedMonths.length-1])}`:'なし';
+  const vsT=D.target>0?pct(tot,D.target):null;
+  el.innerHTML=`<h3 class="dv2-h3">年間の売上着地予測 <span class="dv2-chip dv2-plan">予測</span></h3>
+    <div class="dv2-num dv2-fc-total">${dv2Yen(tot)}</div>
+    <div class="dv2-muted">${D.target>0?`目標 ${dv2Yen(D.target)} に対して ${vsT.toFixed(1)}%`:'目標未設定'}</div>
+    <div class="dv2-stack" role="img" aria-label="確定 ${dv2Yen(sp.confirmed)}、予測 ${dv2Yen(sp.planned)}">
+      <span class="dv2-stack-a" style="width:${cw}%"></span><span class="dv2-stack-p" style="width:${100-cw}%"></span></div>
+    <div class="dv2-fc-rows">
+      <div><span class="dv2-chip dv2-actual">確定（実績）</span><b class="dv2-num">${dv2Yen(sp.confirmed)}</b></div>
+      <div><span class="dv2-chip dv2-plan">予測（契約ベース）</span><b class="dv2-num">${dv2Yen(sp.planned)}</b></div>
+    </div>
+    <button class="dv2-link" onclick="dv2Toggle('fc')">予測の前提 ${dv2Open.fc?'▲':'▼'}</button>
+    ${dv2Open.fc?`<div class="dv2-basis">
+      <div>確定：${lm}（前月まで）の案件ベースの売上</div>
+      <div>予測：${pm}（当月から期末）。請求レコードがある月はその金額（${recs}件）、無い月は案件の月額</div>
+      <div>案件予実・期間サマリーと同じ関数（projectSalesAtAbsTotal）。入金予定（入金ベース）は混ぜていません。統計的な外挿はしていません</div>
+    </div>`:''}`;
+}
+
+// 経営ミッション
+const DV2_MISSION_GO={forecast:'dv2GoForecast()',fiscal:'dv2GoFiscal()',overdue:'openOverdueList()',
+  invoice:"goToInvoices('')",inbox:'openInboxList()',close:'openClosePage()'};
+function renderDv2Missions(list){
+  const el=document.getElementById('dv2-missions');
+  el.innerHTML=`<h3 class="dv2-h3">経営ミッション</h3><ul class="dv2-missions-list">`+list.map(m=>`
+    <li class="${m.done?'done':''}"><button onclick="${DV2_MISSION_GO[m.go]||''}">
+      <span class="dv2-m-icon" aria-hidden="true">${m.done?'✓':'○'}</span>
+      <span class="dv2-m-body"><span class="dv2-m-title">${escAttr(m.title)}</span>
+        ${m.detail?`<span class="dv2-note">${escAttr(m.detail)}</span>`:''}
+        <span class="dv2-m-bar"><span style="width:${m.progress}%"></span></span>
+        <span class="dv2-note">${m.done?'完了':'未完了'}・進捗 ${m.progress.toFixed(m.progress%1?1:0)}%</span></span>
+      <span class="dv2-m-go" aria-hidden="true">›</span></button></li>`).join('')+`</ul>`;
+}
+
+// 自動チェックのひとこと
+function renderDv2Advice(D){
+  const lines=dashAdvice({salesThis:D.month.sales,salesPrev:D.prev.sales,awaitingTotal:D.aw.total,awaitingCount:D.aw.count,
+    overdue:D.od.length,paceRate:D.paceRate,elapsedRate:D.elapsedRate});
+  document.getElementById('dv2-advice').innerHTML=`<div class="dv2-advice-head"><span class="dv2-chip">自動チェック（AI分析ではありません）</span>
+    <span class="dv2-note">${dv2YmLabel(D.abs)}・ルールにもとづく確認</span></div>
+    <p>${lines.map(escAttr).join('')}</p>`;
+}
 
 // 文字コードを判定して読む（UTF-8で読めなければShift-JIS）
 function readCsvFile(file){

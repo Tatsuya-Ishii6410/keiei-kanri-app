@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>新旧ダッシュボードの数字の突き合わせ</title>
+<style>
+  body{margin:0;font-family:'Noto Sans JP',sans-serif;background:#F8FAFF;color:#17233D}
+  #out{padding:12px 16px;font-size:13px;line-height:1.7;white-space:pre-wrap}
+  .ok{color:#047857}.ng{color:#BE123C;font-weight:700}
+  iframe{border:0;width:100%;height:900px;background:#fff}
+  body.narrow iframe{width:375px;height:812px}
+</style></head>
+<body>
+<!-- 使い方：リポジトリの直下で `python -m http.server 8765` を実行し、
+     http://localhost:8765/tests/dashboard-v2-compare.html を開く（?narrow でスマホ幅 375px）。
+     アプリは GAS_URL を空にして読み込むので、スプレッドシートには読み書きしない（このページの localStorage だけを使う）。
+     見本のデータを入れ、旧ダッシュボードの表示と新ダッシュボードの数字が一致するかを表にする -->
+<div id="out">読み込み中…</div>
+<iframe id="f" title="アプリ"></iframe>
+<script>
+if(location.search.indexOf('narrow')>=0)document.body.classList.add('narrow');
+if(location.search.indexOf('tall')>=0)document.getElementById('f').style.height='3200px';
+try{localStorage.clear();localStorage.setItem('bizapp_session_v1',JSON.stringify({expires:Date.now()+86400000}));}catch(e){}
+const results=[];
+const check=(name,a,b)=>results.push({name,ok:a===b,a,b});
+const yen=t=>{const m=/(−|-)?¥\s*(-)?([\d,]+)/.exec(String(t||''));return m?(m[1]||m[2]?-1:1)*parseInt(m[3].replace(/,/g,''),10):NaN};
+const num=t=>{const m=/(-?[\d.]+)/.exec(String(t||''));return m?parseFloat(m[1]):NaN};
+
+fetch('../keiei-kanri.html').then(r=>r.text()).then(src=>{
+  const f=document.getElementById('f');
+  f.onload=()=>setTimeout(run,800);
+  f.srcdoc=src.replace(/^const GAS_URL='[^']*';/m,"const GAS_URL='';");
+});
+
+function run(){
+  const w=document.getElementById('f').contentWindow,d=w.document;
+  try{
+    w.alert=()=>{};w.confirm=()=>true;
+    const S=w.eval('S');
+    const now=new Date(),y=now.getFullYear(),m=now.getMonth()+1;
+    const ym=(dy,dm)=>{const a=y*12+(m-1)+dm+dy*12;return Math.floor(a/12)+'-'+String(a%12+1).padStart(2,'0')};
+    // 見本：今期（今月を含む12か月）、案件3件、収支、入金予定（遅延あり）
+    S.fiscalYears=[{id:1,name:'見本の期',startMonth:ym(0,-5),endMonth:ym(0,6),salesTarget:6000000,profitTarget:1000000,active:true,
+      newCustomerTarget:3,retentionTarget:'',winRateTarget:50}];
+    S.currentFiscalYearId=1;
+    S.projects=[
+      {id:1,name:'保守',client:'株式会社A',amount:300000,status:'進行中',start:ym(0,-8)+'-01',end:ym(0,10)+'-28',contract:'monthly',invoiceStatus:'invoiced'},
+      {id:2,name:'開発',client:'B商事',amount:200000,status:'進行中',start:ym(0,-2)+'-01',end:ym(0,3)+'-28',contract:'monthly',invoiceStatus:'uninvoiced'},
+      {id:3,name:'提案',client:'C社',amount:100000,status:'失注',start:ym(0,-1)+'-01',end:'',contract:'single',invoiceStatus:'uninvoiced'}];
+    S.ledger=[
+      {id:1,date:ym(0,0)+'-05',type:'通信料',desc:'回線',amount:55000,status:'actual'},
+      {id:2,date:ym(0,0)+'-10',type:'役員報酬',desc:'役員報酬',amount:200000,status:'actual'},
+      {id:3,date:ym(0,-1)+'-10',type:'システム利用料',desc:'SaaS',amount:33000,status:'actual'},
+      {id:4,date:ym(0,-1)+'-20',expectedDate:ym(0,-1)+'-20',type:'売上',desc:'株式会社A 入金予定',amount:330000,status:'planned_in',projectId:1,billingMonth:ym(0,-2)}];
+    S.bankBalance=1234567;S.nextLedgerId=5;
+    w.renderFiscalSelects();
+    d.getElementById('fiscal-select').value='1';
+    d.getElementById('month-select').value=String(now.getMonth());
+    w.setDashVersion(2,true);
+    w.updateDashboard();
+    setTimeout(()=>{
+      const kpi=key=>{const el=d.querySelector(`[data-key="kpi-${key}"]`);return el?parseFloat(el.dataset.count):NaN};
+      check('月間売上（旧「売上」＝新KPI）',yen(d.getElementById('d-sales').textContent),kpi('sales'));
+      check('営業利益（旧「営業利益」＝新KPI）',yen(d.getElementById('d-profit').textContent),kpi('profit'));
+      check('現預金残高（設定の値＝新KPI）',w.bankBalance(),kpi('cash'));
+      const fs=d.getElementById('fiscal-summary').querySelectorAll('tbody tr')[0].querySelectorAll('td');
+      const heroRow=d.querySelector('#dv2-hero .dv2-hero-row b');
+      check('期の売上累計（期間サマリー＝ヒーロー）',yen(fs[2].textContent),yen(heroRow&&heroRow.textContent));
+      check('売上目標達成率（期間サマリー＝ヒーロー＝KPI）',num(fs[3].textContent),kpi('rate'));
+      check('ヒーローの達成率の表示',num(fs[3].textContent),num(d.querySelector('#dv2-hero .dv2-big').textContent));
+      const fc=yen(d.querySelector('#dv2-forecast .dv2-fc-total').textContent);
+      check('着地予測の合計＝期間サマリーの売上（同じ関数）',yen(fs[2].textContent),fc);
+      const od=(d.getElementById('d-overdue-status').textContent.match(/(\d+)件/)||[])[1];
+      const odM=[...d.querySelectorAll('#dv2-missions .dv2-m-title')].map(x=>x.textContent).find(t=>/入金遅延/.test(t))||'';
+      check('入金遅延の件数（状態の行＝ミッション）',parseInt(od||'0',10),parseInt((odM.match(/(\d+)件/)||[0,0])[1],10));
+      const cl=(d.getElementById('d-close-status').textContent.match(/未解決\s*(\d+)件/)||[])[1];
+      const clM=[...d.querySelectorAll('#dv2-missions .dv2-m-title')].map(x=>x.textContent).find(t=>/月次締め/.test(t))||'';
+      check('月次締めの未解決（状態の行＝ミッション）',parseInt(cl||'0',10),parseInt((clM.match(/(\d+)件/)||[0,0])[1],10));
+      const inv=(d.getElementById('d-invoice-status').textContent.match(/未作成\s*(\d+)件/)||[])[1];
+      const invM=[...d.querySelectorAll('#dv2-missions .dv2-m-title')].map(x=>x.textContent).find(t=>/請求書/.test(t))||'';
+      check('未作成の請求書（状態の行＝ミッション）',parseInt(inv||'0',10),parseInt((invM.match(/(\d+)件/)||[0,0])[1],10));
+      check('状態の行6つが要対応の帯にある',d.querySelectorAll('#dv2-slot-status #dv-status > div[id^="d-"]').length,6);
+      check('メトリクス7枚が要対応の帯にある',d.querySelectorAll('#dv2-slot-metrics .metric-card').length,7);
+      // 旧に切り替えると元の場所に戻る
+      w.setDashVersion(1,true);
+      check('旧に切り替え：メトリクスが元の場所',d.querySelectorAll('#dvh-metrics .metric-card').length,7);
+      check('旧に切り替え：新画面は非表示',d.getElementById('dash-v2').style.display,'none');
+      w.setDashVersion(2,true);
+      const ng=results.filter(r=>!r.ok).length;
+      document.getElementById('out').innerHTML=`<b>${ng?'<span class="ng">一致しない項目があります</span>':'<span class="ok">すべて一致</span>'}</b>（${results.length}項目）\n`
+        +results.map(r=>`<span class="${r.ok?'ok':'ng'}">${r.ok?'✓':'✗'}</span> ${r.name}：旧/基準 ${r.a} ／ 新 ${r.b}`).join('\n');
+      document.title=ng?'NG':'OK';
+    },700);
+  }catch(e){document.getElementById('out').innerHTML='<span class="ng">エラー</span> '+e.stack;document.title='ERROR';}
+}
+</script>
+</body></html>

@@ -42,7 +42,8 @@ var SHEET_DEFS = {
   ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'settlementMonth', 'billingMonth', 'fixedCostId',
     'visit', 'purpose', 'calId', 'withWhom', 'persons', 'receiptId', 'payee', 'docNo', 'reviewed'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
-  fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
+  fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active',
+    'newCustomerTarget', 'retentionTarget', 'winRateTarget'],
   monthlyBillings: ['id', 'projectId', 'billingMonth', 'amount', 'invoiceStatus',
     'invoiceId', 'paidDate', 'paidAmount', 'expectedPayDate', 'note'],
   settings: ['key', 'value']
@@ -351,7 +352,11 @@ function readFiscalYears_(sh) {
       endMonth: ym_(o.endMonth),
       salesTarget: num_(o.salesTarget),
       profitTarget: num_(o.profitTarget),
-      active: bool_(o.active)
+      active: bool_(o.active),
+      // 新ダッシュボードの重要KPIの目標（任意。空なら ''）
+      newCustomerTarget: optNum_(o.newCustomerTarget),
+      retentionTarget: optNum_(o.retentionTarget),
+      winRateTarget: optNum_(o.winRateTarget)
     };
   }).filter(function (f) { return f.id && f.name !== ''; });
 }
@@ -533,7 +538,8 @@ function writeAll_(data) {
 
   var fiscalYears = (data.fiscalYears || []).map(function (f) {
     return [num_(f.id), str_(f.name), ym_(f.startMonth), ym_(f.endMonth),
-      num_(f.salesTarget), num_(f.profitTarget), !!f.active];
+      num_(f.salesTarget), num_(f.profitTarget), !!f.active,
+      optNum_(f.newCustomerTarget), optNum_(f.retentionTarget), optNum_(f.winRateTarget)];
   });
 
   var settings = [];
@@ -2052,6 +2058,13 @@ function str_(v) {
 }
 
 /** セルの値を数値に。「¥1,000」のような表記にも耐える。 */
+/** 任意の数値（空なら ''、それ以外は小数も残す）。KPIの目標（%は小数1桁まで使う） */
+function optNum_(v) {
+  if (v === null || v === undefined || String(v).trim() === '') return '';
+  var n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+  return isNaN(n) ? '' : n;
+}
+
 function num_(v) {
   if (typeof v === 'number') return Math.round(v);
   var s = String(v === null || v === undefined ? '' : v).replace(/[^0-9.\-]/g, '');
