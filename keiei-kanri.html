@@ -183,7 +183,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   --ui-page:#F8FAFF;--ui-purple:#8758F5;
   --ui-good:#10B981;--ui-good-soft:rgba(16,185,129,.12);--ui-good-text:#047857;
   --ui-caution:#F59E0B;--ui-caution-soft:rgba(245,158,11,.14);--ui-caution-text:#B45309;
-  --ui-warn:#F43F5E;--ui-warn-soft:rgba(244,63,94,.12);--ui-warn-text:#BE123C;
+  --ui-warn:#F43F5E;--ui-warn-soft:rgba(244,63,94,.12);--ui-warn-text:#BE123C;--ui-warn-solid:#DC2626;
   --ui-plan:#8758F5;--ui-plan-soft:rgba(135,88,245,.12);--ui-border-strong:rgba(23,35,61,.18);
   --ui-border-solid:#E3E7EF;--ui-line:#EEF1F6;
   /* 第2弾：淡い色のカード（青・紫）と、その上でも 4.5:1 以上になる文字色 */
@@ -235,7 +235,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .dash-v2 .dv2-hello-wrap{flex:1 1 150px;min-width:0}
 .dash-v2 .dv2-hello{font-size:20px;font-weight:700;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dash-v2 .dv2-hello-sub{font-size:12px;color:#64748B;margin-top:1px}
-.dash-v2 .dv2-hello-sub .is-err{color:#F43F5E;font-weight:700}
+.dash-v2 .dv2-hello-sub .is-err{color:#DC2626;font-weight:700}
 .dash-v2 .dv2-period{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;max-width:100%;min-width:0}
 .dv2-pchip{position:relative;display:inline-flex;align-items:center;gap:4px;min-height:36px;max-width:100%;padding:6px 10px 6px 12px;border-radius:12px;background:#F1F5FB;
   color:#17233D;font-size:14px;font-weight:700;line-height:1.3;cursor:pointer}
@@ -260,7 +260,7 @@ body.dv2-on .tb-menu{display:none!important}
   cursor:pointer;padding:0;-webkit-appearance:none;appearance:none;transition:background-color 120ms ease}
 .tb-icon:active{background:#F1F5FB}
 .tb-icon:focus-visible,.tb-chip:focus-visible,.dv2-menu button:focus-visible{outline:2px solid #3976F6;outline-offset:2px}
-.tb-badge{position:absolute;top:4px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#F43F5E;color:#fff;font-size:11px;font-weight:700;
+.tb-badge{position:absolute;top:4px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#DC2626;color:#fff;font-size:11px;font-weight:700;
   line-height:18px;text-align:center;font-family:'Inter',sans-serif}
 .dv2-avatar .dv2-avatar-img{display:block;width:40px;height:40px;border-radius:50%;object-fit:cover}
 .dv2-avatar .dv2-avatar-img+span{display:none}
@@ -296,16 +296,27 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .lv-good .dv2-cond-title{color:var(--ui-good-text)}.dash-v2 .lv-caution .dv2-cond-title{color:var(--ui-caution-text)}
 .dash-v2 .lv-warn .dv2-cond-title{color:var(--ui-warn-text)}.dash-v2 .lv-none .dv2-cond-title{color:var(--ui-muted)}
 .dash-v2 .dv2-cond-title{font-size:16px;font-weight:700}
+.dash-v2 .dv2-cond.lv-warn .dv2-cond-icon,.dash-v2 .dv2-cond.lv-warn .rinko-badge{background:var(--ui-warn-solid)}
 /* 朝日凛子：44pxの円形アバター＋1行。フェードインだけ（動きを減らす設定ではなし） */
 .dash-v2 .rinko-av{position:relative;width:44px;height:44px;flex:none;border-radius:50%;background:var(--ui-tint-blue);overflow:visible}
 .dash-v2 .rinko-av img{display:block;width:44px;height:44px;border-radius:50%;object-fit:cover}
 .dash-v2 .rinko-av.is-fade img{animation:rinko-in 300ms ease-out 1 both}
 .dash-v2 .rinko-badge{position:absolute;right:-3px;bottom:-3px;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:10px;font-weight:700;color:#fff;background:var(--lv);box-shadow:0 0 0 2px var(--ui-surface,#fff)}
-.dash-v2 .rinko-line{margin:2px 0 0;font-size:13px;line-height:1.5;color:var(--ui-muted-strong);overflow-wrap:anywhere}
-.dash-v2 .dv2-hl .rinko-row{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+/* 一言は1行（行の高さ18px）。アバターはタイトルの行の中（経営コンディション）／見出しの横（ハイライト）に置き、行を増やさない。
+   一言は判定の根拠のボタンの下まで使う（grid の2〜3列）。スマホ（639px以下）は短い文（.rk-short）で折り返さない */
+.dash-v2 .dv2-cond.has-rinko .dv2-cond-main{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 10px;align-items:center}
+.dash-v2 .dv2-cond.has-rinko .rinko-line{grid-column:2/4}
+.dash-v2 .rinko-line{margin:0;font-size:13px;line-height:18px;color:var(--ui-muted-strong);overflow-wrap:anywhere}
+.dash-v2 .rinko-line .rk-short{display:none}
+@media(max-width:639px){
+  .dash-v2 .rinko-line{white-space:nowrap}
+  .dash-v2 .rinko-line .rk-long{display:none}.dash-v2 .rinko-line .rk-short{display:inline}
+}
+.dash-v2 .dv2-hl .dv2-hl-title{display:flex;align-items:center;gap:8px;min-width:0}
+.dash-v2 .dv2-hl .rinko-av,.dash-v2 .dv2-hl .rinko-av img{width:32px;height:32px}
 .dash-v2 .dv2-hl .rinko-av{background:rgba(255,255,255,.9)}
-.dash-v2 .dv2-hl .rinko-line{margin:0;color:#fff;font-weight:700}
+.dash-v2 .dv2-hl .rinko-line{margin:-2px 0 8px;color:#fff;font-weight:700}
 @keyframes rinko-in{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.dash-v2 .rinko-av.is-fade img{animation:none}}
 .dash-v2 .dv2-kicker{font-size:11px;color:var(--ui-muted);font-weight:700}
@@ -13265,6 +13276,13 @@ const RINKO_PHRASES={
   highlight:'今月の達成です。おつかれさまでした。',
   empty:'まだデータがありません。入力すると、ここに表示されます。'
 };
+// スマホ（639px以下）で使う短い文。1行に収める（全角18字以内）。キーは RINKO_PHRASES と同じ
+const RINKO_PHRASES_SHORT={
+  good:'今月も順調です。',
+  check:'確認したい点があります。',
+  highlight:'今月の達成です。',
+  empty:'まだデータがありません。'
+};
 const RINKO_FACES=['wink','smile','think'];
 // 経営コンディションの段階（dashCondition の level）→ 表情と一言。重大（warn）と不明な段階は null（画像も一言も出さない）
 function rinkoForCondition(level,hasData){
@@ -13276,8 +13294,8 @@ function rinkoForCondition(level,hasData){
 // ハイライト：1件以上のときだけ笑顔
 function rinkoForHighlights(count){return count>0?{face:'smile',phrase:'highlight'}:null;}
 // 一言に実データを差し込む（{名前} → vars の値。無い名前はそのまま）
-function rinkoPhrase(key,vars){
-  const t=RINKO_PHRASES[key]||'';
+function rinkoPhrase(key,vars,short){
+  const t=(short?RINKO_PHRASES_SHORT[key]:RINKO_PHRASES[key])||'';
   return t.replace(/\{([^{}]+)\}/g,(m,k)=>vars&&vars[k]!==undefined&&vars[k]!==null?String(vars[k]):m);
 }
 // 表示のオン・オフ（localStorage の値。'0' だけオフ。未設定・読めないときはオン）
@@ -13541,6 +13559,8 @@ function rinkoAvatar(face,badge){
   const a=rinkoAvatarSrc(face),fade=!rinkoFaded[face]&&!dv2ReducedMotion();rinkoFaded[face]=true;
   return`<span class="rinko-av${fade?' is-fade':''}" data-face="${face}"><img src="${a.src}" srcset="${a.srcset}" width="44" height="44" alt="" decoding="async" onerror="this.style.visibility='hidden'">${badge?`<span class="rinko-badge" aria-hidden="true">${badge}</span>`:''}</span>`;
 }
+// 一言の文字（PCは長い文、スマホは短い文。CSSで出し分ける）
+function rinkoLine(key){return`<p class="rinko-line"><span class="rk-long">${escAttr(rinkoPhrase(key))}</span><span class="rk-short">${escAttr(rinkoPhrase(key,null,true))}</span></p>`;}
 function dv2HasData(){return !!((S.projects&&S.projects.length)||(S.ledger&&S.ledger.length));}
 
 // 経営コンディション
@@ -13552,8 +13572,8 @@ function renderDv2Condition(D){
   el.dataset.key=c.key;
   el.dataset.rinko=rk?rk.face:'';
   el.innerHTML=`<div class="dv2-cond-main">${rk?rinkoAvatar(rk.face,c.icon):`<span class="dv2-cond-icon" aria-hidden="true">${c.icon}</span>`}
-      <div><div class="dv2-kicker">経営コンディション</div><div class="dv2-cond-title">${c.title}</div>${rk?`<p class="rinko-line">${escAttr(rinkoPhrase(rk.phrase))}</p>`:''}</div>
-      <button class="dv2-link dv2-tap" onclick="dv2Toggle('cond')" aria-expanded="${!!dv2Open.cond}">判定の根拠 ${dv2Open.cond?'▲':'▼'}</button></div>
+      <div><div class="dv2-kicker">経営コンディション</div><div class="dv2-cond-title">${c.title}</div></div>
+      <button class="dv2-link dv2-tap" onclick="dv2Toggle('cond')" aria-expanded="${!!dv2Open.cond}">判定の根拠 ${dv2Open.cond?'▲':'▼'}</button>${rk?rinkoLine(rk.phrase):''}</div>
     ${dv2Open.cond?`<div class="dv2-basis"><ol class="dv2-rules">${c.rules.map(r=>`<li class="st-${r.state}"><b>${r.name}</b>
       <span class="dv2-rule-st">${r.state==='hit'?'該当':r.state==='skip'?'判定しない':'該当なし'}</span><br>${escAttr(r.detail)}</li>`).join('')}</ol>
       <div>優先順位：1.資金繰り → 2.入金遅延 → 3.目標ペース（−5pt以上＝順調・−5〜−15pt＝少し遅れ・−15pt未満＝遅れ） → 4.判定材料不足。最初に当てはまる1つを表示</div>
@@ -13856,8 +13876,8 @@ function renderDv2Highlights(D){
   if(Array.isArray(seen)&&fresh.length)dv2LS(ls=>ls.setItem('bizapp_dash_hl_seen_v3',JSON.stringify(seen.concat(fresh).slice(-60))));
   const rk=rinkoOn()?rinkoForHighlights(list.length):null;
   el.dataset.rinko=rk?rk.face:'';
-  el.innerHTML=`<div class="dv2-card-head"><h3 class="dv2-h3">今月のハイライト</h3><span class="dv2-hl-note">自動判定（AI分析ではありません）</span></div>
-    ${rk?`<div class="rinko-row">${rinkoAvatar(rk.face)}<p class="rinko-line">${escAttr(rinkoPhrase(rk.phrase))}</p></div>`:''}
+  el.innerHTML=`<div class="dv2-card-head"><div class="dv2-hl-title">${rk?rinkoAvatar(rk.face):''}<h3 class="dv2-h3">今月のハイライト</h3></div><span class="dv2-hl-note">自動判定（AI分析ではありません）</span></div>
+    ${rk?rinkoLine(rk.phrase):''}
     <ul class="dv2-hl-list">${list.map(h=>`<li class="${fresh.indexOf(h.key)>=0?'is-new':''}" data-key="${escAttr(h.key)}"><span class="dv2-hl-icon" aria-hidden="true">${h.icon}</span>${escAttr(h.text)}</li>`).join('')}</ul>`;
 }
 

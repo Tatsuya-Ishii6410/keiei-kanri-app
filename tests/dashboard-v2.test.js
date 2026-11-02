@@ -25,7 +25,7 @@ globalThis.exported = { dashGreeting, monthOverMonth, dashMilestones, routePoint
   normClientName, newCustomerCount, retentionRate, winRate, ringState,
   heroProgress, msLabelPos, niceAxis, pct, plannedWindow, dashCondition, milestoneCelebration, recordMonth, bigChanges,
   actionItems, dashMissionList, deadlineLabel, dashInsights, paceLevel, nextMilestone, withinDays, overdueZeroRecord, dashHighlights, heroState,
-  RINKO_PHRASES, RINKO_FACES, rinkoForCondition, rinkoForHighlights, rinkoPhrase, rinkoEnabled, rinkoAvatarSrc };`, app);
+  RINKO_PHRASES, RINKO_PHRASES_SHORT, RINKO_FACES, rinkoForCondition, rinkoForHighlights, rinkoPhrase, rinkoEnabled, rinkoAvatarSrc };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -491,6 +491,15 @@ test('一言：です・ます、1行40文字以内、決まった数字を含�
     assert(t.length <= 40, k + ' が40文字を超えています');
     assert(/(す|しょう|した)。$/.test(t), k + ' がです・ます調で終わっていません');
     assert(!/[0-9０-９]/.test(t), k + ' に数字が入っています');
+  });
+  // スマホの短い文：同じキーがそろっていて、1行（全角18字以内）・です・ます・数字なし
+  assert.deepStrictEqual(Object.keys(A.RINKO_PHRASES_SHORT).sort(), Object.keys(A.RINKO_PHRASES).sort());
+  Object.keys(A.RINKO_PHRASES_SHORT).forEach(k => {
+    const t = A.RINKO_PHRASES_SHORT[k];
+    assert(t.length <= 18, k + ' の短い文が18字を超えています');
+    assert(/(す|しょう|した|ません)。$/.test(t), k + ' の短い文がです・ます調で終わっていません');
+    assert(!/[0-9０-９]/.test(t), k + ' の短い文に数字が入っています');
+    assert.strictEqual(A.rinkoPhrase(k, null, true), t);
   });
   assert.strictEqual(A.rinkoPhrase('good'), A.RINKO_PHRASES.good);
   A.RINKO_PHRASES.test = '{月}も順調です。';
