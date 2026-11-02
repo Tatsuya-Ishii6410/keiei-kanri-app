@@ -39,7 +39,7 @@ var SHEET_DEFS = {
     'contractStart', 'contractEnd', 'paymentMethod', 'isMonthly',
     'source', 'driveFileId', 'items', 'note'],
   ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'settlementMonth', 'billingMonth', 'fixedCostId',
-    'visit', 'purpose'],
+    'visit', 'purpose', 'calId'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
   fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
   monthlyBillings: ['id', 'projectId', 'billingMonth', 'amount', 'invoiceStatus',
@@ -85,6 +85,7 @@ function doGet(e) {
   try {
     var action = params.action || 'load';
     if (action === 'ping') return respond_({ ok: true, message: 'pong' }, callback);
+    if (action === 'calendarEvents') return respond_(calendarEvents_(params.from, params.to, params.calendarId), callback);
     if (action !== 'load') throw new Error('不明なaction: ' + action);
     return respond_({ ok: true, data: readAll_() }, callback);
   } catch (err) {
@@ -119,6 +120,7 @@ function doPost(e) {
     if (action === 'driveProcessed') return respond_({ ok: true, renamed: driveMarkProcessed_(body.fileIds) }, '');
     if (action === 'advise') return respond_(loanAdvice_(body.data), '');
     if (action === 'fare') return respond_(fareLookup_(body.from, body.to), '');
+    if (action === 'fareBatch') return respond_(fareBatch_(body.pairs), '');
     if (action === 'distance') return respond_(distanceLookup_(body.origin, body.destination, body.apiKey), '');
   } catch (err) {
     return respond_({ ok: false, error: String(err && err.message || err) }, '');
@@ -244,7 +246,8 @@ function readLedger_(sh) {
       billingMonth: ym_(o.billingMonth),
       fixedCostId: str_(o.fixedCostId) === '' ? null : num_(o.fixedCostId),
       visit: str_(o.visit),
-      purpose: str_(o.purpose)
+      purpose: str_(o.purpose),
+      calId: str_(o.calId)
     };
   }).filter(function (l) { return l.date !== '' && l.desc !== ''; });
 }
@@ -302,7 +305,8 @@ function readSettings_(sh) {
   var legacyPlan = null; // 月の区別が無かった頃の形式
   var nextProjectId = 1, nextQuoteNum = 1, nextLedgerId = 1, nextFixedCostId = 1, nextBillingId = 1;
   var finance = { loan: 0 };
-  var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15 };
+  var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15,
+    calendarId: DEFAULT_CALENDAR_ID, fareCache: {} };
   // 税金設定は、シートに無い項目はキーごと返さない（アプリ側の初期値を潰さないため）
   var taxSettings = {};
   var bankBalance = 0;
@@ -343,6 +347,10 @@ function readSettings_(sh) {
       travel.gasolinePrice = num_(value) || 175;
     } else if (key === 'travel.fuelEfficiency') {
       travel.fuelEfficiency = parseFloat(str_(value)) || 15;
+    } else if (key === 'travel.calendarId') {
+      travel.calendarId = str_(value) || DEFAULT_CALENDAR_ID;
+    } else if (key === 'travel.fareCache') {
+      travel.fareCache = parseFareCache_(value);
     } else if (key.indexOf('taxSettings.') === 0) {
       var tkey = key.substring(12);          // "consumptionTax.rate" など
       var tdot = tkey.indexOf('.');
@@ -427,7 +435,7 @@ function writeAll_(data) {
       (l.projectId === null || l.projectId === undefined || l.projectId === '') ? '' : num_(l.projectId),
       ym_(l.settlementMonth), ym_(l.billingMonth),
       (l.fixedCostId === null || l.fixedCostId === undefined || l.fixedCostId === '') ? '' : num_(l.fixedCostId),
-      str_(l.visit), str_(l.purpose)];
+      str_(l.visit), str_(l.purpose), str_(l.calId)];
   });
 
   var fixedCosts = (data.fixedCosts || []).map(function (f) {
@@ -467,6 +475,13 @@ function writeAll_(data) {
   settings.push(['travel.googleMapsApiKey', str_(tv.googleMapsApiKey)]);
   settings.push(['travel.gasolinePrice', num_(tv.gasolinePrice) || 175]);
   settings.push(['travel.fuelEfficiency', parseFloat(tv.fuelEfficiency) || 15]);
+  settings.push(['travel.calendarId', str_(tv.calendarId) || DEFAULT_CALENDAR_ID]);
+  // 運賃キャッシュは fareBatch がシートに直接書き足すので、シート側の値にアプリ側の値を重ねる
+  // （アプリで手修正した運賃が優先。アプリが知らない検索結果も消さない）
+  var fareCache = readFareCache_(ss);
+  var appCache = (tv.fareCache && typeof tv.fareCache === 'object') ? tv.fareCache : {};
+  Object.keys(appCache).forEach(function (k) { fareCache[k] = appCache[k]; });
+  settings.push(['travel.fareCache', JSON.stringify(fareCache)]);
   var tx = data.taxSettings || {};
   Object.keys(TAX_SETTING_FIELDS).forEach(function (grp) {
     var g = tx[grp] || {};
@@ -850,6 +865,161 @@ function fareLookup_(from, to) {
   }));
   if (!m) return { ok: false, error: '運賃を読み取れませんでした（回答: ' + text.slice(0, 80) + '）' };
   return { ok: true, amount: num_(m[1]), note: text.slice(0, 200) };
+}
+
+// ===== 運賃のまとめて取得（カレンダーから交通費を作成） ==========
+// 運賃の検索は fareLookup_ をそのまま使う。同じ「出発|到着」は1回だけ検索し、
+// settings シートの travel.fareCache（JSON）に保存して次回から再利用する。
+
+var FARE_BATCH_MAX = 10; // 1リクエストの最大区間数（アプリ側で分割して呼ぶ）
+
+function parseFareCache_(v) {
+  var s = str_(v);
+  if (!s) return {};
+  try {
+    var o = JSON.parse(s);
+    return (o && typeof o === 'object') ? o : {};
+  } catch (e) { return {}; }
+}
+
+function readFareCache_(ss) {
+  var sh = ss.getSheetByName('settings');
+  var cache = {};
+  rowObjects_(sh, SHEET_DEFS.settings).forEach(function (o) {
+    if (str_(o.key) === 'travel.fareCache') cache = parseFareCache_(o.value);
+  });
+  return cache;
+}
+
+function writeFareCache_(ss, cache) {
+  var sh = ss.getSheetByName('settings');
+  var json = JSON.stringify(cache);
+  var last = sh.getLastRow();
+  if (last >= 2) {
+    var keys = sh.getRange(2, 1, last - 1, 1).getValues();
+    for (var i = 0; i < keys.length; i++) {
+      if (str_(keys[i][0]) === 'travel.fareCache') {
+        sh.getRange(i + 2, 2).setNumberFormat('@').setValue(json);
+        return;
+      }
+    }
+  }
+  sh.appendRow(['travel.fareCache', json]);
+}
+
+/** 回答文から信頼度を決める（low=要確認 / mid=推定）。 */
+function fareConfidence_(text) {
+  var t = str_(text);
+  if (/約|程度|前後|おそらく|推定|不明|確認でき|見つかりませ|わかりませ|分かりませ/.test(t)) return 'low';
+  var nums = {};
+  (t.match(/\d[\d,]{2,}/g) || []).forEach(function (n) { nums[n.replace(/,/g, '')] = 1; });
+  return Object.keys(nums).length > 1 ? 'low' : 'mid';
+}
+
+/** pairs: [{from,to}]（片道）。結果は pairs と同じ順で返す。 */
+function fareBatch_(pairs) {
+  pairs = (pairs || []).slice(0, FARE_BATCH_MAX);
+  var ss = openSpreadsheet_();
+  var cache = readFareCache_(ss);
+  var fresh = {};
+  var results = pairs.map(function (p) {
+    var from = str_(p && p.from), to = str_(p && p.to);
+    var key = from + '|' + to;
+    if (!from || !to) return { from: from, to: to, ok: false, error: '出発と到着が必要です' };
+    var hit = cache[key];
+    if (hit && num_(hit.amount) > 0) {
+      return { from: from, to: to, ok: true, amount: num_(hit.amount), confidence: hit.confidence || 'mid', cached: true };
+    }
+    var r = fareLookup_(from, to);
+    if (!r.ok) return { from: from, to: to, ok: false, error: r.error, confidence: 'low' };
+    var conf = fareConfidence_(r.note);
+    cache[key] = fresh[key] = { amount: r.amount, confidence: conf, at: Utilities.formatDate(new Date(), timezone_(ss), 'yyyy-MM-dd') };
+    return { from: from, to: to, ok: true, amount: r.amount, confidence: conf, cached: false };
+  });
+  if (Object.keys(fresh).length) {
+    var lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      // 検索中に保存が入っているかもしれないので、読み直してから足す
+      var latest = readFareCache_(ss);
+      Object.keys(fresh).forEach(function (k) { latest[k] = fresh[k]; });
+      writeFareCache_(ss, latest);
+    } finally {
+      lock.releaseLock();
+    }
+  }
+  return { ok: true, results: results };
+}
+
+
+// ===== Googleカレンダー（読み取り専用） ===========================
+// 予定の作成・変更・削除は一切しない。getEvents で読むだけ。
+
+var DEFAULT_CALENDAR_ID = 'tatsuya-ishii@us-links.com';
+var MEETING_URL_RE = /https?:\/\/(meet\.google\.com|[\w.-]*zoom\.us|teams\.microsoft\.com|teams\.live\.com|[\w.-]*webex\.com)\//i;
+
+function settingsCalendarId_() {
+  var sh = openSpreadsheet_().getSheetByName('settings');
+  var id = '';
+  rowObjects_(sh, SHEET_DEFS.settings).forEach(function (o) {
+    if (str_(o.key) === 'travel.calendarId') id = str_(o.value);
+  });
+  return id || DEFAULT_CALENDAR_ID;
+}
+
+/** from / to は YYYY-MM-DD（to の日も含む）。 */
+function calendarEvents_(from, to, calendarId) {
+  var re = /^(\d{4})-(\d{2})-(\d{2})$/;
+  var f = re.exec(str_(from)), t = re.exec(str_(to));
+  if (!f || !t) return { ok: false, error: '期間は YYYY-MM-DD で指定してください' };
+  var start = new Date(+f[1], +f[2] - 1, +f[3]);
+  var end = new Date(+t[1], +t[2] - 1, +t[3] + 1); // to の翌日0時まで
+  if (end <= start) return { ok: false, error: '期間の終わりが始まりより前です' };
+
+  var id = str_(calendarId) || settingsCalendarId_();
+  var cal = CalendarApp.getCalendarById(id);
+  if (!cal) return { ok: false, error: 'カレンダーが見つかりません: ' + id + '（GASエディタで testCalendarAccess を実行して権限を承認してください）' };
+
+  var tz = Session.getScriptTimeZone();
+  var events = cal.getEvents(start, end).map(function (ev) {
+    var allDay = ev.isAllDayEvent();
+    var st = allDay ? ev.getAllDayStartDate() : ev.getStartTime();
+    var date = Utilities.formatDate(st, tz, 'yyyy-MM-dd');
+    var title = str_(ev.getTitle());
+    var location = str_(ev.getLocation());
+    var desc = '';
+    try { desc = str_(ev.getDescription()); } catch (e) { desc = ''; }
+    // 場所欄に会議URLだけが入っている予定は「場所なし」とみなす
+    var locIsUrl = /^https?:\/\//i.test(location);
+    var online = title.indexOf('オンライン') >= 0
+      || ((!location || locIsUrl) && (MEETING_URL_RE.test(desc) || MEETING_URL_RE.test(location)));
+    return {
+      // 繰り返し予定は同じIDを共有するので、日付を付けて1回ごとに区別する
+      eventId: ev.getId() + '@' + date,
+      date: date,
+      startTime: allDay ? '' : Utilities.formatDate(st, tz, 'HH:mm'),
+      title: title,
+      location: locIsUrl ? '' : location,
+      isAllDay: allDay,
+      online: online
+    };
+  });
+  events.sort(function (a, b) {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    return a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0;
+  });
+  return { ok: true, calendarId: id, events: events };
+}
+
+/** GASエディタから手動で実行し、カレンダーの読み取り権限を承認するための関数。 */
+function testCalendarAccess() {
+  var id = settingsCalendarId_();
+  var cal = CalendarApp.getCalendarById(id);
+  if (!cal) throw new Error('カレンダーが見つかりません: ' + id);
+  var now = new Date();
+  var week = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
+  var n = cal.getEvents(now, week).length;
+  Logger.log('OK: ' + cal.getName() + '（' + id + '）今後7日間の予定 ' + n + '件');
 }
 
 /** 2地点間の走行距離（km）を Google Maps から取得する。 */

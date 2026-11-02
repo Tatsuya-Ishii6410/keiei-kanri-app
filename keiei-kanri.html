@@ -772,6 +772,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       </select>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn primary" onclick="openTravelEntry()">+ 交通費を追加</button>
+        <button class="btn" onclick="openCalendarImport()">📅 カレンダーから作成</button>
         <button class="btn" onclick="openSettleModal()">🚃 交通費精算を追加</button>
         <button class="btn" onclick="exportTravelCsv()">📥 CSV出力</button>
         <button class="btn" onclick="printTravelLedger()">🖨️ PDF出力</button>
@@ -779,7 +780,11 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     </div>
     <div class="card"><div id="tl-summary"></div></div>
     <div class="card">
-      <div class="card-header"><span class="card-title">交通費一覧</span></div>
+      <div class="card-header"><span class="card-title">交通費一覧</span>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:500">
+          <input id="tl-needs-edit" type="checkbox" onchange="renderTravelLedger()" style="width:auto"> ⚠ 要編集のみ表示
+        </label>
+      </div>
       <div class="table-wrap mob-table"><table>
         <thead><tr><th>日付</th><th>移動手段</th><th>出発</th><th>到着</th><th>訪問先</th><th>用件</th><th style="text-align:right">金額</th><th>備考</th><th>操作</th></tr></thead>
         <tbody id="tl-list"></tbody>
@@ -1034,6 +1039,10 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="form-row">
       <div class="form-group"><label class="form-label">ガソリン単価（円/L）</label><input id="t-gas" type="number" placeholder="175"></div>
       <div class="form-group"><label class="form-label">燃費（km/L）</label><input id="t-fuel" type="number" step="0.1" placeholder="15"></div>
+    </div>
+    <div class="form-row single">
+      <div class="form-group"><label class="form-label">GoogleカレンダーID（「📅 カレンダーから作成」で読み取る。読み取りのみ）</label>
+        <input id="t-calendar" type="text" placeholder="tatsuya-ishii@us-links.com"></div>
     </div>
     <div class="actions-row">
       <button class="btn primary" onclick="saveTravelSettings()">✓ 保存する</button>
@@ -1478,6 +1487,33 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </div>
 </div>
 
+<div class="modal-overlay" id="modal-cal-import">
+<div class="modal wide" style="max-width:1180px">
+  <div class="modal-header"><span class="modal-title">📅 カレンダーから交通費を作成</span><button class="btn sm" onclick="closeModal('modal-cal-import')">✕</button></div>
+  <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
+    Googleカレンダーの予定を読み取るだけです（予定の作成・変更はしません）。
+    場所のない予定は日付と訪問先だけで登録し、あとで台帳から編集してください。
+  </div>
+  <div class="form-row three">
+    <div class="form-group"><label class="form-label">期間（から）</label><input id="ci-from" type="date"></div>
+    <div class="form-group"><label class="form-label">期間（まで）</label><input id="ci-to" type="date"></div>
+    <div class="form-group" style="justify-content:flex-end"><label class="form-label">&nbsp;</label>
+      <button class="btn primary" id="ci-fetch" onclick="fetchCalendarEvents()">予定を取得</button></div>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">除外キーワード（カンマ区切り。予定名に含む行のチェックを外します）</label>
+      <input id="ci-exclude" type="text" onchange="applyCalExclude();renderCalImport()"></div>
+  </div>
+  <div id="ci-msg" style="margin:8px 0"></div>
+  <div id="ci-body"></div>
+  <div class="actions-row" style="flex-wrap:wrap">
+    <button class="btn" onclick="closeModal('modal-cal-import')">閉じる</button>
+    <button class="btn" id="ci-fare" onclick="calcCalFares()" disabled>🔍 運賃を計算</button>
+    <button class="btn primary" id="ci-submit" onclick="registerCalRows()" disabled>選択を台帳に登録</button>
+  </div>
+</div>
+</div>
+
 <div class="modal-overlay" id="modal-plan-confirm">
 <div class="modal">
   <div class="modal-header"><span class="modal-title">入金を実績にする</span><button class="btn sm" onclick="closeModal('modal-plan-confirm')">✕</button></div>
@@ -1747,6 +1783,8 @@ const GAS_URL='https://script.google.com/macros/s/AKfycbypwiuWcOJQqLkJtEDHrew4ML
 const SHEET_URL='https://docs.google.com/spreadsheets/d/1gdtg7q3NwG3FQmWGc7lMpNEKROyvyRwuoIRKNSPsi4k/edit';
 
 const STORAGE_KEY='bizapp_v1';
+// 「📅 カレンダーから作成」で読むカレンダー（設定ページで変更可。読み取りのみ）
+const DEFAULT_CALENDAR_ID='tatsuya-ishii@us-links.com';
 const defaultState={
   company:{
     name:'アスリンク株式会社',
@@ -1804,7 +1842,7 @@ const defaultState={
   // 現在の口座残高（キャッシュフローの起点）
   bankBalance:0,
   // 交通費の計算設定
-  travel:{googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15},
+  travel:{googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15,calendarId:DEFAULT_CALENDAR_ID,fareCache:{}},
   // 財務情報（融資力診断で使う）
   finance:{loan:0},
   /* 税金・社会保険の計算設定。
@@ -1900,6 +1938,7 @@ function mergeState(parsed){
     l.memo=l.memo||'';
     l.visit=l.visit||'';
     l.purpose=l.purpose||'';
+    l.calId=l.calId||'';
     if(['actual','planned_in','planned_out'].indexOf(l.status)<0)l.status='actual';
     l.expectedDate=l.expectedDate||'';
     l.settlementMonth=l.settlementMonth||'';
@@ -1941,7 +1980,9 @@ function mergeState(parsed){
     const a=s.fiscalYears.find(f=>f.active)||s.fiscalYears[0];
     s.currentFiscalYearId=a?a.id:null;
   }
-  s.travel=Object.assign({googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15},(parsed&&parsed.travel)||{});
+  s.travel=Object.assign({googleMapsApiKey:'',gasolinePrice:175,fuelEfficiency:15,calendarId:DEFAULT_CALENDAR_ID,fareCache:{}},(parsed&&parsed.travel)||{});
+  s.travel.calendarId=s.travel.calendarId||DEFAULT_CALENDAR_ID;
+  if(!s.travel.fareCache||typeof s.travel.fareCache!=='object')s.travel.fareCache={};
   s.travel.gasolinePrice=parseInt(s.travel.gasolinePrice)||175;
   s.travel.fuelEfficiency=parseFloat(s.travel.fuelEfficiency)||15;
   s.finance=Object.assign({loan:0},(parsed&&parsed.finance)||{});
@@ -2041,7 +2082,13 @@ function keepLocalWhenMissing(remote){
   ['travel','finance','taxSettings'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
-  // ledger の列が足りない古いデプロイでも、交通費の訪問先・用件を消さない
+  if(d.travel&&S.travel&&d.travel!==S.travel){
+    d.travel=Object.assign({},d.travel);
+    if(d.travel.calendarId===undefined)d.travel.calendarId=S.travel.calendarId;
+    // 運賃キャッシュは手元とGASの両方を合わせる（GASが検索した結果も、手修正も残す）
+    d.travel.fareCache=Object.assign({},d.travel.fareCache||{},S.travel.fareCache||{});
+  }
+  // ledger の列が足りない古いデプロイでも、交通費の訪問先・用件・カレンダーIDを消さない
   if(Array.isArray(d.ledger)&&Array.isArray(S.ledger)){
     const local={};
     S.ledger.forEach(l=>{local[l.id]=l;});
@@ -2049,7 +2096,7 @@ function keepLocalWhenMissing(remote){
       const o=local[r.id];
       if(!o)return r;
       const x=Object.assign({},r);
-      ['visit','purpose'].forEach(f=>{if(x[f]===undefined&&o[f])x[f]=o[f];});
+      ['visit','purpose','calId'].forEach(f=>{if(x[f]===undefined&&o[f])x[f]=o[f];});
       return x;
     });
   }
@@ -3525,6 +3572,8 @@ function nextMonth25(){
    =================================================================== */
 
 const TRAVEL_MODES=['電車・バス','タクシー','車','その他'];
+// カレンダーから作った「場所なし」の行の摘要。GASは摘要が空の行を捨てるので空にしない
+const TRAVEL_BLANK_DESC='（未入力）';
 let editTravelId=null;
 let editTravelRound=false;
 
@@ -3553,6 +3602,7 @@ function travelParse(desc){
 // 摘要を 移動手段・出発・到着 に分ける（到着から「（電車・バス）　往復」を外す）
 function travelPartsOf(l){
   const desc=String(l.desc||'');
+  if(desc===TRAVEL_BLANK_DESC)return{mode:'',round:false,from:'',to:''};
   const round=/往復\s*$/.test(desc);
   const p=travelParse(desc.replace(/（[^（）]+）(?:\s|　)*(?:往復)?\s*$/,''));
   return{mode:travelModeOf(desc),round,from:p.from,to:p.to};
@@ -3561,6 +3611,12 @@ function travelPartsOf(l){
 function travelModeLabel(t){
   return(t.mode||'-')+(t.round?'（往復）':'');
 }
+
+// 到着が空、または金額0円の行は「要編集」（カレンダーから作った場所なしの行など）
+function needsTravelEdit(l){
+  return !travelPartsOf(l).to||!(l.amount>0);
+}
+const TRAVEL_EDIT_BADGE='<span class="badge badge-amber" style="font-size:10px;white-space:nowrap">⚠要編集</span>';
 
 // 日付昇順、同じ日は登録順（id昇順）
 function sortTravel(a,b){
@@ -3602,7 +3658,7 @@ function travelRowHtml(l,g){
     ${g?travelDateCell(g):''}
     <td style="font-size:12px;white-space:nowrap">${travelModeLabel(t)}</td>
     <td style="font-size:12px">${t.from||'-'}</td>
-    <td style="font-size:12px">${t.to||'-'}</td>
+    <td style="font-size:12px">${t.to||'-'}${needsTravelEdit(l)?' '+TRAVEL_EDIT_BADGE:''}</td>
     <td style="font-size:12px">${l.visit||''}</td>
     <td style="font-size:12px">${l.purpose||''}</td>
     <td style="text-align:right;font-weight:500">${fmt(l.amount)}</td>
@@ -3616,8 +3672,11 @@ function travelRowHtml(l,g){
 
 function renderTravelLedger(){
   const mi=currentTravelMonth();
-  const rows=travelLedgerRows(mi);
-  const total=rows.reduce((a,l)=>a+l.amount,0);
+  const all=travelLedgerRows(mi);
+  const total=all.reduce((a,l)=>a+l.amount,0);
+  const needEdit=all.filter(needsTravelEdit).length;
+  const onlyEdit=document.getElementById('tl-needs-edit').checked;
+  const rows=onlyEdit?all.filter(needsTravelEdit):all;
 
   // サマリー
   let status='';
@@ -3629,14 +3688,17 @@ function renderTravelLedger(){
   }
   document.getElementById('tl-summary').innerHTML=
     `<div style="font-size:14px">${mi===null?'全期間':(mi+1)+'月'}の交通費合計：`
-    +`<strong style="font-size:18px">${fmt(total)}</strong>（${rows.length}件）</div>`
+    +`<strong style="font-size:18px">${fmt(total)}</strong>（${all.length}件）</div>`
+    +(needEdit?`<div style="font-size:12px;margin-top:4px">${TRAVEL_EDIT_BADGE} 到着か金額が未入力の行が ${needEdit}件 あります</div>`:'')
     +(status?`<div style="font-size:12px;margin-top:4px">精算状況：${status}</div>`:'');
 
   const tb=document.getElementById('tl-list');
   const cards=document.getElementById('tl-cards');
   if(rows.length===0){
     tb.innerHTML='';cards.innerHTML='';
-    document.getElementById('tl-empty').style.display='';
+    const empty=document.getElementById('tl-empty');
+    empty.textContent=onlyEdit&&all.length?'要編集の交通費はありません。':'交通費の記録がありません。';
+    empty.style.display='';
     return;
   }
   document.getElementById('tl-empty').style.display='none';
@@ -3822,7 +3884,7 @@ function openTravelEntry(id){
   document.getElementById('te-to').value=t.to;
   document.getElementById('te-visit').value=l?(l.visit||''):'';
   document.getElementById('te-purpose').value=l?(l.purpose||''):'';
-  document.getElementById('te-amount').value=l?l.amount:'';
+  document.getElementById('te-amount').value=l&&l.amount?l.amount:'';
   document.getElementById('te-memo').value=l?(l.memo||''):'';
   document.getElementById('te-round').checked=false;
   document.getElementById('te-result').innerHTML='';
@@ -3867,12 +3929,17 @@ function saveTravelEntry(){
   const memo=document.getElementById('te-memo').value.trim();
   const round=document.getElementById('te-round').checked;
   let amount=parseInt(document.getElementById('te-amount').value)||0;
-  if(!date||!amount){alert('日付と金額を入力してください');return;}
-  if(!from&&!to){alert('出発地か到着地を入力してください');return;}
+  // 編集では金額0円・区間なしでも保存できる（カレンダーから作った要編集の行を少しずつ埋めるため）
+  const editing=editTravelId!==null;
+  if(!date){alert('日付を入力してください');return;}
+  if(!editing&&!amount){alert('日付と金額を入力してください');return;}
+  if(!editing&&!from&&!to){alert('出発地か到着地を入力してください');return;}
   if(round)amount*=2;
 
-  const isRound=round||(editTravelId!==null&&editTravelRound);
-  const desc=(from&&to?`${from}→${to}`:(to||from))+`（${mode}）`+(isRound?'　往復':'');
+  const isRound=round||(editing&&editTravelRound);
+  const desc=(from||to)
+    ?(from&&to?`${from}→${to}`:(to||from))+`（${mode}）`+(isRound?'　往復':'')
+    :TRAVEL_BLANK_DESC;
   const values={date,expectedDate:'',type:'交通費',desc,amount,memo,visit,purpose,status:'actual'};
 
   if(editTravelId!==null){
@@ -3885,6 +3952,359 @@ function saveTravelEntry(){
   editTravelId=null;
   saveState();closeModal('modal-travel-entry');
   renderTravelLedger();refreshAll();
+}
+
+/* ===== カレンダーから交通費を作成 =====================================
+   GASの calendarEvents（読み取りのみ）で予定を取り、3つに分ける。
+     A 場所あり … 到着＝場所欄。出発・手段・往復に既定値を入れる
+     B オンライン … 既定では登録しない（折りたたみから個別に復活できる）
+     C 場所なし … 日付と訪問先だけで登録し、あとで台帳から編集する
+   運賃は fareBatch（fareLookup_ の再利用）で推定し、travel.fareCache に溜める。
+   ledger には calId を持たせ、同じ予定を二重に登録しない。
+   =================================================================== */
+
+const CAL_DEFAULT_FROM='青野ヶ原駅';
+const CAL_DEFAULT_PERIOD=['2026-03-01','2026-07-31'];
+const CAL_DEFAULT_EXCLUDE='病院,クリニック,医院,内科,歯科';
+const CAL_FARE_CHUNK=10;   // GASの fareBatch は1回10区間まで
+const CAL_CONF={mid:'推定',low:'低（要確認）',manual:'手入力'};
+
+let calRows=[];      // プレビュー対象（A・C、復活させたB）
+let calOnline=[];    // B オンライン（除外中）
+let calSkipped=0;    // calId が登録済みで除外した件数
+
+function calMsg(html){document.getElementById('ci-msg').innerHTML=html||''}
+
+function openCalendarImport(){
+  if(!document.getElementById('ci-from').value)document.getElementById('ci-from').value=CAL_DEFAULT_PERIOD[0];
+  if(!document.getElementById('ci-to').value)document.getElementById('ci-to').value=CAL_DEFAULT_PERIOD[1];
+  if(!document.getElementById('ci-exclude').value)document.getElementById('ci-exclude').value=CAL_DEFAULT_EXCLUDE;
+  calRows=[];calOnline=[];calSkipped=0;
+  calMsg('');
+  renderCalImport();
+  openModal('modal-cal-import');
+}
+
+// GASへGETする（CORSで失敗したらJSONPで取り直す）
+async function gasGet(params){
+  if(!gasEnabled())throw new Error('GAS_URL が設定されていません');
+  const q=Object.keys(params).map(k=>encodeURIComponent(k)+'='+encodeURIComponent(params[k])).join('&');
+  const url=GAS_URL+'?'+q;
+  try{
+    const res=await fetch(url,{method:'GET',redirect:'follow'});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    return await res.json();
+  }catch(e){
+    return await gasJsonp(url);
+  }
+}
+
+// 訪問先の初期値。先頭の【オンライン】などの接頭辞だけ外し、名前は加工しない
+function calVisitName(title){
+  let s=String(title||'').trim();
+  const re=/^(?:【[^】]*】|\[[^\]]*\]|［[^］]*］)\s*/;
+  while(re.test(s))s=s.replace(re,'');
+  return s||String(title||'').trim();
+}
+
+function makeCalRow(ev){
+  const hasLoc=!!String(ev.location||'').trim();
+  return{
+    calId:ev.eventId,
+    date:ev.date,
+    startTime:ev.startTime||'',
+    title:ev.title||'',
+    location:ev.location||'',
+    online:!!ev.online,
+    cat:hasLoc?'A':'C',
+    checked:true,
+    from:hasLoc?CAL_DEFAULT_FROM:'',
+    to:hasLoc?String(ev.location).trim():'',
+    mode:hasLoc?'電車・バス':'',
+    round:hasLoc,
+    visit:calVisitName(ev.title),
+    purpose:'',
+    fare:'',          // 片道の運賃
+    conf:'',          // mid / low / manual
+    fareError:'',
+    dup:false,
+    excluded:''       // 当たった除外キーワード
+  };
+}
+
+function calRowAmount(r){
+  return(parseInt(r.fare)||0)*(r.round?2:1);
+}
+
+// 同日×同到着、または同日×同金額の交通費がすでにあるか
+function calDupOf(r){
+  const amt=calRowAmount(r);
+  const to=String(r.to||'').trim();
+  return S.ledger.some(l=>isActual(l)&&l.type==='交通費'&&l.date===r.date&&(
+    (to&&travelPartsOf(l).to===to)||(amt>0&&l.amount===amt)
+  ));
+}
+
+function calExcludeWords(){
+  return document.getElementById('ci-exclude').value
+    .split(/[,、，]/).map(s=>s.trim()).filter(Boolean);
+}
+
+// 除外キーワードを予定名に含む行はチェックを外す（行は消さない）
+function applyCalExclude(){
+  const words=calExcludeWords();
+  calRows.forEach(r=>{
+    const hit=words.find(w=>r.title.indexOf(w)>=0)||'';
+    if(hit&&!r.excluded)r.checked=false;
+    r.excluded=hit;
+  });
+}
+
+function sortCalRows(){
+  calRows.sort((a,b)=>a.date.localeCompare(b.date)||a.startTime.localeCompare(b.startTime));
+}
+
+async function fetchCalendarEvents(){
+  const from=document.getElementById('ci-from').value;
+  const to=document.getElementById('ci-to').value;
+  if(!from||!to){alert('期間を入力してください');return;}
+  if(from>to){alert('期間の終わりが始まりより前です');return;}
+  const btn=document.getElementById('ci-fetch');
+  btn.disabled=true;
+  calMsg('<div class="alert alert-info"><span class="spinner"></span> カレンダーの予定を取得しています...</div>');
+  try{
+    const json=await gasGet({action:'calendarEvents',from,to,calendarId:(S.travel&&S.travel.calendarId)||DEFAULT_CALENDAR_ID});
+    if(!json||!json.ok)throw new Error((json&&json.error)||'予定を取得できませんでした');
+    const known={};
+    S.ledger.forEach(l=>{if(l.calId)known[l.calId]=true;});
+    calRows=[];calOnline=[];calSkipped=0;
+    (json.events||[]).forEach(ev=>{
+      if(known[ev.eventId]){calSkipped++;return;}
+      const r=makeCalRow(ev);
+      r.dup=calDupOf(r);
+      if(r.dup)r.checked=false;
+      (ev.online?calOnline:calRows).push(r);
+    });
+    applyCalExclude();
+    sortCalRows();
+    calMsg(`<div class="alert alert-success">✓ ${(json.events||[]).length}件の予定を取得しました`
+      +(calSkipped?`（登録済み ${calSkipped}件は除外）`:'')+'</div>');
+  }catch(e){
+    calMsg(`<div class="alert alert-error">❌ ${e.message}<br><small>初めて使うときは、GASエディタで testCalendarAccess を実行して権限を承認し、新しいバージョンでデプロイしてください。</small></div>`);
+  }
+  btn.disabled=false;
+  renderCalImport();
+}
+
+function calFareKey(r){
+  return String(r.from||'').trim()+'|'+String(r.to||'').trim();
+}
+
+// プレビューの入力を data に反映する（チェックボックスは checked、それ以外は value）
+function calEdit(i,field,el){
+  const r=calRows[i];
+  if(!r)return;
+  if(field==='checked'||field==='round'){
+    r[field]=el.checked;
+  }else if(field==='fare'){
+    const v=el.value===''?'':(parseInt(el.value)||0);
+    r.fare=v;
+    r.conf=v===''?'':'manual';
+    r.fareError='';
+    // 手修正した運賃は次回から使えるようにキャッシュへ
+    if(v!==''&&r.from.trim()&&r.to.trim()){
+      if(!S.travel.fareCache)S.travel.fareCache={};
+      S.travel.fareCache[calFareKey(r)]={amount:v,confidence:'manual',at:today()};
+      saveState();
+    }
+  }else{
+    r[field]=el.value;
+    // 区間が変わったら推定運賃は使えない（手入力の値は残す）
+    if((field==='from'||field==='to'||field==='mode')&&r.conf!=='manual'){r.fare='';r.conf='';r.fareError='';}
+  }
+  r.dup=calDupOf(r);
+  renderCalImport();
+}
+
+function calRestore(i){
+  const r=calOnline.splice(i,1)[0];
+  if(!r)return;
+  r.excluded='';
+  calRows.push(r);
+  applyCalExclude();
+  sortCalRows();
+  renderCalImport();
+}
+
+function calConfCell(r){
+  if(r.fareError)return`<span style="color:var(--red);font-size:11px" title="${escAttr(r.fareError)}">取得失敗</span>`;
+  return r.conf?`<span style="font-size:11px">${CAL_CONF[r.conf]||r.conf}</span>`:'<span style="color:var(--text-muted)">-</span>';
+}
+
+function calBadges(r){
+  return(r.dup?' <span class="badge badge-amber" style="font-size:10px">登録済みの可能性</span>':'')
+    +(r.excluded?` <span class="badge" style="font-size:10px">除外語「${r.excluded}」</span>`:'')
+    +(r.cat==='C'?' <span class="badge" style="font-size:10px">場所なし</span>':'')
+    +(r.online?' <span class="badge badge-blue" style="font-size:10px">オンライン</span>':'');
+}
+
+function calModeOptions(cur){
+  return['',...TRAVEL_MODES].map(m=>`<option value="${m}"${m===cur?' selected':''}>${m||'—'}</option>`).join('');
+}
+
+function calFareCell(r,i){
+  const amt=calRowAmount(r);
+  return`<input type="number" value="${r.fare}" onchange="calEdit(${i},'fare',this)" style="width:84px;font-size:12px;padding:4px 6px;text-align:right">`
+    +(r.fare!==''&&r.conf!=='manual'?'<div style="font-size:10px;color:var(--text-muted)">推定</div>':'')
+    +(r.round&&amt?`<div style="font-size:10px;color:var(--text-muted)">往復 ${fmt(amt)}</div>`:'');
+}
+
+const CAL_INPUT='style="width:100%;min-width:84px;font-size:12px;padding:4px 6px"';
+
+function calRowHtml(r,i){
+  const bg=r.conf==='low'||r.fareError?'background:var(--amber-bg)':'';
+  return`<tr style="${bg}">
+    <td><input type="checkbox" ${r.checked?'checked':''} onchange="calEdit(${i},'checked',this)" style="width:auto"></td>
+    <td style="font-size:12px;white-space:nowrap">${r.date}${r.startTime?`<div style="font-size:10px;color:var(--text-muted)">${r.startTime}</div>`:''}</td>
+    <td style="font-size:12px;min-width:140px">${r.title}${calBadges(r)}</td>
+    <td><input type="text" value="${escAttr(r.from)}" onchange="calEdit(${i},'from',this)" ${CAL_INPUT}></td>
+    <td><input type="text" value="${escAttr(r.to)}" onchange="calEdit(${i},'to',this)" ${CAL_INPUT}></td>
+    <td><select onchange="calEdit(${i},'mode',this)" style="font-size:12px;padding:4px;width:auto">${calModeOptions(r.mode)}</select></td>
+    <td style="text-align:center"><input type="checkbox" ${r.round?'checked':''} onchange="calEdit(${i},'round',this)" style="width:auto"></td>
+    <td><input type="text" value="${escAttr(r.visit)}" onchange="calEdit(${i},'visit',this)" ${CAL_INPUT}></td>
+    <td><input type="text" value="${escAttr(r.purpose)}" onchange="calEdit(${i},'purpose',this)" ${CAL_INPUT}></td>
+    <td>${calFareCell(r,i)}</td>
+    <td>${calConfCell(r)}</td>
+  </tr>`;
+}
+
+function calCardHtml(r,i){
+  const bg=r.conf==='low'||r.fareError?'background:var(--amber-bg)':'';
+  const field=(label,html)=>`<div class="form-group" style="margin-bottom:8px"><label class="form-label">${label}</label>${html}</div>`;
+  return mobCard(
+    `<div class="mob-card-header"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">
+      <input type="checkbox" ${r.checked?'checked':''} onchange="calEdit(${i},'checked',this)" style="width:auto;margin-top:3px">
+      <span><span style="font-size:13px">${r.date}${r.startTime?' '+r.startTime:''}</span><br>${r.title}${calBadges(r)}</span></label></div>`
+    +field('出発',`<input type="text" value="${escAttr(r.from)}" onchange="calEdit(${i},'from',this)">`)
+    +field('到着',`<input type="text" value="${escAttr(r.to)}" onchange="calEdit(${i},'to',this)">`)
+    +field('手段',`<select onchange="calEdit(${i},'mode',this)">${calModeOptions(r.mode)}</select>`)
+    +`<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-bottom:8px"><input type="checkbox" ${r.round?'checked':''} onchange="calEdit(${i},'round',this)" style="width:auto"> 往復</label>`
+    +field('訪問先',`<input type="text" value="${escAttr(r.visit)}" onchange="calEdit(${i},'visit',this)">`)
+    +field('用件',`<input type="text" value="${escAttr(r.purpose)}" onchange="calEdit(${i},'purpose',this)">`)
+    +field('運賃（片道）',calFareCell(r,i))
+    +mobRow('信頼度',calConfCell(r)),bg);
+}
+
+function renderCalImport(){
+  const body=document.getElementById('ci-body');
+  const has=calRows.length>0;
+  document.getElementById('ci-fare').disabled=!has;
+  document.getElementById('ci-submit').disabled=!calRows.some(r=>r.checked);
+  if(!has&&calOnline.length===0){
+    body.innerHTML=calSkipped?'<div class="empty-state">新しく登録できる予定はありません。</div>':'';
+    return;
+  }
+  const nA=calRows.filter(r=>r.cat==='A').length;
+  const nC=calRows.filter(r=>r.cat==='C').length;
+  const sel=calRows.filter(r=>r.checked);
+  const total=sel.reduce((a,r)=>a+calRowAmount(r),0);
+
+  const online=calOnline.length===0?'':`<details style="margin:10px 0;font-size:13px">
+    <summary style="cursor:pointer">オンライン除外 ${calOnline.length}件</summary>
+    <div style="margin-top:6px">${calOnline.map((r,i)=>`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:12px">${r.date} ${r.startTime} ${r.title}</span>
+      <button class="btn sm" onclick="calRestore(${i})">↩ 復活</button></div>`).join('')}</div>
+  </details>`;
+
+  body.innerHTML=`<div style="font-size:13px;margin-bottom:6px">場所あり ${nA}件 ／ 場所なし ${nC}件 ／ オンライン除外 ${calOnline.length}件`
+      +(calSkipped?` ／ 登録済み ${calSkipped}件`:'')+'</div>'
+    +online
+    +(has?`<div class="table-wrap mob-table"><table>
+      <thead><tr><th></th><th>日付</th><th>予定名</th><th>出発</th><th>到着</th><th>手段</th><th>往復</th><th>訪問先</th><th>用件</th><th style="text-align:right">運賃</th><th>信頼度</th></tr></thead>
+      <tbody>${calRows.map(calRowHtml).join('')}</tbody>
+    </table></div>
+    <div class="mob-cards">${calRows.map(calCardHtml).join('')}</div>`:'')
+    +`<div style="text-align:right;font-size:14px;margin-top:10px">選択 ${sel.length}件　合計 <strong style="font-size:17px">${fmt(total)}</strong>`
+    +`<div style="font-size:11px;color:var(--text-muted)">運賃は推定です。往復は片道×2。黄色の行は信頼度が低いので確認してください。</div></div>`;
+}
+
+async function calcCalFares(){
+  const cache=S.travel.fareCache||(S.travel.fareCache={});
+  // 到着が入っている電車・バスの行だけ（場所なしの行・手入力した行は対象外）
+  const targets=calRows.filter(r=>r.from.trim()&&r.to.trim()&&r.mode==='電車・バス'&&r.conf!=='manual');
+  if(targets.length===0){alert('運賃を計算できる行がありません（出発・到着が入っている電車・バスの行が対象です）');return;}
+
+  const apply=(r,c)=>{r.fare=parseInt(c.amount)||'';r.conf=c.confidence||'mid';r.fareError='';};
+  const missing=[];
+  targets.forEach(r=>{
+    const c=cache[calFareKey(r)];
+    if(c&&parseInt(c.amount)>0)apply(r,c);
+    else if(missing.indexOf(calFareKey(r))<0)missing.push(calFareKey(r));
+  });
+
+  const btn=document.getElementById('ci-fare');
+  btn.disabled=true;
+  let failed=0;
+  try{
+    for(let k=0;k<missing.length;k+=CAL_FARE_CHUNK){
+      const chunk=missing.slice(k,k+CAL_FARE_CHUNK);
+      calMsg(`<div class="alert alert-info"><span class="spinner"></span> 運賃を検索しています...（${Math.min(k+chunk.length,missing.length)}/${missing.length}区間）</div>`);
+      const json=await gasCall({action:'fareBatch',pairs:chunk.map(key=>{const p=key.split('|');return{from:p[0],to:p[1]};})});
+      if(!json||!json.ok)throw new Error((json&&json.error)||'運賃を取得できませんでした');
+      (json.results||[]).forEach(res=>{
+        const key=res.from+'|'+res.to;
+        if(res.ok)cache[key]={amount:res.amount,confidence:res.confidence||'mid',at:today()};
+        targets.filter(r=>calFareKey(r)===key).forEach(r=>{
+          if(res.ok)apply(r,res);
+          else{r.fare='';r.conf='low';r.fareError=res.error||'取得失敗';failed++;}
+        });
+      });
+    }
+    calMsg(`<div class="alert alert-success">✓ ${targets.length}行の運賃を入れました`
+      +(missing.length?`（新しく検索 ${missing.length}区間）`:'（すべて保存済みの運賃）')
+      +(failed?`。取得できなかった行が ${failed}件あります`:'')+'</div>');
+  }catch(e){
+    calMsg(`<div class="alert alert-error">❌ ${e.message}<br><small>取得できた分は反映済みです。運賃は手入力もできます。</small></div>`);
+  }
+  // 金額が入ったので重複を見直す（新しく重複になった行だけチェックを外す）
+  calRows.forEach(r=>{const d=calDupOf(r);if(d&&!r.dup)r.checked=false;r.dup=d;});
+  saveState();
+  btn.disabled=false;
+  renderCalImport();
+}
+
+function registerCalRows(){
+  const sel=calRows.filter(r=>r.checked);
+  if(sel.length===0){alert('登録する行を選択してください');return;}
+  if(!confirm(`${sel.length}件を交通費台帳に登録します。よろしいですか？`))return;
+  sel.forEach(r=>{
+    const from=r.from.trim(),to=r.to.trim(),mode=r.mode;
+    // 場所なしで何も入れていない行は「（未入力）」。金額0円のまま登録し、台帳で要編集にする
+    const desc=(from||to)
+      ?(from&&to?`${from}→${to}`:(to||from))+(mode?`（${mode}）`:'')+(r.round?'　往復':'')
+      :TRAVEL_BLANK_DESC;
+    S.ledger.push({
+      id:S.nextLedgerId++,
+      date:r.date,
+      expectedDate:'',
+      type:'交通費',
+      desc,
+      amount:calRowAmount(r),
+      memo:'',
+      visit:r.visit.trim(),
+      purpose:r.purpose.trim(),
+      status:'actual',
+      calId:r.calId
+    });
+  });
+  const done={};
+  sel.forEach(r=>{done[r.calId]=true;});
+  calRows=calRows.filter(r=>!done[r.calId]);
+  calSkipped+=sel.length;
+  saveState();
+  renderTravelLedger();refreshAll();
+  calMsg(`<div class="alert alert-success">✓ ${sel.length}件を交通費台帳に登録しました。⚠要編集の行は台帳から編集してください。</div>`);
+  renderCalImport();
 }
 
 /* ===== 交通費の精算（出金予定への反映） ==============================
@@ -4147,6 +4567,7 @@ function loadTravelForm(){
   document.getElementById('t-mapkey').value=t.googleMapsApiKey;
   document.getElementById('t-gas').value=t.gasolinePrice;
   document.getElementById('t-fuel').value=t.fuelEfficiency;
+  document.getElementById('t-calendar').value=(S.travel&&S.travel.calendarId)||DEFAULT_CALENDAR_ID;
 }
 
 function saveTravelSettings(){
@@ -4154,6 +4575,7 @@ function saveTravelSettings(){
   S.travel.googleMapsApiKey=document.getElementById('t-mapkey').value.trim();
   S.travel.gasolinePrice=parseInt(document.getElementById('t-gas').value)||175;
   S.travel.fuelEfficiency=parseFloat(document.getElementById('t-fuel').value)||15;
+  S.travel.calendarId=document.getElementById('t-calendar').value.trim()||DEFAULT_CALENDAR_ID;
   saveState();
   refreshTravelMode();
   const msg=document.getElementById('travel-msg');
@@ -7236,7 +7658,7 @@ function travelDayCardsHtml(rows,withActions){
 function travelCardHtml(l,withActions){
   const t=travelPartsOf(l);
   return mobCard(
-    `<div class="mob-card-header"><span style="font-size:13px">${travelModeLabel(t)}</span>
+    `<div class="mob-card-header"><span style="font-size:13px">${travelModeLabel(t)}${needsTravelEdit(l)?' '+TRAVEL_EDIT_BADGE:''}</span>
       <span style="font-size:15px;font-weight:700">${fmt(l.amount)}</span></div>`
     +mobRow('出発',t.from||'-')
     +mobRow('到着',t.to||'-')
