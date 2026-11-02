@@ -206,12 +206,12 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .dash-v2 .dv2-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .dash-v2 button,.dash-v2 select{-webkit-appearance:none;appearance:none;font-family:inherit}
 .dash-v2 .dv2-btn{border:1px solid var(--ui-border-solid);background:var(--ui-bg);color:var(--ui-text);border-radius:999px;padding:8px 14px;font-size:13px;cursor:pointer;min-height:44px}
-.dash-v2 .dv2-btn.primary{background:var(--ui-accent);border-color:var(--ui-accent);color:var(--ui-on-accent);font-weight:700}
+.dash-v2 .dv2-btn.primary{background:var(--ui-accent-text);border-color:var(--ui-accent-text);color:var(--ui-on-accent);font-weight:700}
 .dash-v2 .dv2-link{background:none;border:0;padding:4px 0;color:var(--ui-accent-text);font-size:12px;font-weight:700;cursor:pointer}
 .dash-v2 .dv2-tap{min-height:44px}
 .dash-v2 .dv2-basis{margin-top:6px;padding:10px 12px;border-radius:var(--ui-radius-item);background:var(--ui-accent-soft);font-size:12px;line-height:1.7;color:var(--ui-text)}
 .dash-v2 .dv2-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:var(--ui-accent-soft);color:var(--ui-accent-text);white-space:nowrap}
-.dash-v2 .dv2-chip.dv2-actual{background:var(--ui-accent);color:var(--ui-on-accent)}
+.dash-v2 .dv2-chip.dv2-actual{background:var(--ui-accent-text);color:var(--ui-on-accent)}
 .dash-v2 .dv2-chip.dv2-plan{background:var(--ui-plan-soft);color:var(--ui-plan-text);border:1px dashed var(--ui-plan)}
 /* あいさつ行（ナビとは別。通常のスクロールで流れる。約56px） */
 .dash-v2 .dv2-head{display:flex;align-items:center;justify-content:space-between;gap:6px 12px;flex-wrap:wrap;min-height:48px;margin-bottom:8px}
@@ -265,6 +265,9 @@ body.dv2-on .tb-menu{display:none!important}
   .dash-v2 .dv2-left,.dash-v2 .dv2-right{display:flex;flex-direction:column;gap:16px;min-width:0}
   .dash-v2 .dv2-left{grid-column:span 8}.dash-v2 .dv2-right{grid-column:span 4}
 }
+/* キーボード操作のフォーカス表示（アクセント #3976F6 の2pxのリング） */
+.dash-v2 :is(button,a,select,summary,[tabindex]):focus-visible{outline:2px solid #3976F6;outline-offset:2px}
+.dash-v2 .dv2-kpi:focus-visible{outline-offset:2px}
 /* 経営コンディション */
 .dash-v2 .dv2-cond{padding:12px 16px;border-left:0;box-shadow:inset 4px 0 0 var(--lv),var(--ui-shadow-card)}
 .dash-v2 .dv2-cond.lv-good{--lv:var(--ui-good)}.dash-v2 .dv2-cond.lv-caution{--lv:var(--ui-caution)}.dash-v2 .dv2-cond.lv-warn{--lv:var(--ui-warn)}.dash-v2 .dv2-cond.lv-none{--lv:var(--ui-muted)}
@@ -295,6 +298,7 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .dv2-hero-nums>div{display:flex;flex-direction:column;min-width:0;max-width:100%}
 .dash-v2 .dv2-hero-nums b{overflow-wrap:anywhere}
 .dash-v2 .dv2-hero-nums .k{font-size:11px;color:var(--ui-muted-strong)}
+.dash-v2 .dv2-hero .dv2-kicker,.dash-v2 .dv2-hero .dv2-unit,.dash-v2 .dv2-hero .dv2-note,.dash-v2 .dv2-hero .dv2-muted{color:var(--ui-muted-strong)}
 .dash-v2 .dv2-hero-nums b{font-size:14px}
 .dash-v2 .dv2-hero-nums .dv2-hn-main b{font-size:17px}.dash-v2 .dv2-hero-nums .plan b{color:var(--ui-plan-text)}
 .dash-v2 .dv2-hero-rate .dv2-unit{line-height:1.2}
@@ -381,7 +385,7 @@ body.dv2-on .tb-menu{display:none!important}
 /* 推移グラフ */
 .dash-v2 .dv2-seg{display:inline-flex;border:1px solid var(--ui-border-solid);border-radius:999px;padding:2px}
 .dash-v2 .dv2-seg button{border:0;background:none;border-radius:999px;padding:0 14px;font-size:12px;cursor:pointer;color:var(--ui-muted);min-height:40px}
-.dash-v2 .dv2-seg button.on{background:var(--ui-accent);color:var(--ui-on-accent);font-weight:700}
+.dash-v2 .dv2-seg button.on{background:var(--ui-accent-text);color:var(--ui-on-accent);font-weight:700}
 .dash-v2 .dv2-legend{display:flex;gap:4px 12px;flex-wrap:wrap;font-size:11px;color:var(--ui-muted);margin-bottom:4px}
 .dash-v2 .dv2-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 .dash-v2 .lg-bar{background:linear-gradient(#3976F6,#7D6CF6)}.dash-v2 .lg-plan{background:var(--ui-plan-soft);border:1px dashed var(--ui-plan)}
@@ -440,7 +444,9 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 #dv-metrics .metric-card{border-radius:var(--ui-radius-item)}
 /* 読み込み中（高さは実際のカードに合わせる。動かさない） */
 .dash-v2 .dv2-skel{border-radius:var(--ui-radius-item);background:var(--ui-accent-soft)}
-.dash-v2 .dv2-skel.h-kpi{height:132px;border-radius:var(--ui-radius-card)}
+.dash-v2 .dv2-skel.h-kpi{height:206px;border-radius:var(--ui-radius-card)}
+.dash-v2 .dv2-skel.h-hero{height:208px}.dash-v2 .dv2-skel.h-trend{height:355px}.dash-v2 .dv2-skel.h-miss{height:230px}
+@media (max-width:768px){.dash-v2 .dv2-skel.h-hero{height:306px}.dash-v2 .dv2-skel.h-trend{height:349px}.dash-v2 .dv2-skel.h-kpi{height:205px}}
 @media (max-width:768px){
   .dash-v2{margin:-16px -12px;padding:12px 12px 32px}
   .dash-v2 .dv2-hero{grid-template-columns:minmax(0,1fr)}
@@ -912,9 +918,9 @@ body.dv2-on .tb-menu{display:none!important}
     <div class="dv2-layout">
       <div class="dv2-left">
         <section class="dv2-card dv2-cond" id="dv2-cond"><div class="dv2-skel" style="height:44px"></div></section>
-        <section class="dv2-card dv2-hero" id="dv2-hero"><div class="dv2-skel" style="height:150px"></div></section>
+        <section class="dv2-card dv2-hero" id="dv2-hero"><div class="dv2-skel h-hero"></div></section>
         <section class="dv2-kpis" id="dv2-kpis"><div class="dv2-skel h-kpi"></div><div class="dv2-skel h-kpi"></div><div class="dv2-skel h-kpi"></div><div class="dv2-skel h-kpi"></div></section>
-        <section class="dv2-card" id="dv2-trend"><div class="dv2-skel" style="height:240px"></div></section>
+        <section class="dv2-card" id="dv2-trend"><div class="dv2-skel h-trend"></div></section>
       </div>
       <div class="dv2-right">
         <section class="dv2-card dv2-actions" id="dv2-actions">
@@ -925,7 +931,7 @@ body.dv2-on .tb-menu{display:none!important}
           </div>
         </section>
         <section class="dv2-card dv2-hl" id="dv2-hl" hidden></section>
-        <section class="dv2-card" id="dv2-missions"><div class="dv2-skel" style="height:200px"></div></section>
+        <section class="dv2-card" id="dv2-missions"><div class="dv2-skel h-miss"></div></section>
         <section class="dv2-card" id="dv2-insights" hidden></section>
       </div>
     </div>
@@ -13179,7 +13185,20 @@ function setDashVersion(v,noSave){
 function initDashVersion(){
   dashVersion=dv2LS(ls=>ls.getItem(DASH_VERSION_KEY))==='1'?1:2;
   placeDashboard();
+  dv2Arrange();
+  if(window.matchMedia){const mq=window.matchMedia('(min-width:1024px)');(mq.addEventListener?mq.addEventListener('change',dv2Arrange):mq.addListener(dv2Arrange));}
 }
+/* スマホ（1列）では、アクションセンターとハイライトを KPI のすぐ後ろに置く（DOMの順＝見た目の順＝Tab の順）。PCは右の列へ戻す */
+function dv2Arrange(){
+  const wide=!!(window.matchMedia&&window.matchMedia('(min-width:1024px)').matches);
+  const left=document.querySelector('#dash-v2 .dv2-left'),right=document.querySelector('#dash-v2 .dv2-right');
+  const act=document.getElementById('dv2-actions'),hl=document.getElementById('dv2-hl'),kpis=document.getElementById('dv2-kpis');
+  if(!left||!right||!act||!hl||!kpis)return;
+  if(wide){right.insertBefore(hl,right.firstChild);right.insertBefore(act,hl);}
+  else{kpis.after(act);act.after(hl);}
+}
+// Esc でアバターのメニューを閉じる
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){const m=document.getElementById('dv2-menu');if(m&&!m.hidden){dv2Menu(false);const a=document.getElementById('dv2-avatar');if(a)a.focus();}}});
 // 旧の表示項目を、新画面の枠（dv2-slot-*）か元の場所（dvh-*）に移す
 function placeDashboard(){
   const v2=dashVersion===2;
@@ -13627,7 +13646,7 @@ function renderDv2Kpis(D){
   el.innerHTML=cards.map((c,i)=>{
     const val=c.value===null?(c.nullText||'未設定'):c.fmt==='pct'?c.value.toFixed(1)+'%':dv2Yen(c.value);
     const valEl=`<div class="dv2-num dv2-kpi-val ${c.value===null?'is-null':dv2FitClass(val)}" ${c.value===null?'':`data-count="${c.value}" data-fmt="${c.fmt}" data-key="kpi-${c.key}"`}>${val}</div>`;
-    return`<article class="dv2-card dv2-kpi kpi-${c.key} ${i%2?'tint-purple':'tint-blue'}" role="link" tabindex="0" onclick="${c.go}" onkeydown="if(event.key==='Enter')${c.go}">
+    return`<article class="dv2-card dv2-kpi kpi-${c.key} ${i%2?'tint-purple':'tint-blue'}" role="link" tabindex="0" onclick="${c.go}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${c.go}}">
       <div class="dv2-kpi-top"><span class="dv2-kpi-icon" aria-hidden="true">${c.icon}</span><span class="dv2-kpi-label">${c.label}</span>
         <button class="dv2-info" aria-label="${c.label}の計算根拠" aria-expanded="${!!dv2Open['kpi-'+c.key]}" onclick="event.stopPropagation();dv2Toggle('kpi-${c.key}')">ⓘ</button></div>
       ${c.ring&&c.value!==null?`<div class="dv2-ring-wrap">${dv2Ring(D.rate,D.hero.landing,rateStatus[0])}${valEl.replace('dv2-kpi-val','dv2-kpi-val dv2-ring-num')}</div>
