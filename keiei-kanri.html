@@ -567,6 +567,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div id="d-bank-import" style="font-size:13px;margin:-8px 0 6px"></div>
   <div id="d-backup-status" style="font-size:13px;margin:0 0 6px"></div>
   <div id="d-overdue-status" style="font-size:13px;margin:0 0 6px"></div>
+  <div id="d-close-status" style="font-size:13px;margin:0 0 6px"></div>
   <div id="d-inbox-status" style="font-size:13px;margin:0 0 6px"></div>
   <div id="d-invoice-status" style="font-size:13px;margin:0 0 16px"></div>
   <div class="two-col">
@@ -1249,6 +1250,25 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   </div>
 </div>
 
+<div id="page-close" class="page">
+  <div class="section-header">
+    <h1 class="section-title">✅ 月次締め</h1>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="close-month" onchange="renderClosePage()" style="width:auto;font-size:13px"></select>
+      <button class="btn" onclick="showPage('dashboard',document.querySelectorAll('.nav-btn')[0])">← ダッシュボード</button>
+    </div>
+  </div>
+  <div class="card" id="close-summary"></div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">確認項目</span></div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">
+      <span class="badge badge-green">OK</span> 対応不要　<span class="badge badge-red">要対応</span> 確認が必要　<span class="badge badge-gray">参考</span> 件数の目安（要対応には数えない）。
+      項目を押すと、該当の一覧を開きます。
+    </div>
+    <div id="close-list"></div>
+  </div>
+</div>
+
 </main>
 </div>
 </div>
@@ -1623,6 +1643,14 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <button class="btn" id="ci-fare" onclick="calcCalFares()" disabled>🔍 運賃を計算</button>
     <button class="btn primary" id="ci-submit" onclick="registerCalRows()" disabled>選択を台帳に登録</button>
   </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-close-list">
+<div class="modal wide" style="max-width:860px">
+  <div class="modal-header"><span class="modal-title" id="cl-title"></span><button class="btn sm" onclick="closeModal('modal-close-list')">✕</button></div>
+  <div id="cl-note" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px"></div>
+  <div id="cl-body"></div>
 </div>
 </div>
 
@@ -2294,6 +2322,7 @@ const defaultState={
   // スプレッドシートの週次バックアップの記録（GASの weeklyBackup が settings に書く。アプリからは書き換えない）
   backup:{lastAt:'',lastFile:'',lastError:'',lastErrorAt:''},
   reminder:{template:''},   // 入金の催促文のひな形（空なら REMINDER_TEMPLATE_DEFAULT）
+  monthClose:{},            // 月次締めの確認日時 {'YYYY-MM':'YYYY-MM-DD HH:mm'}（settings の monthClose.YYYY-MM）
   // 財務情報（融資力診断で使う）
   finance:{loan:0},
   /* 税金・社会保険の計算設定。
@@ -2382,6 +2411,7 @@ function mergeState(parsed){
     p.paidMonth=p.paidMonth||'';
     p.paidAmount=parseInt(p.paidAmount)||0;
   });
+  if(!s.monthClose||typeof s.monthClose!=='object'||Array.isArray(s.monthClose))s.monthClose={};
   if(!Array.isArray(s.quotes))s.quotes=[];
   s.quotes.forEach(q=>{if(q.source!=='drive_sync')q.source='manual';normalizeQuoteDoc(q);});
   if(!Array.isArray(s.ledger))s.ledger=[];
@@ -2390,6 +2420,7 @@ function mergeState(parsed){
     l.visit=l.visit||'';
     l.purpose=l.purpose||'';
     l.calId=l.calId||'';
+    l.reviewed=l.reviewed||'';
     l.withWhom=l.withWhom||'';
     l.persons=(l.persons===''||l.persons===null||l.persons===undefined)?'':(parseInt(l.persons)||'');
     l.receiptId=l.receiptId||'';
@@ -2540,7 +2571,7 @@ function keepLocalWhenMissing(remote){
   ['nextBillingId','nextFiscalYearId','nextFixedCostId','bankBalance'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
-  ['travel','finance','taxSettings','mail','bank','inboxFolders','backup','reminder'].forEach(k=>{
+  ['travel','finance','taxSettings','mail','bank','inboxFolders','backup','reminder','monthClose'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
   if(d.travel&&S.travel&&d.travel!==S.travel){
@@ -2571,7 +2602,7 @@ function keepLocalWhenMissing(remote){
       const o=local[r.id];
       if(!o)return r;
       const x=Object.assign({},r);
-      ['visit','purpose','calId','withWhom','persons','receiptId','payee','docNo'].forEach(f=>{if(x[f]===undefined&&o[f])x[f]=o[f];});
+      ['visit','purpose','calId','withWhom','persons','receiptId','payee','docNo','reviewed'].forEach(f=>{if(x[f]===undefined&&o[f])x[f]=o[f];});
       return x;
     });
   }
@@ -2668,11 +2699,12 @@ function refreshAll(){
   if(id==='quotes')renderQuotes();
   if(id==='ledger')renderLedger();
   if(id==='settings')loadSettingsForm();
+  if(id==='close')renderClosePage();
 }
 
 // ページ名（トップバーに表示する）
 const PAGE_TITLES={dashboard:'ダッシュボード',projects:'案件管理',quotes:'見積・請求',
-  ledger:'キャッシュフロー管理',csv:'CSV取込',report:'月次レポート',settings:'設定'};
+  ledger:'キャッシュフロー管理',csv:'CSV取込',report:'月次レポート',settings:'設定',close:'月次締め'};
 
 // スマホではサイドバーを開閉する
 function toggleSidebar(open){
@@ -2697,6 +2729,7 @@ function showPage(p,btn){
   if(p==='csv')initCsvPage();
   if(p==='report')initReportPage();
   if(p==='settings')loadSettingsForm();
+  if(p==='close')initClosePage();
 }
 
 function openModal(id){document.getElementById(id).classList.add('open')}
@@ -3250,10 +3283,201 @@ function resetReminderTemplate(){
   document.getElementById('rm-template').value=REMINDER_TEMPLATE_DEFAULT;
 }
 
+/* ===== 月次締めチェック ==============================================
+   判定は @ops-rules の closeChecks / reviewCandidates。確認の完了日時は settings の monthClose.YYYY-MM
+   （月のロック＝編集禁止はしない）
+   ===================================================================== */
+let closeListKind=null;   // 開いている一覧（payable / entertain / review / receipt）
+
+function closeData(){return{ledger:S.ledger,quotes:S.quotes,monthlyBillings:billingList(),projects:S.projects,bank:S.bank,inboxItems}}
+function closeOpt(){return{groupOf:ledgerGroup,needsTravelEdit,settlementFor,features:{inbox:true}}}
+function closeChecksFor(ym){return closeChecks(closeData(),ym,localToday(),closeOpt())}
+function prevYm(ymd){const p=String(ymd).split('-').map(Number);return p[1]===1?(p[0]-1)+'-12':p[0]+'-'+String(p[1]-1).padStart(2,'0')}
+function closeYm(){const el=document.getElementById('close-month');return(el&&el.value)||prevYm(localToday())}
+
+// ダッシュボードの「✅ 月次締め（○月分）：未解決 ○件」。押すと月次締めの画面
+function renderCloseStatus(){
+  const el=document.getElementById('d-close-status');
+  if(!el)return;
+  const ym=prevYm(localToday());
+  const n=closeChecksFor(ym).filter(x=>x.status==='ng').length;
+  const done=(S.monthClose||{})[ym];
+  el.innerHTML=`<a href="#" onclick="openClosePage();return false" style="color:inherit;text-decoration:none" title="クリックすると月次締めの画面を開きます">`
+    +`✅ 月次締め（${invYmJp(ym)}分）：未解決 <span class="badge ${n?'badge-red':'badge-green'}">${n}件</span>`
+    +(done?` <span class="badge badge-gray">確認済み ${escAttr(done)}</span>`:'')
+    +`<span style="font-size:11px;color:var(--text-muted);margin-left:6px">→ 月次締めへ</span></a>`;
+}
+
+function openClosePage(){
+  showPage('close',null);
+  window.scrollTo(0,0);
+}
+
+// 月の選択肢（今月から24ヶ月前まで）。初期値は前月
+function initClosePage(){
+  const sel=document.getElementById('close-month');
+  if(!sel.options.length){
+    const p=localToday().split('-').map(Number);
+    const opts=[];
+    for(let i=0;i<24;i++){
+      const d=new Date(p[0],p[1]-1-i,1);
+      const ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      opts.push(`<option value="${ym}">${invYmJp(ym)}</option>`);
+    }
+    sel.innerHTML=opts.join('');
+    sel.value=prevYm(localToday());
+  }
+  renderClosePage();
+}
+
+const CLOSE_STATUS={ok:['badge-green','OK'],ng:['badge-red','要対応'],info:['badge-gray','参考']};
+function renderClosePage(){
+  const list=document.getElementById('close-list');
+  if(!list)return;
+  const ym=closeYm();
+  const items=closeChecksFor(ym);
+  const n=items.filter(x=>x.status==='ng').length;
+  const done=(S.monthClose||{})[ym];
+  document.getElementById('close-summary').innerHTML=`<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:12px;color:var(--text-secondary)">${invYmJp(ym)}分</div>
+        <div style="font-size:30px;font-weight:700;font-family:var(--font-num);color:${n?'var(--red)':'var(--green)'}">未解決 ${n}件</div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        ${done?`<div style="margin-bottom:6px"><span class="badge badge-green">確認済み（${escAttr(done)}）</span></div>`:''}
+        <button class="btn primary" onclick="completeMonthClose()">✓ この月の確認を完了${done?'（日時を更新）':''}</button>
+      </div>
+    </div>`;
+  list.innerHTML=items.map(x=>{
+    const st=CLOSE_STATUS[x.status];
+    return`<div class="inbox-item" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;${x.go?'cursor:pointer':''}" ${x.go?`onclick="closeGo('${x.key}')"`:''}>
+      <span class="badge ${st[0]}" style="min-width:52px;text-align:center">${st[1]}</span>
+      <div style="flex:1;min-width:200px">
+        <div style="font-weight:600">${x.no}. ${escAttr(x.label)}${x.count!==null?`　<span style="font-family:var(--font-num)">${x.count}件</span>`:''}</div>
+        ${x.detail?`<div style="font-size:12px;color:var(--text-secondary);margin-top:2px">${escAttr(x.detail)}</div>`:''}
+      </div>
+      ${x.go?'<span style="font-size:12px;color:var(--text-muted);white-space:nowrap">→ 一覧へ</span>':''}
+    </div>`;
+  }).join('');
+  const m=document.getElementById('modal-close-list');
+  if(m&&m.classList.contains('open')&&closeListKind)renderCloseList();
+}
+
+function completeMonthClose(){
+  const ym=closeYm();
+  const n=closeChecksFor(ym).filter(x=>x.status==='ng').length;
+  if(n&&!confirm(`未解決が${n}件あります。このまま${invYmJp(ym)}分の確認を完了にしますか？`))return;
+  const d=new Date();
+  S.monthClose=Object.assign({},S.monthClose,{[ym]:localYmd(d)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')});
+  saveState();
+  renderClosePage();
+}
+
+// 項目を押したとき：該当の一覧へ（絞り込み表示）
+function closeGo(key){
+  const ym=closeYm();
+  const nav=i=>document.querySelectorAll('.nav-btn')[i];
+  if(key==='invoice'){
+    const drafts=S.quotes.some(q=>isInvoiceDoc(q)&&docStatusOf(q)==='draft'&&invoiceMonthOf(q,billingList())===ym);
+    goToInvoices(drafts?'draft':'');
+  }else if(key==='overdue'){
+    openOverdueList();
+  }else if(key==='travelEdit'||key==='travelSettle'){
+    showPage('ledger',nav(3));
+    switchCfTab('travel',document.querySelectorAll('#page-ledger .tab-group .tab')[1]);
+    const m=document.getElementById('tl-month');
+    if(m)m.value=String(parseInt(ym.slice(5),10)-1);
+    const ne=document.getElementById('tl-needs-edit');
+    if(ne)ne.checked=key==='travelEdit';
+    renderTravelLedger();
+  }else if(key==='bank'){
+    showPage('csv',nav(4));
+    setCsvType('bank');
+  }else if(key==='inbox'){
+    openInboxList();
+  }else{
+    closeListKind=key;
+    openModal('modal-close-list');
+    renderCloseList();
+  }
+}
+
+const SOURCE_LABEL={mail:'メール取込',rcpt:'領収書取込',bank:'銀行明細CSV',cal:'カレンダー',fixed:'固定費',manual:'手入力など'};
+function closeLedgerRow(l,buttons){
+  return`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0">
+      <span style="font-family:var(--font-num);white-space:nowrap">${escAttr(ledgerDateOf(l))}</span>
+      <span class="badge badge-gray">${escAttr(l.type)}</span>
+      <span style="flex:1;min-width:140px;word-break:break-all">${escAttr(l.desc)}
+        <span style="font-size:11px;color:var(--text-muted)">（${SOURCE_LABEL[ledgerSourceOf(l)]}${l.reviewed?`・確認済み ${escAttr(l.reviewed)}`:''}）</span></span>
+      <span style="font-family:var(--font-num);font-weight:700;white-space:nowrap">${fmt(l.amount)}</span>
+      <span style="display:flex;gap:6px;flex-wrap:wrap">${buttons}</span>
+    </div>`;
+}
+const editBtn=l=>`<button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button>`;
+const delBtn=l=>`<button class="btn sm danger" onclick="deleteLedger(${l.id})">🗑 削除</button>`;
+
+function renderCloseList(){
+  const ym=closeYm();
+  const title=document.getElementById('cl-title'),note=document.getElementById('cl-note'),body=document.getElementById('cl-body');
+  const D=closeData(),today=localToday();
+  const empty='<div class="empty-state">該当はありません</div>';
+  if(closeListKind==='payable'){
+    const rows=overduePayables(D.ledger,today);
+    title.textContent='⏰ 出金予定の支払期限超過';
+    note.textContent='予定日が今日より前の出金予定です。支払い済みなら「編集」で実績に、日付が変わったなら予定日を直してください。';
+    body.innerHTML=rows.length?rows.map(l=>closeLedgerRow(l,editBtn(l))).join('<hr style="border:none;border-top:0.5px solid var(--border);margin:0">'):empty;
+  }else if(closeListKind==='entertain'){
+    const rows=entertainMissingIn(D.ledger,ym);
+    title.textContent=`🍽 交際費：「誰と」「用件」が空（${invYmJp(ym)}）`;
+    note.textContent='「編集」で誰と・用件を入れてください。';
+    body.innerHTML=rows.length?rows.map(l=>closeLedgerRow(l,editBtn(l))).join('<hr style="border:none;border-top:0.5px solid var(--border);margin:0">'):empty;
+  }else if(closeListKind==='receipt'){
+    const rows=receiptMissingIn(D.ledger,ym,ledgerGroup);
+    title.textContent=`📷 参考：領収書の写真リンクがない経費（${invYmJp(ym)}）`;
+    note.textContent='要対応には数えません。紙の領収書を保管しているなどで問題なければ、そのままで構いません（交通費は除く）。';
+    body.innerHTML=rows.length?rows.map(l=>closeLedgerRow(l,editBtn(l))).join('<hr style="border:none;border-top:0.5px solid var(--border);margin:0">'):empty;
+  }else if(closeListKind==='review'){
+    const r=reviewCandidates(D.ledger,ym,ledgerGroup);
+    const showDone=!!(document.getElementById('cl-show-done')||{}).checked;
+    title.textContent=`🔍 認証・重複の可能性（${invYmJp(ym)}）`;
+    note.innerHTML='重複の可能性：同額（100円以上）で日付が前後1日以内、取込元が違う2件（片方はメール取込・領収書取込・銀行明細CSV。交通費は除く）。'
+      +'同じ支払いなら片方を削除、別の支払いなら「確認済みにする」（2件とも印を付けます）。<br>'
+      +'認証の可能性：10円以下の経費。実際の支出でなければ削除、支出なら「確認済みにする」。<br>'
+      +`<label style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer"><input id="cl-show-done" type="checkbox" ${showDone?'checked':''} onchange="renderCloseList()" style="width:auto"> 確認済みも表示（解除できます）</label>`;
+    const pairHtml=(pr,done)=>`<div class="inbox-item" style="${done?'opacity:.75':''}">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:2px">
+          <span class="badge ${done?'badge-gray':'badge-amber'}">${done?'確認済み':'重複の可能性'}</span>
+          <span style="margin-left:auto">${done
+            ?`<button class="btn sm" onclick="reviewMark([${pr[0].id},${pr[1].id}],false)">確認済みを解除</button>`
+            :`<button class="btn sm success" onclick="reviewMark([${pr[0].id},${pr[1].id}],true)">✓ 別の支払い（確認済みにする）</button>`}</span>
+        </div>
+        ${closeLedgerRow(pr[0],editBtn(pr[0])+delBtn(pr[0]))}
+        ${closeLedgerRow(pr[1],editBtn(pr[1])+delBtn(pr[1]))}
+      </div>`;
+    const authHtml=(l,done)=>`<div class="inbox-item" style="${done?'opacity:.75':''}">
+        <span class="badge ${done?'badge-gray':'badge-amber'}">${done?'確認済み':'認証の可能性'}</span>
+        ${closeLedgerRow(l,editBtn(l)+delBtn(l)+(done
+          ?`<button class="btn sm" onclick="reviewMark([${l.id}],false)">確認済みを解除</button>`
+          :`<button class="btn sm success" onclick="reviewMark([${l.id}],true)">✓ 確認済みにする</button>`))}
+      </div>`;
+    const html=r.pairs.map(pr=>pairHtml(pr,false)).join('')+r.auth.map(l=>authHtml(l,false)).join('')
+      +(showDone?r.pairsDone.map(pr=>pairHtml(pr,true)).join('')+r.authDone.map(l=>authHtml(l,true)).join(''):'');
+    body.innerHTML=html||empty;
+  }
+}
+
+function reviewMark(ids,on){
+  setReviewed(S.ledger,ids,on?localToday():'');
+  saveState();
+  refreshAll();
+  if(closeListKind)renderCloseList();
+}
+
 function updateDashboard(){
   renderBankImportStatus();
   renderBackupStatus();
   renderOverdueStatus();
+  renderCloseStatus();
   renderInboxStatus();
   renderInvoiceDocStatus();
   const mi=getMonth();
@@ -11209,6 +11433,150 @@ function ymdJp(ymd){
   return m?`${+m[1]}年${+m[2]}月${+m[3]}日`:String(ymd||'');
 }
 
+/* ---- 月次締めチェック ---- */
+
+// 収支の取込元。calId の接頭辞（mail: / rcpt: / bank:）と、既存の備考の印で見分ける
+//   mail …… デビット通知（calId 'mail:'、備考「メール取込」）
+//   rcpt …… 領収書の写真・受信箱（calId 'rcpt:'、写真を保存しなかったものは備考「領収書取込…」）
+//   bank …… 銀行明細CSV（calId 'bank:'。この印を付ける前に登録したものは見分けられないので manual 扱い）
+//   cal  …… カレンダーから作った交通費（calId が上のどれでもない）／fixed …… 固定費／manual …… それ以外
+function ledgerSourceOf(l){
+  const c=String((l&&l.calId)||''),m=String((l&&l.memo)||'');
+  if(c.indexOf('mail:')===0)return'mail';
+  if(c.indexOf('rcpt:')===0)return'rcpt';
+  if(c.indexOf('bank:')===0)return'bank';
+  if(/^領収書取込/.test(m))return'rcpt';
+  if(/^メール取込/.test(m))return'mail';
+  if(c)return'cal';
+  if(l&&l.fixedCostId)return'fixed';
+  return'manual';
+}
+const IMPORT_SOURCES=['mail','rcpt','bank'];
+function bankExtId(date,amount){return'bank:'+date+'|'+amount}
+
+const inYm=(l,ym)=>String(l.date||'').slice(0,7)===ym;
+const isActualEntry=l=>(l.status||'actual')==='actual';
+
+/* 「認証の可能性」「重複の可能性」の候補（ym の月）
+   auth  … 10円以下の経費（実績）で、確認済み（reviewed）でないもの
+   pairs … 同額（100円以上）で日付が前後1日以内の経費2件のうち、
+           区分が交通費でなく、片方がメール取込・領収書取込・銀行明細CSVで、もう片方と取込元が違うもの。
+           2件とも確認済みなら pairsDone（片方だけなら未解決のまま）
+   groupOf は区分 → グループ（ledgerGroup）。売上は対象外 */
+function reviewCandidates(ledger,ym,groupOf){
+  const exp=(ledger||[]).filter(l=>isActualEntry(l)&&groupOf(l.type)!=='sales');
+  const auth=[],authDone=[];
+  exp.forEach(l=>{
+    if(!inYm(l,ym)||!(l.amount>0&&l.amount<=10))return;
+    (l.reviewed?authDone:auth).push(l);
+  });
+  const byAmount={};
+  exp.forEach(l=>{
+    if(l.type==='交通費'||!(l.amount>=100))return;
+    (byAmount[l.amount]=byAmount[l.amount]||[]).push(l);
+  });
+  const pairs=[],pairsDone=[];
+  Object.keys(byAmount).forEach(k=>{
+    const g=byAmount[k].slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))||a.id-b.id);
+    for(let i=0;i<g.length;i++)for(let j=i+1;j<g.length;j++){
+      const a=g[i],b=g[j];
+      const d=dayDiff(a.date,b.date);
+      if(!(Math.abs(d)<=1))continue;
+      if(!inYm(a,ym)&&!inYm(b,ym))continue;
+      const sa=ledgerSourceOf(a),sb=ledgerSourceOf(b);
+      if(sa===sb)continue;
+      if(IMPORT_SOURCES.indexOf(sa)<0&&IMPORT_SOURCES.indexOf(sb)<0)continue;
+      ((a.reviewed&&b.reviewed)?pairsDone:pairs).push([a,b]);
+    }
+  });
+  return{auth,authDone,pairs,pairsDone};
+}
+
+// 確認済みの印（reviewed＝確認した日）を付ける・外す。ペアは両方の id を渡す
+function setReviewed(ledger,ids,value){
+  let n=0;
+  (ledger||[]).forEach(l=>{if(ids.indexOf(l.id)>=0){l.reviewed=value||'';n++;}});
+  return n;
+}
+
+// 出金予定の支払期限超過：planned_out で予定日が今日より前（今日時点。月で絞らない）
+function overduePayables(ledger,todayYmd){
+  return(ledger||[]).filter(l=>l.status==='planned_out'&&(l.expectedDate||l.date||'')<todayYmd&&(l.expectedDate||l.date))
+    .sort((a,b)=>String(a.expectedDate||a.date).localeCompare(String(b.expectedDate||b.date)));
+}
+
+// 交際費（実績・ym の月）で「誰と」「用件」が空のもの
+function entertainMissingIn(ledger,ym){
+  return(ledger||[]).filter(l=>isActualEntry(l)&&l.type==='交際費'&&inYm(l,ym)
+    &&(!String(l.withWhom||'').trim()||!String(l.purpose||'').trim()));
+}
+
+// 参考：領収書の写真リンク（receiptId）がない経費（実績・ym の月）。交通費は除く
+function receiptMissingIn(ledger,ym,groupOf){
+  return(ledger||[]).filter(l=>isActualEntry(l)&&inYm(l,ym)&&groupOf(l.type)==='expense'&&l.type!=='交通費'&&!l.receiptId);
+}
+
+/* 月次締めの確認項目。D={ledger,quotes,monthlyBillings,projects,bank,inboxItems}
+   opt={groupOf, needsTravelEdit, settlementFor(ym), features:{inbox}}
+   返り値 [{key,no,label,count,status:'ok'|'ng'|'info',detail,go}]（count が null の項目は件数を出さない）
+   ★ まだ無い機能の項目は出さない（features で渡す。いまは取込待ち＝inbox だけが切り替え対象） */
+function closeChecks(D,ym,todayYmd,opt){
+  opt=opt||{};
+  const ledger=D.ledger||[];
+  const groupOf=opt.groupOf||(t=>t==='売上'?'sales':'expense');
+  const feat=opt.features||{};
+  const items=[];
+  const add=(key,no,label,count,detail,status)=>items.push({key,no,label,count,detail:detail||'',
+    status:status||(count>0?'ng':'ok'),go:status==='info'?count>0:(status==='ng'||count>0)});
+
+  // 1. 請求書：未作成・下書きのまま（対象月）
+  const missing=missingInvoiceTargets(D,ym).length;
+  const drafts=(D.quotes||[]).filter(q=>isInvoiceDoc(q)&&docStatusOf(q)==='draft'&&invoiceMonthOf(q,D.monthlyBillings)===ym).length;
+  add('invoice','1','請求書：未作成・下書きのまま',missing+drafts,`未作成 ${missing}件／下書き ${drafts}件`);
+
+  // 2. 入金遅延（今日時点）
+  const od=overdueReceivables(ledger,D.quotes,D.monthlyBillings,D.projects,todayYmd);
+  add('overdue','2','入金遅延',od.length,od.length?`合計 ¥${od.reduce((a,x)=>a+x.amount,0).toLocaleString('ja-JP')}（今日時点）`:'（今日時点）');
+
+  // 3. 出金予定の支払期限超過（今日時点）
+  const op=overduePayables(ledger,todayYmd);
+  add('payable','3','出金予定の支払期限超過',op.length,'（今日時点）');
+
+  // 4. 交通費：要編集の行／精算がまだ
+  const travel=ledger.filter(l=>isActualEntry(l)&&l.type==='交通費'&&inYm(l,ym));
+  const needs=opt.needsTravelEdit||(l=>!(l.amount>0));
+  add('travelEdit','4','交通費：要編集（0円・到着が空）',travel.filter(needs).length);
+  const settled=opt.settlementFor?!!opt.settlementFor(ym):ledger.some(l=>l.settlementMonth===ym);
+  const ended=ym<String(todayYmd).slice(0,7);
+  if(!travel.length)add('travelSettle','4','交通費：精算',null,'この月の交通費はありません','ok');
+  else if(settled)add('travelSettle','4','交通費：精算',null,'精算を登録済み','ok');
+  else if(!ended)add('travelSettle','4','交通費：精算',null,'月が終わってから精算を登録します','ok');
+  else add('travelSettle','4','交通費：精算がまだ',null,`交通費 ${travel.length}件・¥${travel.reduce((a,l)=>a+(l.amount||0),0).toLocaleString('ja-JP')}`,'ng');
+
+  // 5. 交際費で「誰と」「用件」が空
+  add('entertain','5','交際費：「誰と」「用件」が空',entertainMissingIn(ledger,ym).length);
+
+  // 6. 認証の可能性・重複の可能性が未解決
+  const rv=reviewCandidates(ledger,ym,groupOf);
+  add('review','6','「認証の可能性」「重複の可能性」が未解決',rv.auth.length+rv.pairs.length,
+    `認証の可能性 ${rv.auth.length}件／重複の可能性 ${rv.pairs.length}組`);
+
+  // 7. 銀行明細の最終取込日が対象月の末日より前
+  const last=(D.bank&&D.bank.lastCsvImportDate)||'';
+  const monthEnd=invYmLastDay(ym);
+  add('bank','7','銀行明細の最終取込日',null,
+    last?(last<monthEnd?`最終取込 ${last}（${monthEnd} より前）`:`最終取込 ${last}`):'未取込',
+    (!last||last<monthEnd)?'ng':'ok');
+
+  // 8. 取込待ち（ドライブ読み取り）。機能があるときだけ
+  if(feat.inbox&&Array.isArray(D.inboxItems))add('inbox','8','取込待ち（ドライブ読み取り）',D.inboxItems.length);
+
+  // 9. 参考：領収書の写真リンクがない経費
+  const rm=receiptMissingIn(ledger,ym,groupOf).length;
+  add('receipt','9','参考：領収書の写真リンクがない経費',rm,'交通費は除く。要対応には数えません','info');
+  return items;
+}
+
 // ===== @ops-rules-end
 
 // 文字コードを判定して読む（UTF-8で読めなければShift-JIS）
@@ -11416,7 +11784,8 @@ function bankRegister(){
         return;
       }
     }
-    const entry={id:S.nextLedgerId++,date:r.date,type:r.type,desc:r.desc,amount:r.amount};
+    // 取込元の印（月次締めの重複チェックで取込元を見分ける）。外部IDとしての一意性は持たない
+    const entry={id:S.nextLedgerId++,date:r.date,type:r.type,desc:r.desc,amount:r.amount,calId:bankExtId(r.date,r.amount)};
     if(r.type==='交際費'){entry.withWhom=String(r.withWhom||'').trim();entry.purpose=String(r.purpose||'').trim();}
     // 突合を選んだ入金は、案件（と推定した月の請求レコード）を入金済みにして紐づける
     if(r.income&&r.applyMatch&&r.matchId){

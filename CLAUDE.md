@@ -672,3 +672,34 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   - 「催促文をコピー」：ひな形（settings の reminder.template。空なら REMINDER_TEMPLATE_DEFAULT）に
     {宛名} {請求書番号} {金額} {期日} {遅延日数} {会社名} を差し込んでクリップボードへ（fillReminder）。メールは送らない
     ひな形は設定ページの「✉ 入金の催促文（ひな形）」で編集する。初期の文面と同じなら空で保存する
+
+## 月次締めチェック
+- 画面「月次締め」（page-close。ナビには出さない）。ダッシュボードの「✅ 月次締め（前月分）：未解決 ○件」から開く（openClosePage）。
+  ★ ナビ（.nav-btn）は増やしていない（goToInvoiced などが添字で参照しているため）
+- 対象月はセレクト（今月〜24ヶ月前）。初期値は前月。上部に「未解決 ○件」（要対応の項目数）
+- 項目は closeChecks（@ops-rules）。状態は ok（緑）／ng＝要対応（赤）／info＝参考（灰。未解決に数えない）。押すと該当の一覧へ
+  1. 請求書：未作成（missingInvoiceTargets）＋下書きのまま（請求月＝invoiceMonthOf が対象月）→ 請求書タブ
+  2. 入金遅延（今日時点。overdueReceivables）→ 入金遅延の一覧
+  3. 出金予定の支払期限超過（今日時点。overduePayables）→ 一覧（modal-close-list）
+  4. 交通費：要編集（needsTravelEdit）→ 交通費台帳（対象月・要編集のみ）／精算がまだ（交通費があり、settlementFor が無く、月が終わっている）
+  5. 交際費で「誰と」「用件」が空（entertainMissingIn）→ 一覧
+  6. 「認証の可能性」「重複の可能性」が未解決（reviewCandidates）→ 一覧（下記）
+  7. 銀行明細の最終取込日（bank.lastCsvImportDate）が対象月の末日より前、または未取込 → CSV取込（銀行明細）
+  8. 取込待ち（inboxItems の件数）→ 取込待ちの一覧。★ 機能がある場合だけ出す（closeChecks の features.inbox）
+  9. 参考：領収書の写真リンク（receiptId）がない経費（交通費は除く）→ 一覧
+- 「この月の確認を完了」で settings の monthClose.YYYY-MM に日時（'YYYY-MM-DD HH:mm'）を保存し「確認済み（日時）」と出す。
+  未解決があれば確認してから。月のロック（編集禁止）はしない
+
+### 認証・重複の可能性（項目6）
+- 取込の画面の印は ledger に残らないので、収支から計算し直す（reviewCandidates）
+- 認証の可能性：10円以下の経費（実績）。確認済みは除く
+- 重複の可能性：同額で日付が前後1日以内の経費2件のうち、すべて満たすものだけ
+  区分が交通費でない／金額100円以上／片方がメール取込・領収書取込・銀行明細CSVで、もう片方と取込元が違う
+- 取込元は ledgerSourceOf：calId の接頭辞 mail: / rcpt: / bank:、備考の先頭「メール取込」「領収書取込」。
+  それ以外の calId はカレンダー、fixedCostId は固定費、残りは手入力など
+  ★ 銀行明細CSVの登録に calId 'bank:{日付}|{金額}'（bankExtId）を付けるようにした。外部IDとしての一意性は持たない（判定にだけ使う）。
+  それより前に登録した銀行明細の行は見分けられないので「手入力など」として扱う（銀行どうし・手入力との組は数えない）
+- 確認済みの印は ledger の reviewed 列（確認した日）。ペアは両方に付ける（setReviewed）。2件とも確認済みのペアだけ解決扱い
+  （確認済みの行と別の行が新しく組になれば、また出る）。一覧の「確認済みも表示」から解除できる
+- 一覧ではペアの2行を並べ、それぞれ「編集」「削除」（deleteLedger）を出す
+- GASの ledger シートに reviewed 列（TEXT_COLUMNS）。keepLocalWhenMissing でも残す

@@ -40,7 +40,7 @@ var SHEET_DEFS = {
     'source', 'driveFileId', 'items', 'note',
     'status', 'revision', 'history', 'billingMonth', 'billingKey', 'cancelReason', 'issuedAt'],
   ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'settlementMonth', 'billingMonth', 'fixedCostId',
-    'visit', 'purpose', 'calId', 'withWhom', 'persons', 'receiptId', 'payee', 'docNo'],
+    'visit', 'purpose', 'calId', 'withWhom', 'persons', 'receiptId', 'payee', 'docNo', 'reviewed'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
   fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
   monthlyBillings: ['id', 'projectId', 'billingMonth', 'amount', 'invoiceStatus',
@@ -52,7 +52,7 @@ var SHEET_DEFS = {
 var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'value',
   'startMonth', 'endMonth', 'contractStart', 'contractEnd', 'paidMonth', 'expectedDate', 'settlementMonth',
   'billingMonth', 'paidDate', 'expectedPayDate', 'invoiceId', 'driveFileId',
-  'history', 'billingKey', 'issuedAt', 'receiptId', 'docNo'];
+  'history', 'billingKey', 'issuedAt', 'receiptId', 'docNo', 'reviewed'];
 
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
@@ -192,6 +192,7 @@ function readAll_() {
     bank: settings.bank,
     backup: settings.backup,
     reminder: settings.reminder,
+    monthClose: settings.monthClose,
     taxSettings: settings.taxSettings,
     bankBalance: settings.bankBalance,
     currentFiscalYearId: settings.currentFiscalYearId,
@@ -306,7 +307,8 @@ function ledgerFromRow_(o) {
       persons: str_(o.persons) === '' ? '' : num_(o.persons),
       receiptId: str_(o.receiptId),
       payee: str_(o.payee),
-      docNo: str_(o.docNo)
+      docNo: str_(o.docNo),
+      reviewed: str_(o.reviewed)   // 月次締めの「認証・重複の可能性」を確認した日（空＝未確認）
     };
 }
 
@@ -319,7 +321,7 @@ function ledgerRow_(l) {
     (l.fixedCostId === null || l.fixedCostId === undefined || l.fixedCostId === '') ? '' : num_(l.fixedCostId),
     str_(l.visit), str_(l.purpose), str_(l.calId),
     str_(l.withWhom), (l.persons === null || l.persons === undefined || l.persons === '') ? '' : num_(l.persons),
-    str_(l.receiptId), str_(l.payee), str_(l.docNo)];
+    str_(l.receiptId), str_(l.payee), str_(l.docNo), str_(l.reviewed)];
 }
 
 function readMonthlyBillings_(sh) {
@@ -380,6 +382,7 @@ function readSettings_(sh) {
   var inboxFolders = { receipt: '', invoice: '' };
   var backup = { lastAt: '', lastFile: '', lastError: '', lastErrorAt: '' };
   var reminder = { template: '' };   // 入金の催促文のひな形（空ならアプリの初期の文面）
+  var monthClose = {};               // 月次締めの確認日時 { 'YYYY-MM': 'YYYY-MM-DD HH:mm' }
   var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15,
     calendarId: DEFAULT_CALENDAR_ID, fareCache: {} };
   // 税金設定は、シートに無い項目はキーごと返さない（アプリ側の初期値を潰さないため）
@@ -426,6 +429,8 @@ function readSettings_(sh) {
       backup[key.substring(7)] = str_(value);
     } else if (key === 'reminder.template') {
       reminder.template = str_(value);
+    } else if (/^monthClose\.\d{4}-\d{2}$/.test(key)) {
+      if (str_(value)) monthClose[key.substring(11)] = str_(value);
     } else if (key === 'travel.googleMapsApiKey') {
       travel.googleMapsApiKey = str_(value);
     } else if (key === 'travel.gasolinePrice') {
@@ -486,6 +491,7 @@ function readSettings_(sh) {
     inboxFolders: inboxFolders,
     backup: backup,
     reminder: reminder,
+    monthClose: monthClose,
     taxSettings: taxSettings,
     bankBalance: bankBalance,
     currentFiscalYearId: currentFiscalYearId,
@@ -555,6 +561,10 @@ function writeAll_(data) {
   var sheetBackup = readSettings_(ss.getSheetByName('settings')).backup;
   BACKUP_SETTING_FIELDS.forEach(function (k) { settings.push(['backup.' + k, str_(sheetBackup[k])]); });
   settings.push(['reminder.template', str_((data.reminder || {}).template)]);
+  var mc = data.monthClose || {};
+  Object.keys(mc).sort().forEach(function (ym) {
+    if (/^\d{4}-\d{2}$/.test(ym) && str_(mc[ym])) settings.push(['monthClose.' + ym, str_(mc[ym])]);
+  });
   var tv = data.travel || {};
   settings.push(['travel.googleMapsApiKey', str_(tv.googleMapsApiKey)]);
   settings.push(['travel.gasolinePrice', num_(tv.gasolinePrice) || 175]);

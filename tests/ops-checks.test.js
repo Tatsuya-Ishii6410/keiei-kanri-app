@@ -1,9 +1,9 @@
-/* 運用チェックのテスト（①週次バックアップ ②入金遅延アラート）
+/* 運用チェックのテスト（①週次バックアップ ②入金遅延アラート ③月次締めチェック）
    実行: node tests/ops-checks.test.js
 
    - gas-code.js はまるごと読む。DriveApp・ScriptApp・SpreadsheetApp・LockService・Utilities はモックに差し替える
      バックアップの本体（runBackup_）は Drive を io で受け取るので、io もモックで渡す
-   - keiei-kanri.html は「@import-rules」と「@ops-rules」の範囲だけを切り出して読む */
+   - keiei-kanri.html は「@invoice-rules」「@import-rules」「@ops-rules」の範囲だけを切り出して読む */
 
 const fs = require('fs');
 const path = require('path');
@@ -69,8 +69,9 @@ function region(name) {
 }
 const app = {};
 vm.createContext(app);
-vm.runInContext(region('import-rules') + '\n' + region('ops-rules') + `
-globalThis.exported = { backupStatusOf, overdueReceivables, overdueLevel, reschedulePlannedIn, fillReminder, REMINDER_TEMPLATE_DEFAULT, ymdJp };`, app);
+vm.runInContext(region('invoice-rules') + '\n' + region('import-rules') + '\n' + region('ops-rules') + `
+globalThis.exported = { backupStatusOf, overdueReceivables, overdueLevel, reschedulePlannedIn, fillReminder, REMINDER_TEMPLATE_DEFAULT, ymdJp,
+  closeChecks, reviewCandidates, setReviewed, ledgerSourceOf, bankExtId };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -373,6 +374,168 @@ test('GASとの往復：催促文のひな形（複数行）が消えない', ()
   assert.strictEqual(gas.readAll_().reminder.template, tpl);
   gas.writeAll_({});
   assert.strictEqual(gas.readAll_().reminder.template, '');
+});
+
+console.log('③ 月次締めチェック');
+
+const YM = '2026-10';
+const groupOf = t => t === '売上' ? 'sales' : t === '役員報酬' ? 'labor' : t === '法人税・住民税・事業税（納付）' ? 'tax' : 'expense';
+const opt = extra => Object.assign({ groupOf, needsTravelEdit: l => !(l.amount > 0) || !/→/.test(l.desc), features: { inbox: true } }, extra || {});
+const act = (id, date, type, amount, extra) => Object.assign({ id, date, type, desc: type + id, amount, status: 'actual', memo: '', calId: '', reviewed: '' }, extra || {});
+const byKey = items => { const o = {}; items.forEach(x => { o[x.key] = x; }); return o; };
+const ng = items => items.filter(x => x.status === 'ng').length;
+
+function fixture() {
+  return {
+    projects: [{ id: 1, name: '保守', client: '株式会社A', status: '進行中' }, { id: 2, name: '開発', client: '株式会社B', status: '進行中' }],
+    monthlyBillings: [{ id: 1, projectId: 1, billingMonth: YM, amount: 100000, invoiceStatus: 'uninvoiced' },
+      { id: 2, projectId: 2, billingMonth: YM, amount: 50000, invoiceStatus: 'uninvoiced', invoiceId: 'DRAFT-1' }],
+    quotes: [{ id: 'DRAFT-1', type: '請求書', status: 'draft', billingMonth: YM, client: '株式会社B 御中', items: [{ projectId: 2 }] }],
+    bank: { lastCsvImportDate: '2026-10-25' },
+    inboxItems: [{ fileId: 'F1', status: 'ready' }, { fileId: 'F2', status: 'failed' }],
+    ledger: [
+      { id: 1, type: '売上', desc: '株式会社A 2026年9月分 入金予定', amount: 110000, status: 'planned_in', date: '2026-10-31', expectedDate: '2026-10-31', projectId: 1, billingMonth: '2026-09' },
+      { id: 2, type: '通信料', desc: '回線', amount: 5500, status: 'planned_out', date: '2026-10-30', expectedDate: '2026-10-30' },
+      { id: 3, type: '通信料', desc: '回線（来月）', amount: 5500, status: 'planned_out', date: '2026-11-05', expectedDate: '2026-11-05' },
+      act(4, '2026-10-05', '交通費', 0, { desc: '青野ヶ原→三宮（電車・バス）' }),
+      act(5, '2026-10-06', '交通費', 860, { desc: '青野ヶ原→三宮（電車・バス）' }),
+      act(6, '2026-10-10', '交際費', 8800, { withWhom: '', purpose: '打合せ' }),
+      act(7, '2026-10-11', '交際費', 6600, { withWhom: '株式会社A 様', purpose: '打合せ', receiptId: 'R7', calId: 'rcpt:R7' }),
+      act(8, '2026-10-12', 'その他経費', 1, { calId: 'mail:m8', memo: 'メール取込' }),
+      act(9, '2026-10-15', 'システム利用料', 3300, { calId: 'mail:m9', memo: 'メール取込' }),
+      act(10, '2026-10-16', 'システム利用料', 3300, { calId: 'bank:2026-10-16|3300' })
+    ]
+  };
+}
+
+test('各項目の件数（請求書・入金遅延・出金予定の超過・交通費・交際費・認証/重複・銀行明細・取込待ち・参考）', () => {
+  const items = A.closeChecks(fixture(), YM, '2026-11-02', opt());
+  const k = byKey(items);
+  assert.deepStrictEqual(plain(items.map(x => x.key)),
+    ['invoice', 'overdue', 'payable', 'travelEdit', 'travelSettle', 'entertain', 'review', 'bank', 'inbox', 'receipt']);
+  assert.strictEqual(k.invoice.count, 2);      // 未作成1（案件1）＋下書き1（案件2）
+  assert.strictEqual(k.invoice.detail, '未作成 1件／下書き 1件');
+  assert.strictEqual(k.overdue.count, 1);
+  assert.strictEqual(k.payable.count, 1);      // 11/5 はまだ
+  assert.strictEqual(k.travelEdit.count, 1);   // 0円の行
+  assert.strictEqual(k.travelSettle.status, 'ng');
+  assert.strictEqual(k.entertain.count, 1);
+  assert.strictEqual(k.review.count, 2);       // 認証1件＋重複1組
+  assert.strictEqual(k.review.detail, '認証の可能性 1件／重複の可能性 1組');
+  assert.strictEqual(k.bank.status, 'ng');     // 10/25 は 10/31 より前
+  assert.strictEqual(k.inbox.count, 2);
+  assert.strictEqual(k.receipt.status, 'info'); // 参考は赤にしない
+  assert.strictEqual(k.receipt.count, 4);      // 交際費6・その他経費8・システム利用料9,10（交通費と写真ありの7は除く）
+  assert.strictEqual(ng(items), 9);
+});
+
+test('すべて片付いていれば OK（参考は数えない）', () => {
+  const D = fixture();
+  D.monthlyBillings.forEach(b => { b.invoiceStatus = 'invoiced'; b.invoiceId = 'INV-202610-00' + b.id; });
+  D.quotes = [{ id: 'INV-202610-001', type: '請求書', status: 'issued', billingMonth: YM, items: [{ projectId: 1 }] },
+    { id: 'INV-202610-002', type: '請求書', status: 'issued', billingMonth: YM, items: [{ projectId: 2 }] }];
+  D.ledger = [act(5, '2026-10-06', '交通費', 860, { desc: '青野ヶ原→三宮（電車・バス）' }),
+    { id: 20, type: '交通費', desc: '交通費精算 2026年10月分', amount: 860, status: 'planned_out', date: '2026-11-25', expectedDate: '2026-11-25', settlementMonth: YM },
+    act(21, '2026-10-20', '通信料', 5500)];
+  D.bank.lastCsvImportDate = '2026-10-31';
+  D.inboxItems = [];
+  const items = A.closeChecks(D, YM, '2026-11-02', opt());
+  assert.strictEqual(ng(items), 0, items.filter(x => x.status === 'ng').map(x => x.key).join(','));
+  assert.strictEqual(byKey(items).receipt.count, 1);
+});
+
+test('機能が無い項目は出さない（取込待ち）', () => {
+  const noFeat = A.closeChecks(fixture(), YM, '2026-11-02', opt({ features: {} }));
+  assert(!noFeat.some(x => x.key === 'inbox'));
+  const D = fixture(); delete D.inboxItems;
+  assert(!A.closeChecks(D, YM, '2026-11-02', opt()).some(x => x.key === 'inbox'));
+});
+
+test('交通費の精算：月が終わっていなければ要対応にしない／精算済み・交通費なしは OK', () => {
+  const D = fixture();
+  assert.strictEqual(byKey(A.closeChecks(D, YM, '2026-10-20', opt())).travelSettle.status, 'ok');
+  D.ledger.push({ id: 30, type: '交通費', desc: '精算', amount: 860, status: 'planned_out', date: '2026-11-25', expectedDate: '2026-11-25', settlementMonth: YM });
+  assert.strictEqual(byKey(A.closeChecks(D, YM, '2026-11-02', opt())).travelSettle.status, 'ok');
+  assert.strictEqual(byKey(A.closeChecks(D, '2026-09', '2026-11-02', opt())).travelSettle.status, 'ok');
+});
+
+test('取込元の判定：calId の接頭辞と備考の印', () => {
+  assert.strictEqual(A.ledgerSourceOf({ calId: 'mail:x' }), 'mail');
+  assert.strictEqual(A.ledgerSourceOf({ calId: 'rcpt:x' }), 'rcpt');
+  assert.strictEqual(A.ledgerSourceOf({ calId: A.bankExtId('2026-10-16', 3300) }), 'bank');
+  assert.strictEqual(A.ledgerSourceOf({ memo: '領収書取込／打合せ' }), 'rcpt');   // 写真を保存しなかった領収書
+  assert.strictEqual(A.ledgerSourceOf({ memo: 'メール取込' }), 'mail');
+  assert.strictEqual(A.ledgerSourceOf({ calId: 'abc123@2026-10-01' }), 'cal');
+  assert.strictEqual(A.ledgerSourceOf({ fixedCostId: 3 }), 'fixed');
+  assert.strictEqual(A.ledgerSourceOf({}), 'manual');                         // 印を付ける前の銀行明細CSVもここ
+});
+
+test('重複の可能性：条件（交通費でない・取込元が違い片方が取込・100円以上・前後1日）をすべて満たすペアだけ', () => {
+  const R = ledger => A.reviewCandidates(ledger, YM, groupOf);
+  const mail = (id, date, amount, type) => act(id, date, type || 'その他経費', amount, { calId: 'mail:' + id });
+  const bank = (id, date, amount, type) => act(id, date, type || 'その他経費', amount, { calId: A.bankExtId(date, amount) });
+  assert.strictEqual(R([mail(1, '2026-10-15', 3300), bank(2, '2026-10-16', 3300)]).pairs.length, 1);
+  assert.strictEqual(R([mail(1, '2026-10-15', 3300), act(2, '2026-10-15', 'その他経費', 3300, { memo: '領収書取込' })]).pairs.length, 1);
+  assert.strictEqual(R([mail(1, '2026-10-15', 3300), act(2, '2026-10-15', 'その他経費', 3300)]).pairs.length, 1);   // 取込と手入力
+  assert.strictEqual(R([mail(1, '2026-10-15', 860, '交通費'), bank(2, '2026-10-15', 860, '交通費')]).pairs.length, 0);  // 交通費
+  assert.strictEqual(R([mail(1, '2026-10-15', 3300), mail(2, '2026-10-15', 3300)]).pairs.length, 0);    // 同じ取込元
+  assert.strictEqual(R([act(1, '2026-10-15', 'その他経費', 3300), act(2, '2026-10-15', 'その他経費', 3300, { fixedCostId: 1 })]).pairs.length, 0); // どちらも取込でない
+  assert.strictEqual(R([mail(1, '2026-10-15', 99), bank(2, '2026-10-15', 99)]).pairs.length, 0);        // 100円未満
+  assert.strictEqual(R([mail(1, '2026-10-15', 3300), bank(2, '2026-10-17', 3300)]).pairs.length, 0);    // 2日差
+  assert.strictEqual(R([mail(1, '2026-10-15', 3300), bank(2, '2026-10-15', 3400)]).pairs.length, 0);    // 金額違い
+  assert.strictEqual(R([mail(1, '2026-10-15', 3300), bank(2, '2026-10-15', 3300, '売上')]).pairs.length, 0); // 売上は対象外
+  // 月またぎ（10/31 と 11/1）はどちらの月にも出る
+  const cross = [mail(1, '2026-10-31', 3300), bank(2, '2026-11-01', 3300)];
+  assert.strictEqual(R(cross).pairs.length, 1);
+  assert.strictEqual(A.reviewCandidates(cross, '2026-11', groupOf).pairs.length, 1);
+  assert.strictEqual(A.reviewCandidates(cross, '2026-09', groupOf).pairs.length, 0);
+});
+
+test('認証の可能性：10円以下の経費（実績）。確認済みは除く', () => {
+  const l = [act(1, '2026-10-12', 'その他経費', 1), act(2, '2026-10-12', 'その他経費', 10), act(3, '2026-10-12', 'その他経費', 11),
+    act(4, '2026-10-12', 'その他経費', 1, { reviewed: '2026-11-01' }), act(5, '2026-10-12', '売上', 1),
+    Object.assign(act(6, '2026-10-12', 'その他経費', 1), { status: 'planned_out' })];
+  const r = A.reviewCandidates(l, YM, groupOf);
+  assert.deepStrictEqual(plain(r.auth.map(x => x.id)), [1, 2]);
+  assert.deepStrictEqual(plain(r.authDone.map(x => x.id)), [4]);
+});
+
+test('確認済み：ペアは両方に印を付ける。片方だけなら未解決のまま。解除すると戻る', () => {
+  const ledger = [act(1, '2026-10-15', 'その他経費', 3300, { calId: 'mail:1' }), act(2, '2026-10-16', 'その他経費', 3300, { calId: 'bank:x' })];
+  assert.strictEqual(A.setReviewed(ledger, [1, 2], '2026-11-02'), 2);
+  assert.strictEqual(ledger[0].reviewed, '2026-11-02');
+  assert.strictEqual(ledger[1].reviewed, '2026-11-02');
+  let r = A.reviewCandidates(ledger, YM, groupOf);
+  assert.strictEqual(r.pairs.length, 0);
+  assert.strictEqual(r.pairsDone.length, 1);
+  // 3件目（同額・前日・別の取込元）が増えたら、確認済みの行とのペアでも未解決に出る
+  ledger.push(act(3, '2026-10-14', 'その他経費', 3300, { memo: '領収書取込' }));
+  r = A.reviewCandidates(ledger, YM, groupOf);
+  assert.strictEqual(r.pairs.length, 1);
+  assert.deepStrictEqual(plain(r.pairs[0].map(x => x.id)).sort(), [1, 3]);
+  A.setReviewed(ledger, [1, 2], '');
+  r = A.reviewCandidates(ledger, YM, groupOf);
+  assert.strictEqual(r.pairs.length, 2);
+  assert.strictEqual(r.pairsDone.length, 0);
+});
+
+test('GASとの往復：ledger の reviewed 列・settings の月次締めの確認日時が消えない', () => {
+  ss = mockSpreadsheet();
+  gas.ensureSheets_(ss);
+  const l = { id: 7, date: '2026-10-15', type: 'その他経費', desc: 'X', amount: 3300, status: 'actual', calId: 'mail:7', reviewed: '2026-11-02' };
+  const row = gas.ledgerRow_(l);
+  assert.strictEqual(row.length, gas.SHEET_DEFS.ledger.length);
+  assert(gas.TEXT_COLUMNS.indexOf('reviewed') >= 0);   // 日付に変換されない
+  gas.writeAll_({ ledger: [l, { id: 8, date: '2026-10-16', type: '通信料', desc: 'Y', amount: 1, status: 'actual' }],
+    monthClose: { '2026-10': '2026-11-02 10:30', '2026-09': '2026-10-05 09:00', 'bad': 'x', '2026-08': '' } });
+  const back = gas.readAll_();
+  assert.strictEqual(back.ledger.find(x => x.id === 7).reviewed, '2026-11-02');
+  assert.strictEqual(back.ledger.find(x => x.id === 8).reviewed, '');
+  assert.deepStrictEqual(plain(back.monthClose), { '2026-09': '2026-10-05 09:00', '2026-10': '2026-11-02 10:30' });
+  // 列が無い古いシート（reviewed より前の列だけ）でも読める
+  const old = gas.SHEET_DEFS.ledger.filter(h => h !== 'reviewed');
+  ss.sheets.ledger = mockSheet([old, old.map(h => ({ id: 9, date: '2026-10-01', type: '通信料', desc: 'Z', amount: 100, status: 'actual' })[h] ?? '')]);
+  assert.strictEqual(gas.readAll_().ledger[0].reviewed, '');
 });
 
 console.log(`\n${passed}件 成功` + (process.exitCode ? '（失敗あり）' : ''));
