@@ -45,7 +45,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - tests/inbox-scan.test.js：受信箱の週次読み取り・取込待ちからの登録・一括登録・重複判定のテスト（AI・Driveはモック）
 - tests/ops-checks.test.js：週次バックアップ・入金遅延・月次締めチェックのテスト（Drive・GASはモック）
 - tests/travel-suggest.test.js：交通費の訪問先の候補（駅名・訪問先の正規化・自宅駅の除外・並び順）・用件の選択式・帰りの行の自動入力・同じ区間の過去の運賃のテスト
-- tests/dashboard-v2.test.js：新ダッシュボードの判定（達成率・マイルストーン・着地予測・KPI・ミッション）と期のKPI目標の往復のテスト
+- tests/dashboard-v2.test.js：新ダッシュボードの判定（達成率・コンディション・過去最高・大きな変化・アクション・ミッション・インサイト）と期のKPI目標の往復のテスト
 - tests/dashboard-v2-compare.html：新旧ダッシュボードの数字の突き合わせ（ブラウザで開く。手順は「新ダッシュボード」の節）
 - .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
 - netlify.toml：旧Netlify用の設定（移行後も念のため残している）
@@ -804,52 +804,59 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   摘要の（手段）だけを書き換える（relabelTravelMode。往復の印・区間はそのまま）。適用するまでデータは変えない
 - 一覧・スマホのカード・PDF・CSV・精算モーダル・月次締めは、保存された手段をそのまま表示する
 
-## 新ダッシュボード（デザイン刷新・第1段階）
-- ダッシュボードのページだけ。サイドバー・他のタブ・モーダルは変えていない。見た目は .dash-v2（.ui-scope）の中だけに効かせる
-- 右上の「旧ダッシュボードに切り替え」／旧の「✨ 新ダッシュボードに切り替え」で切り替える。どちらを出すかは
-  このブラウザの localStorage（bizapp_dash_version_v1）に記憶（既定は新）。setDashVersion / initDashVersion
-- ★ 旧の表示項目は消していない。要素ごと新画面の枠へ移す（placeDashboard）。中身を描く関数・押したときの遷移先は旧のまま
-  #dv-status（状態の行6つ：銀行明細・バックアップ・入金遅延・月次締め・取込待ち・請求書）→「要対応」の帯
-  #dv-metrics（メトリクス7枚）→ 帯の「詳細指標」／ #dv-summary（期間サマリー）・#dv-rest（計画差異・月次推移・進行中の案件・更新アラート）→ 下の「旧ダッシュボードの詳細」
-  旧に戻すと #dvh-* の元の場所に戻る。月次推移の Canvas は「詳細」を開いたときに描き直す
-- ★ 数字は既存の関数だけ。dashMonthNumbers(abs)＝projectSalesAtAbsTotal＋sumLedgerAbs＋operatingProfit
-  （旧の updateDashboard もこれを使うので、旧の「売上」「営業利益」と新のKPIは必ず一致する）。
-  期の累計・達成率＝fiscalTotals(fy).sales と pct()（期間サマリーと同じ）。入金待ち＝awaitingPayment、入金遅延＝overdueNow、
-  未作成の請求書＝missingInvoiceTargets（renderInvoiceDocStatus と同じ請求月）、月次締め＝closeChecksFor(前月)、取込待ち＝inboxItems
-- 期・月のセレクトは旧の #fiscal-select / #month-select が正。新画面のセレクトは写し（dv2SyncSelects / dv2SetPeriod）
-- ヘッダー：あいさつ（dashGreeting）・一言（dashHeadline：入金遅延 → 前月比±5%）・🔔要対応の件数（未完了のミッション。売上目標は除く）・
-  代表者名（company.rep）の頭文字
-- ヒーロー（山頂）：山頂＝選択中の期の売上目標（fiscalYears.salesTarget。新しい設定は作らない）。未設定なら「期の設定で目標を入れる」（dv2GoFiscal）
-  ★ 達成率は確定ベース：達成率・現在地・マイルストーン（25・50・75・100%）のチェック・KPIの「売上目標達成率（確定）」・
-  ミッションの「売上目標まであと○円」・100%のお祝いは、すべて確定の累計 ÷ 目標（heroProgress。pct で小数1桁）
-  確定＝期首から当月まで（売上・利益の推移の「実績」と同じ。forecastSplit）、予測＝翌月から期末の契約の予定額
-  ★ 予測込みは「着地見込み」：（確定＋予測）÷ 目標。期間サマリーの達成率と同じ値。山頂のイラストでは点線の中抜きマーカー
-  表記は「確定の累計」。確定と予測の内訳を色とラベルで出す。マイルストーンの文字はマーカーと重ならない側へ（msLabelPos）
-  お祝いは確定が100%に達したとき、期ごとに1回（localStorage）・動きを減らす設定では出さない
-- KPIカード4枚：月間売上・営業利益（前月比）、売上目標達成率（確定。下に着地見込み）、現預金残高（bankBalance。履歴が無いので推移・前月比は「推移データなし」）。
-  対象月が当月なら、営業利益に「月途中（経費は入力済みの分のみ）」と出し、前月比は色・矢印を付けない（dv2DeltaQuiet）。
-  ★ 残高は数値で保存している（アプリ parseInt||0、GAS num_）ので、未設定と0円を区別できない。0 は「未設定（または0円）」と出し、
-  CF管理の口座残高へ案内する（dv2GoCash）。区別するには保存形式の変更が必要
-  小さな推移グラフは直近6か月（SVG）。押すと案件／CF管理／レポートの案件予実／CF管理へ。「計算根拠」で期間と使った項目を出す。
-  カウントアップは400ms・1回だけ（dv2Counted）
-- 売上・利益の推移（SVG）：縦軸は0を含む区切りのよい目盛り（niceAxis。4〜6区切りでいちばん幅の狭いもの）、棒は0の線から。
-  12か月＝選択中の期の月、6か月＝選択中の月までの6か月。当月より後の月は「予測」（契約の予定額）として色と「*」で分ける。
-  営業利益の線は実績の月だけ。前年同月（projectSalesAtAbsTotal(abs-12)）は、どこかの月にデータがあるときだけ出す（無ければ「データ不足」）
-- 重要KPI（@dash-rules）：新規顧客数（newCustomerCount：期に初めて受注案件が始まった取引先。normClientName で表記ゆれをまとめる）、
-  継続率（retentionRate：前の期に売上があった取引先のうち今期も売上がある割合。前の期が無ければデータ不足）、
-  成約率（winRate：(契約済＋進行中＋完了)÷(＋失注)、開始月で期に絞る。★ 失注が0件なら「データ不足（失注の記録なし）」）。
-  目標は期の newCustomerTarget / retentionTarget / winRateTarget（任意。空なら「目標未設定」でリングを描かない）。ringState で色と文字（達成・あと少し・要注意）
-- 着地予測：案件ベースだけ（入金予定は混ぜない）。確定（当月まで）＋予測（翌月から期末：請求レコード、無い月は案件の月額）＝fiscalTotals と同じ合計。
-  統計的な外挿はしない。「予測の前提」で範囲と元データを出す
-- 経営ミッション（dashMissions）：売上目標まであと○円／入金遅延／未作成の請求書／取込待ち／月次締めの未解決。件数は上の既存の集計をそのまま渡す
-- 自動チェックのひとこと（dashAdvice）：前月比・入金待ち・入金遅延・確定売上のペース（期の経過と比べる）。「自動チェック（AI分析ではありません）」と出す
-- 期の設定（modal-fiscal）に「新規顧客目標数」「継続率目標（%）」「成約率目標（%）」。GASの fiscalYears シートに列を足した（optNum_：空は空のまま、小数可）
-- --ui- 変数は .ui-scope に足した（--ui-page / --ui-purple / --ui-good* / --ui-caution* / --ui-warn* / --ui-plan* / --ui-radius-card / --ui-shadow-card /
-  --ui-border-solid / --ui-line）
-- 表示の文言は「要対応・状況」「詳細指標」「詳細データ」（「旧ダッシュボード」と出すのは切り替えボタンだけ）
-- ★ iOS Safari 対策：要対応の帯は不透明の1色の枠＋左の帯を inset の影で描く（太さの違う半透明の枠線を角丸で重ねると、角に暗い曲線が出るため）。
-  区切り線も不透明の実線。.dash-v2 の button / select は -webkit-appearance:none（既定の影・グラデーションを出さない）。
-  「→ 一覧へ」などの矢印リンクとバッジは折り返さず1つのかたまりで次の行へ
-- テスト：tests/dashboard-v2.test.js（@dash-rules と GAS の期の往復）。新旧の数字の突き合わせは tests/dashboard-v2-compare.html
+## 新ダッシュボード（デザイン刷新・第1段階＋第2弾）
+- ダッシュボードのページだけ。サイドバー・他のタブ・モーダルは変えていない。見た目は .dash-v2（.ui-scope）の中だけ
+- 切り替え：右上のアイコン（代表者名の頭文字）のメニュー →「旧ダッシュボードに切り替え」／旧の「✨ 新ダッシュボードに切り替え」。
+  どちらを出すかは localStorage（bizapp_dash_version_v1）に記憶（既定は新）。setDashVersion / initDashVersion
+- ★ 旧の表示項目は消していない。要素ごと新画面の枠へ移す（placeDashboard）。描く関数・押したときの遷移先は旧のまま
+  #dv-status（状態の行6つ）→ アクションセンターの「状態の詳細」／ #dv-metrics（メトリクス7枚）・#dv-summary（期間サマリー）・
+  #dv-rest（計画差異・月次推移・進行中の案件・更新アラート）→ 下の「詳細データ」。旧に戻すと #dvh-* の元の場所に戻る
+- ★ 数字は既存の関数だけ。dashMonthNumbers(abs)＝projectSalesAtAbsTotal＋sumLedgerAbs＋operatingProfit（旧の updateDashboard も使う）。
+  期の累計＝fiscalTotals、達成率は pct()。入金待ち awaitingPayment、入金遅延 overdueNow、未作成の請求書 missingInvoiceTargets
+  （renderInvoiceDocStatus と同じ請求月）、月次締め closeChecksFor(前月)、取込待ち inboxItems、バックアップ backupStatusOf、
+  銀行明細 bankImportAgeDays（状態の行と共通）。期・月は旧の #fiscal-select / #month-select が正（新画面は写し）
+- 判定は「@dash-rules-begin〜end」（tests/dashboard-v2.test.js が切り出して読む。pct はアプリの定義をそのまま取り出す）
+
+### 並び（スマホ1列／PCは1200pxの中で12列：左8＝コンディション・山登り・KPI・推移、右4＝アクションセンター・ミッション・インサイト）
+- ヘッダー（1行）：あいさつ（dashGreeting）・期・月・🔔（アクションセンターの未完了の数）・アイコン（メニュー）
+- 経営コンディション（dashCondition。優先順位で最初に当てはまる1つ。「判定の根拠」で各ルールと値）
+  1. 資金繰りに注意：現預金残高 ＜ 出金予定（plannedWindow：status=planned_out で予定日が期限超過か今日から30日以内）。
+     残高0（未設定と区別できない）は飛ばす。入金予定は判定に使わない（根拠に30日以内の入金予定を参考で出す）。全期間は足さない
+  2. 入金の確認が必要：入金遅延が1件以上
+  3. 目標ペース：確定達成率−期の経過率（当月までの月数÷期の月数）。≧−5pt 順調（緑）／−5〜−15pt 少し遅れ（黄。−15ちょうどは黄）／−15pt未満 遅れ（赤）
+  4. 判定材料が不足しています（灰。期の目標が未設定など）。色＋アイコン＋文字で区別
+- 山登り（SVG・グラデーションと影）：★ 達成率は確定ベース（heroProgress：確定の累計÷目標）。現在地＝確定（光るマーカー。400msで滑らかに動く）、
+  着地見込み＝（確定＋予測）÷目標（期間サマリーの達成率と同じ。点線の中抜き）。確定は期首〜当月（推移の「実績」と同じ）、予測は翌月〜期末の契約の予定額
+  確定実績・目標・予測を並べる。マイルストーンの文字はマーカーと重ならない側へ（msLabelPos）。スマホは高さ150pxまで
+  祝福：確定でマイルストーンに新しく到達したときだけ短く1回（milestoneCelebration。localStorage bizapp_dash_ms_v2_{期ID}）。
+  初めて開いたときは到達済みを記録だけ。localStorage が使えない・動きを減らす設定のときは出さない
+- KPIカード（スマホ2列・PC4列。淡い色は青と紫を交互、緑・黄・赤は状態ラベルだけ）：月間売上・営業利益（前月比）、達成率（確定。着地見込みも）、
+  現預金残高（0は「未設定（または0円）」→ 残高を入れる）。ⓘで計算根拠。当月は営業利益に「月途中（経費は入力済みの分のみ）」、前月比は色なし
+  カウントアップは読み込みにつき1回・400ms
+- 今日の優先アクション（スマホだけ）：アクションセンターの未完了の上位3件。「すべて表示（○件）」でアクションセンターへ
+- 売上・利益の推移（SVG）：縦軸は niceAxis（0を含む区切りのよい目盛り）。実績は青紫のグラデーション、予測（当月より後）は破線、営業利益は紫の線（実績の月だけ）。
+  過去最高（recordMonth：確定した月で売上のある月が3か月以上のとき、最高値の月に★。予測の月は対象外。同額は新しい月）、
+  大きな変化（bigChanges：確定した月どうしで前月比±30%以上かつ差10万円以上。当月・予測・前月0は対象外）を強調。
+  棒を押すとその月の売上・営業利益・前月比。スマホは既定6か月・座標を狭くして文字を読める大きさに
+- アクションセンター（今すぐやること。actionItems）：入金遅延・月次締めの未解決・請求書の未作成・取込待ち・バックアップ（10日以内なら完了）・銀行明細（7日以内なら完了）。
+  重要度は固定のルール：赤（入金遅延・月次締め）→ 橙（請求書・取込待ち・バックアップ・銀行明細）→ 緑（完了。小さなチップにまとめる）。「重要度の見方」で確認
+  件数・金額は状態の行と同じ集計（二重に数えない）。対応ボタンは既存の画面へ
+- 経営ミッション（目標への進捗。dashMissionList）：売上目標（確定）、目標を設定したKPI（新規顧客数・継続率・成約率。目標未設定は下に値だけ）、月次締めの解決率。
+  「今月の達成 ○／○」。期限は月次締めだけ（期限超過の入金予定日・支払期限、請求書の作成期間＝月末3日前〜翌月10日の、いちばん早い日。
+  今日より前は「○日超過」を赤。deadlineLabel）。データの無いものには期限を出さない。チェックの演出は未完了→完了に変わった瞬間だけ
+- 経営インサイト（dashInsights。最大3件。ルールだけ。各カードに「自動判定（AI分析ではありません）」）
+  良い変化：売上が前月比+10%以上／過去最高を更新（それまでの月より高いときだけ）／入金遅延の解消（このブラウザで前に見たときは遅延があり、
+  いま0件。解消から7日間。localStorage bizapp_dash_overdue_v2）／確定達成率≧期の経過率
+  注意：入金遅延あり／前月比−20%以下／確定達成率−期の経過率≦−5pt／月次締めの未解決。次の行動：アクションセンターの先頭1件を指すだけ
+- 重要KPIの定義（第1段階から）：新規顧客数（newCustomerCount）・継続率（retentionRate。前の期が無ければデータ不足）・成約率（winRate。失注0件はデータ不足）。
+  目標は期の newCustomerTarget / retentionTarget / winRateTarget（GASの fiscalYears シートの列。optNum_）
+- アニメーションは transform と opacity だけ（200〜500ms）。常に動く装飾なし。prefers-reduced-motion ではすべて無効。
+  タップできる要素は高さ44px以上（ⓘ・リンク・ボタン）。淡い色のカードの文字は --ui-muted-strong / --ui-accent-text（4.5:1以上）。
+  スケルトンは実際のカードの高さに合わせ、動かさない
+- ★ 注意：アプリ本体に .main（画面の外枠。margin-left:220px）があるので、.dash-v2 の中で .main という名前のクラスを使わないこと
+- --ui- 変数は .ui-scope に足して使う（--ui-page / --ui-purple / --ui-good* / --ui-caution* / --ui-warn* / --ui-plan* / --ui-radius-card / --ui-shadow-card /
+  --ui-border-solid / --ui-line / --ui-tint-blue / --ui-tint-purple / --ui-muted-strong / --ui-accent-text / --ui-plan-text）
+- iOS Safari 対策：枠は不透明の1色、左の帯は inset の影（太さの違う半透明の枠線を角丸で重ねない）。button / select は -webkit-appearance:none
+- テスト：tests/dashboard-v2.test.js（判定ルールの境界値・GASの期の往復）。新旧の数字の突き合わせは tests/dashboard-v2-compare.html
   （リポジトリ直下で `python -m http.server 8765` → http://localhost:8765/tests/dashboard-v2-compare.html。GAS_URL を空にして読むのでシートには触らない。
-  ?narrow でスマホ幅、?tall で縦長）
+  ?narrow でスマホ幅、?tall で縦長。横スクロールが出ないことも確かめる）
