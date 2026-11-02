@@ -41,6 +41,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - gas-code.js：Google Apps Script用のコード（GASエディタに貼り付けて使う。ブラウザからは読み込まれない）
 - tests/debit-import.test.js：取込の判定のテスト。`node tests/debit-import.test.js` で実行する
 - tests/invoice-drafts.test.js：請求書の下書き・訂正のテスト。`node tests/invoice-drafts.test.js` で実行する
+- tests/receipt-import.test.js：領収書の読み取り・誰と／用件・重複判定のテスト（AIの呼び出しはモック）
 - .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
 - netlify.toml：旧Netlify用の設定（移行後も念のため残している）
 
@@ -363,7 +364,16 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 
 ## 収支の備考
 - ledger の各エントリに memo（任意）を持つ。GASの ledger シートにも memo 列がある
-- 収支入力モーダルの備考欄は、区分が「交際費」のときだけ placeholder を変える
+- 収支入力モーダルの備考欄は、区分が「交際費」のときだけ placeholder を変える（同席者・目的は専用欄へ）
+
+## 誰と・用件・人数（経費全般）
+- ledger に withWhom（誰と：同席者・相手先）／persons（人数、交際費のみ）を持つ。用件は既存の purpose（交通費と共通）
+  GASの ledger シートにも withWhom / persons 列がある（行の変換は ledgerRow_ / ledgerFromRow_）
+- 収支入力モーダル（売上・入金予定以外で表示）、デビット通知・銀行CSVの取込プレビュー（交際費の行だけ）、
+  領収書の確認画面、CF管理の一覧（摘要の下）、CF管理の「📥 CSV出力」に出す
+- ★ 区分が「交際費」なら「誰と」「用件」は必須（expenseEntryError）。空だと保存・登録できない。
+  人数を入れると1人あたり（perPersonAmount）を表示する
+- 入力欄の候補は最近使った値（recentValues → datalist dl-with / dl-purpose）
 - 収支一覧では摘要の下に小さいグレー文字で表示する
 - 月次PL（Excel）では勘定科目ごとに備考を改行で連結して備考列に出す
   （改行を含むセルは wrapText を有効にする）
@@ -567,3 +577,22 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   「PDFに保存」の既定名になる。HTMLダウンロードも同じ名前
 - 帳票のフォントは DOC_JA_FONT（Noto Sans CJK JP → Webフォントの Noto Sans JP）。単体HTMLには DOC_FONT_LINK を入れる
 
+## 領収書の写真から経費登録（CF管理）
+- 「📷 領収書から登録」。タッチ端末（pointer:coarse）はカメラ（capture）、PCは画像選択（複数可・1回5枚まで）
+- 写真はブラウザで縮小（長辺1600px・JPEG・品質0.8／shrinkReceiptImage）してから送る
+- 読み取りは GAS の receiptRead（doPost）。claude-sonnet-4-6（ANTHROPIC_MODEL）に画像を渡し、
+  日付・合計・支払先・但し書き・税込/税抜・税率別内訳・インボイス番号（T+13桁）・支払方法・区分の候補・
+  項目ごとの確信度（高/中/低）を返す。★ 読めない項目は null／空のまま（プロンプトで推測を禁止し、
+  normalizeReceipt_ も推測で埋めない）。区分は既存の経費区分（アプリが categories で渡す）にあるものだけ
+- APIの失敗は apiErrorMessage_ で理由にする（クレジット不足・キー無効・上限・混雑）。画面に出して手入力で登録できる
+- 確認画面は1枚ずつ。左に写真・右に入力欄。確信度「低」と空の日付・金額は黄色（rc-warn）
+  合計と税額の整合は receiptTaxWarnings（税込：対象額の合計＝合計／税抜：対象額＋税額＝合計、1円までの差は許す）
+- ★ 登録を押して初めて写真を保存（receiptSave）し ledger に入れる（status=actual、memo は「領収書取込」＋但し書き等）。
+  スキップした写真は保存しない。保存先は「領収書/2026年11月」（スクリプト プロパティ RECEIPT_FOLDER_ID があればその下、
+  無ければマイドライブ直下に「領収書」を作る）。ファイル名 YYYYMMDD_支払先_金額.jpg（receiptFileName_）
+  写真の保存に失敗したら、写真なしで登録するか聞く
+- ledger の receiptId にファイルID、calId に外部ID 'rcpt:{ファイルID}'。一覧の 📷 からドライブの写真を開く。
+  経費を削除してもドライブの写真は消さない
+- 重複：receiptDupOf＝同額で日付が前後1日以内の経費（実績・売上以外。手入力・デビット通知・銀行CSV・領収書すべて）。
+  あれば「重複の可能性」でチェックOFF。判定は nearExpenses を銀行CSVの mailNear と共通で使う
+- 初回はGASエディタで testReceiptFolder() を実行して、フォルダ作成ができることを確認する

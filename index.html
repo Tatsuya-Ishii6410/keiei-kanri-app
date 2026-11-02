@@ -148,6 +148,13 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .modal-overlay.open{display:flex}
 .modal{background:var(--bg-primary);border-radius:16px;padding:26px 28px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;border:1px solid var(--border);box-shadow:0 18px 50px rgba(16,24,40,0.28)}
 .modal.wide{max-width:680px}
+/* 領収書の確認画面：左に写真・右に入力欄（768px以下は縦に並べる） */
+.rc-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:18px;align-items:start}
+.rc-photo{position:sticky;top:0;background:var(--bg-secondary);border-radius:var(--radius-md);padding:8px;text-align:center}
+.rc-photo img{max-width:100%;max-height:70vh;object-fit:contain;border-radius:6px}
+.rc-warn{background:var(--amber-bg) !important;border-color:#e0a800 !important}
+.req-mark{color:var(--red)}
+@media (max-width:768px){.rc-grid{grid-template-columns:1fr}.rc-photo{position:static}.rc-photo img{max-height:45vh}}
 .modal.doc{max-width:720px}
 @media(max-width:480px){
   #modal-preview-quote .actions-row .btn{width:100%;justify-content:center}
@@ -721,6 +728,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn" onclick="openDriveImportModal()">☁️ ドライブから取込</button>
+      <button class="btn" onclick="startReceiptImport()">📷 領収書から登録</button>
       <button class="btn" onclick="openDebitImportModal()">📧 デビット通知から取込</button>
       <button class="btn" onclick="openFixedCostsModal()">🔁 固定費管理</button>
       <button class="btn primary" onclick="openLedgerModal(null,'actual')">+ 実績入力</button>
@@ -762,7 +770,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <div id="plan-cards" class="mob-cards"></div>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title" id="ledger-list-title">キャッシュフロー</span></div>
+      <div class="card-header"><span class="card-title" id="ledger-list-title">キャッシュフロー</span><button class="btn sm" onclick="exportLedgerCsv()">📥 CSV出力</button></div>
       <div class="table-wrap mob-table"><table>
         <thead><tr><th>日付</th><th>区分</th><th>摘要</th><th style="text-align:right">入金</th><th style="text-align:right">出金</th><th>状態</th><th>操作</th></tr></thead>
         <tbody id="ledger-list"></tbody>
@@ -1296,6 +1304,16 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </div>
 </div>
 
+<datalist id="dl-with"></datalist><datalist id="dl-purpose"></datalist>
+<input type="file" id="rc-pick" accept="image/*" multiple style="display:none" onchange="onReceiptFiles(this)">
+<input type="file" id="rc-camera" accept="image/*" capture="environment" style="display:none" onchange="onReceiptFiles(this)">
+<div class="modal-overlay" id="modal-receipt">
+<div class="modal wide" style="max-width:1040px">
+  <div class="modal-header"><span class="modal-title">📷 領収書から登録 <span id="rc-counter" style="font-size:13px;font-weight:400;color:var(--text-secondary)"></span></span><button class="btn sm" onclick="closeReceiptModal()">✕</button></div>
+  <div id="rc-body"></div>
+</div>
+</div>
+
 <div class="modal-overlay" id="modal-debit-import">
 <div class="modal wide" style="max-width:980px">
   <div class="modal-header"><span class="modal-title">📧 デビット通知から取込</span><button class="btn sm" onclick="closeModal('modal-debit-import')">✕</button></div>
@@ -1742,11 +1760,21 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="modal-header"><span class="modal-title" id="modal-ledger-title">収支を入力</span><button class="btn sm" onclick="closeModal('modal-add-ledger')">✕</button></div>
   <div class="form-row">
     <div class="form-group"><label class="form-label" id="l-date-label">日付</label><input id="l-date" type="date"></div>
-    <div class="form-group" id="l-type-group"><label class="form-label">区分</label><select id="l-type" onchange="updateMemoPlaceholder();toggleTravelPanel()"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option><option>社会保険料</option><option>住民税（特別徴収）</option><option>消費税（納付）</option><option>源泉所得税（納付）</option><option>法人税・住民税・事業税（納付）</option><option>その他税金・公課</option></select></div>
+    <div class="form-group" id="l-type-group"><label class="form-label">区分</label><select id="l-type" onchange="updateMemoPlaceholder();toggleTravelPanel();toggleExpenseExtra()"><option>売上</option><option>家賃（レンタルオフィス利用料）</option><option>通信料</option><option>システム利用料</option><option>交通費</option><option>交際費</option><option>役員報酬</option><option>その他経費</option><option>社会保険料</option><option>住民税（特別徴収）</option><option>消費税（納付）</option><option>源泉所得税（納付）</option><option>法人税・住民税・事業税（納付）</option><option>その他税金・公課</option></select></div>
   </div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">摘要</label><input id="l-desc" type="text" placeholder="例: 〇〇案件 6月分"></div>
-    <div class="form-group"><label class="form-label">金額</label><input id="l-amount" type="number" placeholder="100000"></div>
+    <div class="form-group"><label class="form-label">金額</label><input id="l-amount" type="number" placeholder="100000" oninput="updatePerPerson()"></div>
+  </div>
+  <div id="l-extra">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">誰と<span id="l-with-req" class="req-mark"></span></label><input id="l-with" type="text" list="dl-with" placeholder="例：株式会社○○ 山田様・2名"></div>
+      <div class="form-group"><label class="form-label">用件<span id="l-purpose-req" class="req-mark"></span></label><input id="l-purpose" type="text" list="dl-purpose" placeholder="例：△△案件の打合せ"></div>
+    </div>
+    <div class="form-row" id="l-persons-row" style="display:none">
+      <div class="form-group"><label class="form-label">人数</label><input id="l-persons" type="number" min="1" step="1" placeholder="2" oninput="updatePerPerson()"></div>
+      <div class="form-group"><label class="form-label">1人あたり</label><div id="l-perperson" style="padding:9px 0;font-weight:600">-</div></div>
+    </div>
   </div>
   <div id="travel-panel" style="display:none;background:var(--bg-secondary);border-radius:var(--radius-md);padding:14px;margin-bottom:12px">
     <div class="form-label" style="margin-bottom:8px">交通費の計算</div>
@@ -2267,6 +2295,9 @@ function mergeState(parsed){
     l.visit=l.visit||'';
     l.purpose=l.purpose||'';
     l.calId=l.calId||'';
+    l.withWhom=l.withWhom||'';
+    l.persons=(l.persons===''||l.persons===null||l.persons===undefined)?'':(parseInt(l.persons)||'');
+    l.receiptId=l.receiptId||'';
     if(['actual','planned_in','planned_out'].indexOf(l.status)<0)l.status='actual';
     l.expectedDate=l.expectedDate||'';
     l.settlementMonth=l.settlementMonth||'';
@@ -2440,7 +2471,7 @@ function keepLocalWhenMissing(remote){
       const o=local[r.id];
       if(!o)return r;
       const x=Object.assign({},r);
-      ['visit','purpose','calId'].forEach(f=>{if(x[f]===undefined&&o[f])x[f]=o[f];});
+      ['visit','purpose','calId','withWhom','persons','receiptId'].forEach(f=>{if(x[f]===undefined&&o[f])x[f]=o[f];});
       return x;
     });
   }
@@ -3731,6 +3762,301 @@ function goToInvoices(status){
   renderQuotes();
 }
 
+
+/* ===== 領収書の写真から経費登録 ======================================
+   写真はブラウザで縮小（長辺1600px・JPEG・品質0.8）してから GAS に送る。
+   読み取り（receiptRead）は項目だけを返し、写真の保存（receiptSave）は「登録」を押したときに行う。
+   1枚ずつ確認して登録する。判定は @import-rules（receiptFormFrom / receiptDupOf / receiptTaxWarnings など）
+   ===================================================================== */
+const RECEIPT_MAX_FILES=5;
+const RECEIPT_MAX_SIDE=1600;
+const RECEIPT_QUALITY=0.8;
+let rcQueue=[];        // {dataUrl,state:'pending'|'reading'|'ready'|'error',error,conf,f,dup,checked,result}
+let rcIndex=0;
+let rcSaving=false;
+
+function expenseTypes(){return LEDGER_TYPES.filter(t=>ledgerGroup(t)==='expense')}
+
+// スマホ（タッチ操作）はカメラ、PCは画像の選択
+function startReceiptImport(){
+  const touch=!!(window.matchMedia&&window.matchMedia('(pointer:coarse)').matches);
+  const el=document.getElementById(touch?'rc-camera':'rc-pick');
+  el.value='';
+  el.click();
+}
+
+function shrinkReceiptImage(file){
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{
+      const w0=img.naturalWidth,h0=img.naturalHeight;
+      const sc=Math.min(1,RECEIPT_MAX_SIDE/Math.max(w0,h0));
+      const w=Math.max(1,Math.round(w0*sc)),h=Math.max(1,Math.round(h0*sc));
+      const c=document.createElement('canvas');
+      c.width=w;c.height=h;
+      const ctx=c.getContext('2d');
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);   // 透過PNGの背景を白に
+      ctx.drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg',RECEIPT_QUALITY));
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('この形式の画像は開けませんでした'));};
+    img.src=url;
+  });
+}
+
+async function onReceiptFiles(input){
+  let files=Array.from(input.files||[]);
+  input.value='';
+  if(files.length===0)return;
+  if(files.length>RECEIPT_MAX_FILES){
+    alert(`1回に読み取れるのは${RECEIPT_MAX_FILES}枚までです。先頭の${RECEIPT_MAX_FILES}枚を読み取ります。`);
+    files=files.slice(0,RECEIPT_MAX_FILES);
+  }
+  fillRecentDatalists();
+  rcQueue=[];rcIndex=0;
+  document.getElementById('rc-counter').textContent='';
+  document.getElementById('rc-body').innerHTML='<div class="alert alert-info"><span class="spinner"></span> 写真を縮小しています...</div>';
+  openModal('modal-receipt');
+  for(const f of files){
+    let dataUrl='',error='';
+    try{dataUrl=await shrinkReceiptImage(f);}catch(e){error=e.message;}
+    rcQueue.push({dataUrl,state:dataUrl?'pending':'error',error:error?`写真を読み込めませんでした（${f.name}：${error}）`:'',
+      conf:{},f:receiptFormFrom(null),dup:null,checked:true,result:''});
+  }
+  showReceipt(0);
+}
+
+function rcCur(){return rcQueue[rcIndex]}
+
+function showReceipt(i){
+  rcIndex=i;
+  if(i>=rcQueue.length){finishReceipts();return;}
+  const it=rcCur();
+  if(it.state==='pending')readReceipt(it);
+  else renderReceipt();
+}
+
+async function readReceipt(it){
+  it.state='reading';it.error='';
+  renderReceipt();
+  let json;
+  if(!gasEnabled()){
+    json={ok:false,error:'GAS_URL が設定されていないため読み取れません'};
+  }else{
+    try{
+      json=await gasCall({action:'receiptRead',image:it.dataUrl.split(',')[1],categories:expenseTypes()});
+    }catch(e){
+      json={ok:false,error:'GASに接続できませんでした（'+e.message+'）'};
+    }
+  }
+  if(json&&json.ok){
+    it.state='ready';
+    it.conf=(json.data&&json.data.confidence)||{};
+    it.f=receiptFormFrom(json.data);
+    it.dup=receiptDupOf(S.ledger,it.f.date,it.f.amount);
+    it.checked=!it.dup;
+  }else{
+    it.state='error';
+    it.error=(json&&json.error)||'読み取りに失敗しました';
+  }
+  if(rcCur()===it)renderReceipt();
+}
+
+// 黄色にする欄：確信度「低」の項目と、空の日付・金額
+function rcWarn(it,key){
+  const f=it.f,c=it.conf||{};
+  if(key==='date')return!f.date||c.date==='低';
+  if(key==='amount')return f.amount===''||f.amount===null||c.total==='低';
+  if(key==='payee')return c.payee==='低';
+  if(key==='item')return c.item==='低';
+  if(key==='taxType')return c.taxType==='低';
+  if(key==='taxes')return c.taxes==='低';
+  if(key==='invoiceNo')return c.invoiceNo==='低';
+  if(key==='paymentMethod')return c.paymentMethod==='低';
+  if(key==='type')return c.category==='低';
+  return false;
+}
+
+function rcInput(key,label,attrs){
+  const it=rcCur();
+  const warn=rcWarn(it,key==='tax10base'||key==='tax10'||key==='tax8base'||key==='tax8'?'taxes':key);
+  return`<div class="form-group"><label class="form-label">${label}</label>
+    <input id="rc-${key}" ${attrs||'type="text"'} value="${escAttr(it.f[key])}" class="${warn?'rc-warn':''}"
+      oninput="rcSet('${key}',this.value)"></div>`;
+}
+
+function renderReceipt(){
+  const it=rcCur();
+  if(!it)return;
+  const f=it.f;
+  document.getElementById('rc-counter').textContent=`${rcIndex+1} / ${rcQueue.length}枚目`;
+  const status=it.state==='reading'
+    ?'<div class="alert alert-info"><span class="spinner"></span> AIが領収書を読み取っています...</div>'
+    :it.state==='error'
+      ?`<div class="alert alert-error">❌ ${escAttr(it.error)}<br><span style="font-size:12px">下の欄に手入力すれば、そのまま登録できます。</span>
+         ${it.dataUrl&&gasEnabled()?`<div style="margin-top:6px"><button class="btn sm" onclick="readReceipt(rcCur())">🔄 もう一度読み取る</button></div>`:''}</div>`
+      :'<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">読み取った内容です。黄色の欄（確信度が低い・空欄）を確認してください。読めなかった項目は空欄のままです。</div>';
+  const ent=f.type==='交際費';
+  const typeWarn=rcWarn(it,'type');
+  document.getElementById('rc-body').innerHTML=`<div class="rc-grid">
+    <div class="rc-photo">${it.dataUrl?`<img src="${it.dataUrl}" alt="領収書の写真">`:'<div class="empty-state">写真がありません</div>'}</div>
+    <div>
+      ${status}
+      <div id="rc-dup"></div>
+      <div id="rc-taxwarn"></div>
+      <fieldset ${it.state==='reading'?'disabled':''} style="border:none;padding:0;margin:0">
+      <div class="form-row">${rcInput('date','日付 *','type="date"')}${rcInput('amount','合計金額 *','type="number" min="0"')}</div>
+      <div class="form-row">${rcInput('payee','支払先（店名）')}${rcInput('item','但し書き（品目）')}</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">区分</label>
+          <select id="rc-type" class="${typeWarn?'rc-warn':''}" onchange="rcSet('type',this.value);renderReceipt()">${expenseTypes().map(t=>`<option ${t===f.type?'selected':''}>${t}</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">税込／税抜</label>
+          <select id="rc-taxType" class="${rcWarn(it,'taxType')?'rc-warn':''}" onchange="rcSet('taxType',this.value)">
+            ${['','税込','税抜'].map(t=>`<option value="${t}" ${t===f.taxType?'selected':''}>${t||'（不明）'}</option>`).join('')}</select></div>
+      </div>
+      <div class="form-row">${rcInput('tax10base','10%対象額','type="number"')}${rcInput('tax10','10%税額','type="number"')}</div>
+      <div class="form-row">${rcInput('tax8base','8%対象額','type="number"')}${rcInput('tax8','8%税額','type="number"')}</div>
+      <div class="form-row">${rcInput('invoiceNo','インボイス登録番号','type="text" placeholder="T1234567890123"')}${rcInput('paymentMethod','支払方法','type="text" list="dl-paymethod"')}</div>
+      <div class="form-row single">${rcInput('desc','摘要 *')}</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">誰と${ent?' <span class="req-mark">*</span>':''}</label><input id="rc-withWhom" type="text" list="dl-with" placeholder="例：株式会社○○ 山田様・2名" value="${escAttr(f.withWhom)}" oninput="rcSet('withWhom',this.value)"></div>
+        <div class="form-group"><label class="form-label">用件${ent?' <span class="req-mark">*</span>':''}</label><input id="rc-purpose" type="text" list="dl-purpose" placeholder="例：△△案件の打合せ" value="${escAttr(f.purpose)}" oninput="rcSet('purpose',this.value)"></div>
+      </div>
+      ${ent?`<div class="form-row">
+        <div class="form-group"><label class="form-label">人数</label><input id="rc-persons" type="number" min="1" step="1" value="${escAttr(f.persons)}" oninput="rcSet('persons',this.value)"></div>
+        <div class="form-group"><label class="form-label">1人あたり</label><div id="rc-perperson" style="padding:9px 0;font-weight:600"></div></div>
+      </div>`:''}
+      <div class="form-row single"><div class="form-group"><label class="form-label">備考</label><input id="rc-memo" type="text" value="${escAttr(f.memo)}" oninput="rcSet('memo',this.value)"></div></div>
+      <label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px">
+        <input id="rc-check" type="checkbox" ${it.checked?'checked':''} onchange="rcCur().checked=this.checked;rcRefresh()" style="width:auto"> この領収書を登録する
+      </label>
+      </fieldset>
+      <div class="actions-row">
+        <button class="btn" onclick="closeReceiptModal()">中止</button>
+        <button class="btn" onclick="rcSkip()" ${it.state==='reading'?'disabled':''}>この写真をスキップ</button>
+        <button class="btn primary" id="rc-submit" onclick="rcRegister()" ${it.state==='reading'?'disabled':''}></button>
+      </div>
+    </div>
+  </div>
+  <datalist id="dl-paymethod"><option value="現金"></option><option value="クレジットカード"></option><option value="Visaデビット"></option><option value="電子マネー"></option><option value="QR決済"></option></datalist>`;
+  rcRefresh();
+}
+
+// 入力に合わせて変わる部分だけ描き直す（入力中のフォーカスを奪わない）
+function rcRefresh(){
+  const it=rcCur();
+  if(!it)return;
+  const f=it.f;
+  const dupEl=document.getElementById('rc-dup');
+  if(dupEl)dupEl.innerHTML=it.dup
+    ?`<div class="alert alert-warning" style="font-size:12px"><span class="badge badge-amber">重複の可能性</span>
+       同じ金額の経費が ${escAttr(it.dup.date)} に登録済みです：${escAttr(it.dup.desc)}（${fmt(it.dup.amount)}）。
+       別の支払いなら「この領収書を登録する」にチェックしてください。</div>`:'';
+  const tw=receiptTaxWarnings(f);
+  const twEl=document.getElementById('rc-taxwarn');
+  if(twEl)twEl.innerHTML=tw.length?`<div class="alert alert-warning" style="font-size:12px">⚠ ${tw.map(escAttr).join('<br>⚠ ')}</div>`:'';
+  ['date','amount'].forEach(k=>{
+    const el=document.getElementById('rc-'+k);
+    if(el)el.classList.toggle('rc-warn',rcWarn(it,k));
+  });
+  const pp=document.getElementById('rc-perperson');
+  if(pp){const v=perPersonAmount(f.amount,f.persons);pp.textContent=v===null?'-':fmt(v)+' / 人';}
+  const cb=document.getElementById('rc-check');
+  if(cb)cb.checked=it.checked;
+  const btn=document.getElementById('rc-submit');
+  if(btn)btn.textContent=rcSaving?'保存中...':(it.checked?'✓ 登録して次へ':'登録せずに次へ');
+}
+
+function rcSet(key,val){
+  const it=rcCur();
+  if(!it)return;
+  it.f[key]=val;
+  if(key==='date'||key==='amount'){
+    const before=it.dup;
+    it.dup=receiptDupOf(S.ledger,it.f.date,it.f.amount);
+    if(it.dup&&!before)it.checked=false;   // 新しく重複が見つかったときだけチェックを外す
+  }
+  rcRefresh();
+}
+
+function rcSkip(){
+  const it=rcCur();
+  if(it)it.result='skip';
+  showReceipt(rcIndex+1);
+}
+
+function receiptMemo(f){
+  return['領収書取込',
+    f.item?'但し書き:'+f.item:'',
+    f.invoiceNo?'登録番号:'+f.invoiceNo:'',
+    f.paymentMethod?'支払:'+f.paymentMethod:'',
+    String(f.memo||'').trim()].filter(Boolean).join('／');
+}
+
+async function rcRegister(){
+  const it=rcCur();
+  if(!it||rcSaving)return;
+  if(!it.checked){it.result='skip';showReceipt(rcIndex+1);return;}
+  const f=it.f;
+  const amount=parseInt(f.amount)||0;
+  const desc=String(f.desc||'').trim()||String(f.payee||'').trim()||'領収書';
+  if(!f.date||amount<=0){alert('日付と合計金額を入力してください');return;}
+  const err=expenseEntryError({type:f.type,withWhom:f.withWhom,purpose:f.purpose});
+  if(err){alert(err);return;}
+  const tw=receiptTaxWarnings(f);
+  if(tw.length&&!confirm('合計金額と税額が合っていません。\n\n'+tw.join('\n')+'\n\nこのまま登録しますか？'))return;
+
+  // 写真をドライブの「領収書/年月」に保存する。失敗したら写真なしで登録するか聞く
+  let fileId='';
+  if(it.dataUrl&&gasEnabled()){
+    rcSaving=true;rcRefresh();
+    let json;
+    try{
+      json=await gasCall({action:'receiptSave',image:it.dataUrl.split(',')[1],date:f.date,payee:f.payee,amount});
+    }catch(e){json={ok:false,error:e.message};}
+    rcSaving=false;rcRefresh();
+    if(json&&json.ok)fileId=json.fileId;
+    else if(!confirm('写真をGoogleドライブに保存できませんでした。\n（'+((json&&json.error)||'不明なエラー')+'）\n\n写真なしで経費だけ登録しますか？'))return;
+  }
+  const ext=fileId?rcptExtId(fileId):'';
+  if(ext&&S.ledger.some(l=>l.calId===ext)){it.result='skip';showReceipt(rcIndex+1);return;}
+  S.ledger.push({
+    id:S.nextLedgerId++,
+    date:f.date,
+    expectedDate:'',
+    type:f.type,
+    desc,
+    amount,
+    memo:receiptMemo(f),
+    status:'actual',
+    calId:ext,
+    receiptId:fileId,
+    withWhom:String(f.withWhom||'').trim(),
+    purpose:String(f.purpose||'').trim(),
+    persons:f.type==='交際費'?(parseInt(f.persons)||''):''
+  });
+  it.result='done';
+  saveState();
+  refreshAll();
+  showReceipt(rcIndex+1);
+}
+
+function finishReceipts(){
+  const done=rcQueue.filter(x=>x.result==='done').length;
+  const skipped=rcQueue.length-done;
+  closeModal('modal-receipt');
+  rcQueue=[];rcIndex=0;
+  if(done||skipped)alert(`領収書から ${done}件を経費として登録しました`+(skipped?`（${skipped}件はスキップ）`:''));
+}
+
+function closeReceiptModal(){
+  const left=rcQueue.slice(rcIndex).length;
+  if(left>0&&rcQueue.length&&!confirm('まだ確認していない写真があります。中止しますか？\n（登録済みの経費はそのまま残ります）'))return;
+  finishReceipts();
+}
+
 /* ===== Googleドライブからの経費取込 ==================================
    専用フォルダ内のPDF・画像をGAS経由でAIに読み取らせ、経費として登録する。
    Driveの操作もAI呼び出しもGAS側で行う（APIキーをブラウザに置かないため）。
@@ -3778,6 +4104,7 @@ function shiftYmd(ymd,days){
 function debitMsg(html){document.getElementById('di-msg').innerHTML=html||''}
 
 function openDebitImportModal(){
+  fillRecentDatalists();
   const last=S.mail&&S.mail.lastDebitSync;
   const t=localToday();
   // 既定：前回取込日の翌日〜今日。初回は当月1日から
@@ -3864,7 +4191,7 @@ function renderDebitPreview(){
         <td style="font-size:12px">${r.merchant||'-'}</td>
         <td><select onchange="debitEdit(${i},'type',this)" style="font-size:12px;padding:4px">${debitTypeOptions(r.type)}</select></td>
         <td><input type="number" value="${r.amount}" onchange="debitEdit(${i},'amount',this)" style="width:96px;font-size:12px;padding:4px 6px;text-align:right"></td>
-        <td><input type="text" value="${escAttr(r.desc)}" onchange="debitEdit(${i},'desc',this)" style="min-width:180px;font-size:12px;padding:4px 6px"></td>
+        <td><input type="text" value="${escAttr(r.desc)}" onchange="debitEdit(${i},'desc',this)" style="min-width:180px;font-size:12px;padding:4px 6px">${entertainInputs('debitRows',i,r)}</td>
         <td>${debitBadges(r)}</td>
       </tr>`).join('')}</tbody>
     </table></div>
@@ -3876,14 +4203,30 @@ function renderDebitPreview(){
       +(debitBadges(r)?`<div style="margin-top:6px">${debitBadges(r)}</div>`:'')
       +`<div style="margin-top:8px"><select onchange="debitEdit(${i},'type',this)">${debitTypeOptions(r.type)}</select></div>`
       +`<div style="margin-top:6px"><input type="number" value="${r.amount}" onchange="debitEdit(${i},'amount',this)" style="font-size:14px;font-weight:700"></div>`
-      +`<div style="margin-top:6px"><input type="text" value="${escAttr(r.desc)}" onchange="debitEdit(${i},'desc',this)"></div>`)).join('')}</div>`
+      +`<div style="margin-top:6px"><input type="text" value="${escAttr(r.desc)}" onchange="debitEdit(${i},'desc',this)"></div>`
+      +entertainInputs('debitRows',i,r))).join('')}</div>`
     +`<div style="text-align:right;font-size:14px;margin-top:10px">選択 ${sel.length}件　合計 <strong style="font-size:17px">${fmt(total)}</strong></div>`
     +unread;
+}
+
+// 交際費の行に出す「誰と」「用件」。入力中に描き直さないよう、データに直接入れる
+function entertainInputs(arr,i,r){
+  if(r.type!=='交際費')return'';
+  return`<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+    <input type="text" list="dl-with" placeholder="誰と *" value="${escAttr(r.withWhom||'')}" oninput="${arr}[${i}].withWhom=this.value" style="flex:1;min-width:120px;font-size:12px;padding:4px 6px">
+    <input type="text" list="dl-purpose" placeholder="用件 *" value="${escAttr(r.purpose||'')}" oninput="${arr}[${i}].purpose=this.value" style="flex:1;min-width:120px;font-size:12px;padding:4px 6px">
+  </div>`;
+}
+
+// 取込で選んだ行のうち、交際費で「誰と」「用件」が空のもの
+function entertainMissing(rows){
+  return rows.filter(r=>expenseEntryError(r));
 }
 
 function registerDebitRows(){
   const sel=debitRows.filter(r=>r.checked&&r.date&&r.amount);
   if(sel.length===0){alert('登録する行を選択してください');return;}
+  if(entertainMissing(sel).length){alert('交際費の行は「誰と」「用件」を入力してください（'+entertainMissing(sel).length+'件）');return;}
   if(!confirm(`${sel.length}件を経費（実績）として登録します。よろしいですか？`))return;
   const known={};
   S.ledger.forEach(l=>{if(l.calId)known[l.calId]=true;});
@@ -3899,7 +4242,9 @@ function registerDebitRows(){
       amount:r.amount,
       memo:'メール取込',
       status:'actual',
-      calId:r.extId
+      calId:r.extId,
+      withWhom:r.type==='交際費'?String(r.withWhom||'').trim():'',
+      purpose:r.type==='交際費'?String(r.purpose||'').trim():''
     });
     known[r.extId]=true;
     added++;
@@ -4217,7 +4562,7 @@ function renderLedger(){
     return`<tr style="${bg}">
       <td style="font-size:12px;white-space:nowrap">${ledgerDateOf(l)}</td>
       <td>${ledgerBadge(l.type)}</td>
-      <td style="font-size:12px">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}${l.memo?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${l.memo}</div>`:''}</td>
+      <td style="font-size:12px">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}${receiptLinkHtml(l)}${expenseExtraText(l)?`<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">${escAttr(expenseExtraText(l))}</div>`:''}${l.memo?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${l.memo}</div>`:''}</td>
       <td style="text-align:right;font-weight:500;color:${inflow?'var(--green)':'var(--text-muted)'}">${inflow?fmt(l.amount):'-'}</td>
       <td style="text-align:right;font-weight:500;color:${inflow?'var(--text-muted)':'var(--red)'}">${inflow?'-':fmt(l.amount)}</td>
       <td><span class="badge ${LEDGER_STATES[st].cls}">${LEDGER_STATES[st].label}</span></td>
@@ -4245,6 +4590,10 @@ function openLedgerModal(id,mode){
   document.getElementById('l-desc').value=l?l.desc:'';
   document.getElementById('l-amount').value=l?l.amount:'';
   document.getElementById('l-memo').value=l?(l.memo||''):'';
+  document.getElementById('l-with').value=l?(l.withWhom||''):'';
+  document.getElementById('l-purpose').value=l?(l.purpose||''):'';
+  document.getElementById('l-persons').value=l&&l.persons?l.persons:'';
+  fillRecentDatalists();
 
   // 入金予定は区分を「売上」に固定する
   document.getElementById('l-type-group').style.display=ledgerMode==='planned_in'?'none':'';
@@ -4260,6 +4609,7 @@ function openLedgerModal(id,mode){
   document.getElementById('tv-car-round').checked=false;
   refreshTravelMode();
   toggleTravelPanel();
+  toggleExpenseExtra();
   openModal('modal-add-ledger');
 }
 
@@ -4270,11 +4620,18 @@ function saveLedger(){
   const amount=parseInt(document.getElementById('l-amount').value)||0;
   const memo=document.getElementById('l-memo').value.trim();
   if(!date||!desc||!amount){alert('日付・摘要・金額を入力してください');return;}
+  const extra={
+    withWhom:document.getElementById('l-with').value.trim(),
+    purpose:document.getElementById('l-purpose').value.trim(),
+    persons:type==='交際費'?(parseInt(document.getElementById('l-persons').value)||''):''
+  };
+  const err=expenseEntryError(Object.assign({type},extra));
+  if(err){alert(err);return;}
 
   const planned=ledgerMode!=='actual';
-  const values=planned
+  const values=Object.assign(planned
     ?{date,expectedDate:date,type,desc,amount,memo,status:ledgerMode}
-    :{date,expectedDate:'',type,desc,amount,memo,status:'actual'};
+    :{date,expectedDate:'',type,desc,amount,memo,status:'actual'},extra);
 
   if(editLedgerId!==null){
     const l=S.ledger.find(x=>x.id===editLedgerId);
@@ -4589,6 +4946,29 @@ function travelPeriodLabel(mi){
 function csvCell(v){
   const s=String(v==null?'':v);
   return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+
+// CF管理の一覧（選択中の月）をCSVに。誰と・人数・1人あたり・用件・領収書のリンクも出す
+function exportLedgerCsv(){
+  const mi=currentLedgerMonth();
+  const rows=cashflowRows(mi);
+  if(rows.length===0){alert('出力できる収支がありません');return;}
+  const lines=[['日付','区分','摘要','入金','出金','状態','誰と','人数','1人あたり','用件','備考','領収書']];
+  rows.forEach(l=>{
+    const inflow=isInflow(l);
+    const pp=perPersonAmount(l.amount,l.persons);
+    lines.push([ledgerDateOf(l),l.type,l.desc,inflow?l.amount:'',inflow?'':l.amount,
+      LEDGER_STATES[ledgerStatusOf(l)].label,l.withWhom||'',l.persons||'',pp===null?'':pp,
+      l.purpose||'',l.memo||'',receiptUrl(l)]);
+  });
+  const bom='\ufeff';
+  const csv=lines.map(r=>r.map(csvCell).join(',')).join('\r\n');
+  const blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`キャッシュフロー_${mi===null?'全期間':(mi+1)+'月'}.csv`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
 }
 
 function exportTravelCsv(){
@@ -8457,7 +8837,8 @@ function cfCardHtml(l){
       <span class="badge ${LEDGER_STATES[st].cls}">${LEDGER_STATES[st].label}</span>
     </div>`
     +`<div style="margin-bottom:6px">${ledgerBadge(l.type)}</div>`
-    +`<div style="font-size:13px;word-break:break-word">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}</div>`
+    +`<div style="font-size:13px;word-break:break-word">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}${receiptLinkHtml(l)}</div>`
+    +(expenseExtraText(l)?`<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">${escAttr(expenseExtraText(l))}</div>`:'')
     +(l.memo?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${l.memo}</div>`:'')
     +`<div class="mob-amount" style="color:${inflow?'var(--green)':'var(--red)'}">${inflow?'入金 ':'出金 '}${fmt(l.amount)}</div>`
     +`<div class="mob-card-actions">
@@ -8532,7 +8913,7 @@ function bankCardHtml(r,i){
     +`<div style="font-size:12px;margin-top:8px;word-break:break-word">${r.desc}</div>`
     +(bankBadges(r)?`<div style="margin-top:4px">${bankBadges(r)}</div>`:'')
     +`<div style="margin-top:8px">
-      <select oninput="bankRows[${i}].type=this.value" onchange="bankRows[${i}].type=this.value" style="font-size:12px">${opts}</select>
+      <select onchange="bankRows[${i}].type=this.value;renderBankPreview()" style="font-size:12px">${opts}</select>${entertainInputs('bankRows',i,r)}
     </div>`
     +`<div style="margin-top:6px">
       <input type="number" value="${r.amount}" oninput="bankRows[${i}].amount=parseInt(this.value)||0" style="font-size:14px;font-weight:700">
@@ -9646,8 +10027,49 @@ function updateMemoPlaceholder(){
   const el=document.getElementById('l-memo');
   if(!el)return;
   el.placeholder=document.getElementById('l-type').value==='交際費'
-    ?'例：〇〇社 山田様と会食、△△の件'
-    :'同席者・目的・場所など（任意）';
+    ?'例：店名・場所など（同席者は「誰と」、目的は「用件」へ）'
+    :'場所など（任意）';
+}
+
+// 「誰と」「用件」は売上・入金予定以外で出す。交際費は必須にして人数欄も出す
+function toggleExpenseExtra(){
+  const type=document.getElementById('l-type').value;
+  const show=ledgerMode!=='planned_in'&&type!=='売上';
+  const ent=type==='交際費';
+  document.getElementById('l-extra').style.display=show?'':'none';
+  document.getElementById('l-persons-row').style.display=show&&ent?'':'none';
+  document.getElementById('l-with-req').textContent=ent?' *':'';
+  document.getElementById('l-purpose-req').textContent=ent?' *':'';
+  updatePerPerson();
+}
+
+function updatePerPerson(){
+  const el=document.getElementById('l-perperson');
+  if(!el)return;
+  const v=perPersonAmount(document.getElementById('l-amount').value,document.getElementById('l-persons').value);
+  el.textContent=v===null?'-':fmt(v)+' / 人';
+}
+
+// 「誰と」「用件」の候補（最近使ったもの）
+function fillRecentDatalists(){
+  const put=(id,vals)=>{
+    const el=document.getElementById(id);
+    if(el)el.innerHTML=vals.map(v=>`<option value="${escAttr(v)}"></option>`).join('');
+  };
+  put('dl-with',recentValues(S.ledger,'withWhom',15));
+  put('dl-purpose',recentValues(S.ledger,'purpose',15));
+}
+
+// 一覧に出す「誰と・用件・人数」と領収書の写真へのリンク
+function expenseExtraText(l){
+  const parts=[];
+  if(l.withWhom)parts.push('誰と：'+l.withWhom+(l.persons?`（${l.persons}名・1人あたり ${fmt(perPersonAmount(l.amount,l.persons))}）`:''));
+  if(l.purpose&&l.type!=='交通費')parts.push('用件：'+l.purpose);
+  return parts.join('　');
+}
+function receiptUrl(l){return l.receiptId?'https://drive.google.com/file/d/'+encodeURIComponent(l.receiptId)+'/view':''}
+function receiptLinkHtml(l){
+  return l.receiptId?` <a href="${receiptUrl(l)}" target="_blank" rel="noopener" title="領収書の写真を開く（Googleドライブ）" style="text-decoration:none">📷</a>`:'';
 }
 
 
@@ -9837,7 +10259,7 @@ function dayDiff(a,b){
    いずれもプレビューではチェックOFF。±1日は別物のこともあるので、登録するかはユーザーが判断する */
 function bankDupFlags(ledger,date,amount,desc,income){
   const dup=ledger.some(l=>l.date===date&&l.amount===amount&&l.desc===desc);
-  const mails=income?[]:ledger.filter(l=>isMailImported(l)&&isActualExpenseEntry(l)&&l.amount===amount);
+  const mails=income?[]:nearExpenses(ledger,date,amount,1).filter(isMailImported);
   const mailDup=mails.some(l=>l.date===date);
   const near=mailDup?null:mails.find(l=>Math.abs(dayDiff(date,l.date))===1);
   return{dup,mailDup,mailNear:!!near,mailNearDate:near?near.date:''};
@@ -9868,6 +10290,97 @@ function debitRowsFrom(items,ledger){
     });
   });
   return{rows,skipped};
+}
+// 同額で日付が前後 days 日以内（既定1日。月・年またぎも dayDiff で1日）の経費（実績）
+// デビット通知・銀行CSV・領収書・手入力のどれで入った経費も対象（取込の重複判定で共通に使う）
+function nearExpenses(ledger,date,amount,days){
+  const d=days==null?1:days;
+  return(ledger||[]).filter(l=>isActualExpenseEntry(l)&&l.amount===amount&&Math.abs(dayDiff(date,l.date))<=d);
+}
+
+// 領収書から登録した収支の外部ID（ledger の calId 列を流用）
+const RCPT_EXT_PREFIX='rcpt:';
+function rcptExtId(fileId){return RCPT_EXT_PREFIX+fileId}
+
+// 領収書の重複：同額で前後1日以内の経費があれば、いちばん日付の近いもの。無ければ null
+function receiptDupOf(ledger,date,amount){
+  amount=parseInt(amount)||0;
+  if(!date||!amount)return null;
+  const hits=nearExpenses(ledger,date,amount,1);
+  if(!hits.length)return null;
+  return hits.slice().sort((a,b)=>Math.abs(dayDiff(date,a.date))-Math.abs(dayDiff(date,b.date)))[0];
+}
+
+// 交際費は「誰と」「用件」が必須。問題なければ空文字
+function expenseEntryError(e){
+  if(!e||e.type!=='交際費')return'';
+  const miss=[];
+  if(!String(e.withWhom||'').trim())miss.push('誰と');
+  if(!String(e.purpose||'').trim())miss.push('用件');
+  return miss.length?'交際費は「'+miss.join('」「')+'」を入力してください':'';
+}
+
+// 1人あたりの金額（人数が無ければ null）
+function perPersonAmount(amount,persons){
+  const n=parseInt(persons)||0;
+  return n>0?Math.round((parseInt(amount)||0)/n):null;
+}
+
+// 最近使った値（新しい順・重複なし）。入力欄の候補に出す
+function recentValues(ledger,field,limit){
+  const seen={},out=[];
+  (ledger||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||(b.id||0)-(a.id||0))
+    .forEach(l=>{
+      const v=String(l[field]||'').trim();
+      if(v&&!seen[v]){seen[v]=true;out.push(v);}
+    });
+  return out.slice(0,limit||10);
+}
+
+/* GASの receiptRead の data を確認画面の入力値にする。読めなかった項目は空欄のまま（推測で埋めない） */
+function receiptFormFrom(d){
+  d=d||{};
+  const v=x=>x===null||x===undefined?'':x;
+  const t10=(d.taxes||[]).find(t=>t.rate===10)||{},t8=(d.taxes||[]).find(t=>t.rate===8)||{};
+  const payee=String(d.payee||''),item=String(d.item||'');
+  return{
+    date:d.date||'',amount:v(d.total),payee,item,taxType:d.taxType||'',
+    tax10base:v(t10.base),tax10:v(t10.tax),tax8base:v(t8.base),tax8:v(t8.tax),
+    invoiceNo:d.invoiceNo||'',paymentMethod:d.paymentMethod||'',
+    type:d.category||'その他経費',
+    desc:payee?payee+(item?'（'+item+'）':''):(item||''),
+    withWhom:'',persons:'',purpose:'',memo:''
+  };
+}
+
+/* 合計金額と税率別の内訳の整合。合わない点を文章で返す（内訳が無ければ確認しない）
+   税込（内税）：対象額は税込、税額＝対象額×税率/(100+税率)、対象額の合計＝合計金額
+   税抜（外税）：対象額は税抜、税額＝対象額×税率/100、対象額＋税額の合計＝合計金額
+   税込/税抜が不明なら税込として見る。端数の丸めで1円ずれるのは許す */
+function receiptTaxWarnings(f){
+  const w=[];
+  const num=x=>x===''||x===null||x===undefined?null:Number(x);
+  const rows=[{rate:10,base:num(f.tax10base),tax:num(f.tax10)},{rate:8,base:num(f.tax8base),tax:num(f.tax8)}]
+    .filter(r=>r.base!==null||r.tax!==null);
+  if(!rows.length)return w;
+  const out=f.taxType==='税抜';
+  const yen=n=>Math.round(n).toLocaleString('ja-JP')+'円';
+  let sum=0,complete=true;
+  rows.forEach(r=>{
+    if(r.base===null||isNaN(r.base)){complete=false;return;}
+    if(r.tax!==null&&!isNaN(r.tax)){
+      const exp=out?r.base*r.rate/100:r.base*r.rate/(100+r.rate);
+      if(Math.abs(exp-r.tax)>1)w.push(`${r.rate}%の税額 ${yen(r.tax)} が、対象額 ${yen(r.base)} から計算した ${yen(exp)} と合いません`);
+      sum+=out?r.base+r.tax:r.base;
+    }else{
+      if(out)complete=false;else sum+=r.base;
+    }
+  });
+  const total=num(f.amount);
+  if(complete&&total!==null&&!isNaN(total)&&Math.abs(sum-total)>1){
+    w.push(`税率別の内訳の合計 ${yen(sum)} が合計金額 ${yen(total)} と合いません`);
+  }
+  return w;
 }
 // ===== @import-rules-end
 
@@ -9973,6 +10486,7 @@ async function bankHandleFile(file){
 }
 
 function renderBankPreview(){
+  fillRecentDatalists();
   const dates=bankRows.map(r=>r.date).sort();
   const inSum=bankRows.filter(r=>r.income).reduce((a,r)=>a+r.amount,0);
   const outSum=bankRows.filter(r=>!r.income).reduce((a,r)=>a+r.amount,0);
@@ -10000,7 +10514,7 @@ function renderBankPreview(){
       <td><input type="checkbox" class="bank-check" ${r.checked?'checked':''} onchange="bankRows[${i}].checked=this.checked" style="width:auto"></td>
       <td><input type="date" value="${r.date}" oninput="bankRows[${i}].date=this.value" style="font-size:12px"></td>
       <td style="font-size:11px">${r.desc}${bankBadges(r)?'<br>'+bankBadges(r):''}</td>
-      <td><select oninput="bankRows[${i}].type=this.value" onchange="bankRows[${i}].type=this.value" style="font-size:12px">${opts(r.type)}</select></td>
+      <td><select onchange="bankRows[${i}].type=this.value;renderBankPreview()" style="font-size:12px">${opts(r.type)}</select>${entertainInputs('bankRows',i,r)}</td>
       <td><input type="number" value="${r.amount}" oninput="bankRows[${i}].amount=parseInt(this.value)||0" style="font-size:12px"></td>
       <td>${r.income?'<span class="badge badge-green">収入</span>':'<span class="badge badge-red">支出</span>'}</td>
       <td style="font-size:11px">${bankMatchCell(r,i)}</td>
@@ -10048,9 +10562,11 @@ function bankRegister(){
   // 表とカードの両方にチェックボックスがあるので、DOMではなくデータ側を見る
   const rows=bankRows.filter(r=>r.checked&&r.date&&r.desc&&r.amount);
   if(rows.length===0){alert('登録する明細を選択してください');return;}
+  if(entertainMissing(rows).length){alert('交際費の行は「誰と」「用件」を入力してください（'+entertainMissing(rows).length+'件）');return;}
   let matched=0,removed=0;
   rows.forEach(r=>{
     const entry={id:S.nextLedgerId++,date:r.date,type:r.type,desc:r.desc,amount:r.amount};
+    if(r.type==='交際費'){entry.withWhom=String(r.withWhom||'').trim();entry.purpose=String(r.purpose||'').trim();}
     // 突合を選んだ入金は、案件（と推定した月の請求レコード）を入金済みにして紐づける
     if(r.income&&r.applyMatch&&r.matchId){
       const p=S.projects.find(x=>x.id===r.matchId);

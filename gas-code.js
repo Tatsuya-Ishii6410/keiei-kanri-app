@@ -40,7 +40,7 @@ var SHEET_DEFS = {
     'source', 'driveFileId', 'items', 'note',
     'status', 'revision', 'history', 'billingMonth', 'billingKey', 'cancelReason', 'issuedAt'],
   ledger:   ['id', 'date', 'type', 'desc', 'amount', 'memo', 'status', 'expectedDate', 'projectId', 'settlementMonth', 'billingMonth', 'fixedCostId',
-    'visit', 'purpose', 'calId'],
+    'visit', 'purpose', 'calId', 'withWhom', 'persons', 'receiptId'],
   fixedCosts: ['id', 'type', 'desc', 'amount', 'startMonth', 'endMonth', 'enabled'],
   fiscalYears: ['id', 'name', 'startMonth', 'endMonth', 'salesTarget', 'profitTarget', 'active'],
   monthlyBillings: ['id', 'projectId', 'billingMonth', 'amount', 'invoiceStatus',
@@ -52,7 +52,7 @@ var SHEET_DEFS = {
 var TEXT_COLUMNS = ['id', 'start', 'end', 'date', 'expire', 'due', 'items', 'value',
   'startMonth', 'endMonth', 'contractStart', 'contractEnd', 'paidMonth', 'expectedDate', 'settlementMonth',
   'billingMonth', 'paidDate', 'expectedPayDate', 'invoiceId', 'driveFileId',
-  'history', 'billingKey', 'issuedAt'];
+  'history', 'billingKey', 'issuedAt', 'receiptId'];
 
 // settings シートに保存する会社情報の項目
 var COMPANY_FIELDS = ['name', 'rep', 'zip', 'addr', 'tel', 'email',
@@ -120,6 +120,8 @@ function doPost(e) {
     if (action === 'invoiceList') return respond_(invoiceFolderList_(body.year, body.month), '');
     if (action === 'driveRead') return respond_(driveRead_(body.fileId), '');
     if (action === 'driveExtract') return respond_(driveExtract_(body.fileId), '');
+    if (action === 'receiptRead') return respond_(receiptRead_(body.image, body.categories), '');
+    if (action === 'receiptSave') return respond_(receiptSave_(body), '');
     if (action === 'driveProcessed') return respond_({ ok: true, renamed: driveMarkProcessed_(body.fileIds) }, '');
     if (action === 'advise') return respond_(loanAdvice_(body.data), '');
     if (action === 'fare') return respond_(fareLookup_(body.from, body.to), '');
@@ -269,7 +271,12 @@ function quoteRow_(q) {
 }
 
 function readLedger_(sh) {
-  return rowObjects_(sh, SHEET_DEFS.ledger).map(function (o) {
+  return rowObjects_(sh, SHEET_DEFS.ledger).map(ledgerFromRow_)
+    .filter(function (l) { return l.date !== '' && l.desc !== ''; });
+}
+
+/** ledger シートの1行（列名→値）を収支に。 */
+function ledgerFromRow_(o) {
     return {
       id: num_(o.id),
       date: str_(o.date),
@@ -285,9 +292,23 @@ function readLedger_(sh) {
       fixedCostId: str_(o.fixedCostId) === '' ? null : num_(o.fixedCostId),
       visit: str_(o.visit),
       purpose: str_(o.purpose),
-      calId: str_(o.calId)
+      calId: str_(o.calId),
+      withWhom: str_(o.withWhom),
+      persons: str_(o.persons) === '' ? '' : num_(o.persons),
+      receiptId: str_(o.receiptId)
     };
-  }).filter(function (l) { return l.date !== '' && l.desc !== ''; });
+}
+
+/** 収支を ledger シートの1行に（SHEET_DEFS.ledger の列順）。 */
+function ledgerRow_(l) {
+  return [num_(l.id), str_(l.date), str_(l.type), str_(l.desc), num_(l.amount), str_(l.memo),
+    str_(l.status) || 'actual', str_(l.expectedDate),
+    (l.projectId === null || l.projectId === undefined || l.projectId === '') ? '' : num_(l.projectId),
+    ym_(l.settlementMonth), ym_(l.billingMonth),
+    (l.fixedCostId === null || l.fixedCostId === undefined || l.fixedCostId === '') ? '' : num_(l.fixedCostId),
+    str_(l.visit), str_(l.purpose), str_(l.calId),
+    str_(l.withWhom), (l.persons === null || l.persons === undefined || l.persons === '') ? '' : num_(l.persons),
+    str_(l.receiptId)];
 }
 
 function readMonthlyBillings_(sh) {
@@ -467,14 +488,7 @@ function writeAll_(data) {
 
   var quotes = (data.quotes || []).map(quoteRow_);
 
-  var ledger = (data.ledger || []).map(function (l) {
-    return [num_(l.id), str_(l.date), str_(l.type), str_(l.desc), num_(l.amount), str_(l.memo),
-      str_(l.status) || 'actual', str_(l.expectedDate),
-      (l.projectId === null || l.projectId === undefined || l.projectId === '') ? '' : num_(l.projectId),
-      ym_(l.settlementMonth), ym_(l.billingMonth),
-      (l.fixedCostId === null || l.fixedCostId === undefined || l.fixedCostId === '') ? '' : num_(l.fixedCostId),
-      str_(l.visit), str_(l.purpose), str_(l.calId)];
-  });
+  var ledger = (data.ledger || []).map(ledgerRow_);
 
   var fixedCosts = (data.fixedCosts || []).map(function (f) {
     return [num_(f.id), str_(f.type), str_(f.desc), num_(f.amount),
@@ -728,6 +742,164 @@ function driveExtract_(fileId) {
       type: normalizeCategory_(parsed.category)
     }
   };
+}
+
+
+// ===== 領収書の写真から経費登録 ===================================
+// アプリが縮小した写真（JPEG・base64）を受け取り、AIで読み取った項目だけを返す（receiptRead）。
+// 写真の保存は、アプリで「登録」を押したときに別に呼ぶ（receiptSave）。スキップした写真は残さない。
+// 保存先：マイドライブの「領収書」フォルダ（スクリプト プロパティ RECEIPT_FOLDER_ID があればそれ）
+//        の下に「2026年11月」のような年月フォルダを作る。ファイルは消さない。
+// normalizeReceipt_ / parseReceiptReply_ / receiptFileName_ / apiErrorMessage_ は
+// GAS の API を使わない純粋な関数（tests/receipt-import.test.js が Node で読み込んでテストする）。
+
+var RECEIPT_ROOT_NAME = '領収書';
+var RECEIPT_MAX_BYTES = 4 * 1024 * 1024;
+var RECEIPT_CONFIDENCE = { '高': '高', '中': '中', '低': '低', high: '高', medium: '中', mid: '中', low: '低' };
+var RECEIPT_FIELDS = ['date', 'total', 'payee', 'item', 'taxType', 'taxes', 'invoiceNo', 'paymentMethod', 'category'];
+
+function receiptPrompt_(categories) {
+  return 'この領収書・レシートの写真から、次の項目を読み取ってJSONだけを返してください。\n'
+    + '{"date":"YYYY-MM-DD","total":合計金額(数値),"payee":"支払先（店名・会社名）","item":"但し書き・品目",'
+    + '"taxType":"税込 または 税抜","taxes":[{"rate":10,"base":対象額(数値),"tax":消費税額(数値)}],'
+    + '"invoiceNo":"T+13桁の登録番号","paymentMethod":"現金/クレジットカード/電子マネー/QR決済など",'
+    + '"category":"区分","confidence":{"date":"高|中|低","total":"高|中|低","payee":"高|中|低","item":"高|中|低",'
+    + '"taxType":"高|中|低","taxes":"高|中|低","invoiceNo":"高|中|低","paymentMethod":"高|中|低","category":"高|中|低"}}\n'
+    + '・区分は次から1つ選ぶ: ' + (categories || []).join(' / ') + '\n'
+    + '・税率別の内訳は、レシートに「10%対象」「8%対象」などの記載がある分だけ入れる。base は記載どおりの対象額\n'
+    + '・★ 読めない・記載がない項目は null にする。推測で埋めない（日付や金額を推測しない）\n'
+    + '・confidence はそれぞれの項目をどれだけ確実に読めたか。\n'
+    + 'JSONのみ返してください。';
+}
+
+/** 金額らしい値を整数に（"¥1,234" "1,234円" "１２３４" も可）。読めなければ null。 */
+function receiptAmount_(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return isFinite(v) ? Math.round(v) : null;
+  var s = nfkc_(v).replace(/[¥￥,\s円]/g, '');
+  if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
+  return Math.round(parseFloat(s));
+}
+
+/** AIの返したオブジェクトを、アプリに返す形にそろえる。読めない項目は空（null / ''）のまま。 */
+function normalizeReceipt_(p, categories) {
+  p = p || {};
+  var conf = p.confidence || {};
+  var c = {};
+  RECEIPT_FIELDS.forEach(function (f) { c[f] = RECEIPT_CONFIDENCE[String(conf[f] || '').toLowerCase()] || RECEIPT_CONFIDENCE[String(conf[f] || '')] || ''; });
+  var taxType = nfkc_(p.taxType || '');
+  var inv = nfkc_(p.invoiceNo || '').replace(/[\s\-ー－]/g, '').toUpperCase();
+  var m = /T\d{13}/.exec(inv);
+  var cat = str_(p.category);
+  var taxes = (Array.isArray(p.taxes) ? p.taxes : []).map(function (t) {
+    var rate = receiptAmount_(t && t.rate !== null && t.rate !== undefined ? nfkc_(t.rate).replace(/[%％]/g, '') : null);
+    return { rate: rate, base: receiptAmount_(t && t.base), tax: receiptAmount_(t && t.tax) };
+  }).filter(function (t) { return t.rate === 8 || t.rate === 10; });
+  return {
+    date: p.date ? normalizeDate_(nfkc_(p.date)) : '',
+    total: receiptAmount_(p.total),
+    payee: str_(p.payee === null ? '' : p.payee),
+    item: str_(p.item === null ? '' : p.item),
+    taxType: /税抜|外税/.test(taxType) ? '税抜' : /税込|内税/.test(taxType) ? '税込' : '',
+    taxes: taxes,
+    invoiceNo: m ? m[0] : '',
+    paymentMethod: str_(p.paymentMethod === null ? '' : p.paymentMethod),
+    category: (categories || []).indexOf(cat) >= 0 ? cat : '',
+    confidence: c
+  };
+}
+
+/** AIの回答文から JSON を取り出して normalizeReceipt_ にかける。壊れていれば ok:false。 */
+function parseReceiptReply_(text, categories) {
+  var parsed = parseJsonLoose_(text);
+  if (!parsed || typeof parsed !== 'object') return { ok: false, error: 'AIの応答をJSONとして読み取れませんでした。手入力で登録してください' };
+  return { ok: true, data: normalizeReceipt_(parsed, categories) };
+}
+
+/** Anthropic API のエラーを、画面に出す理由にする。 */
+function apiErrorMessage_(code, body, raw) {
+  var msg = (body && body.error && body.error.message) || String(raw || '').slice(0, 200);
+  if (/credit balance/i.test(msg)) return 'Anthropic APIのクレジット残高が不足しています（Console の Billing で追加してください）';
+  if (code === 401) return 'APIキーが無効です（スクリプト プロパティ ANTHROPIC_API_KEY を確認してください）';
+  if (code === 429) return 'APIの利用上限に達しました。しばらく待ってからやり直してください';
+  if (code === 529 || code >= 500) return 'AIが混雑しているか一時的に使えません（' + code + '）。しばらく待ってからやり直してください';
+  return 'API エラー ' + code + ': ' + msg;
+}
+
+/** 写真を読み取る。image は base64（data: の前置きがあっても可）。 */
+function receiptRead_(image, categories) {
+  var key = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
+  if (!key) return { ok: false, error: 'ANTHROPIC_API_KEY がスクリプト プロパティに設定されていません' };
+  var data = String(image || '').replace(/^data:[^,]*,/, '');
+  if (!data) return { ok: false, error: '写真がありません' };
+  if (data.length * 3 / 4 > RECEIPT_MAX_BYTES) return { ok: false, error: '写真が大きすぎます（上限4MB）' };
+  var payload = {
+    model: ANTHROPIC_MODEL,
+    max_tokens: 1500,
+    messages: [{ role: 'user', content: [
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: data } },
+      { type: 'text', text: receiptPrompt_(categories) }
+    ] }]
+  };
+  var res;
+  try {
+    res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+  } catch (err) {
+    return { ok: false, error: 'APIに接続できませんでした: ' + (err && err.message || err) };
+  }
+  var code = res.getResponseCode();
+  var raw = res.getContentText();
+  var body;
+  try { body = JSON.parse(raw); } catch (err) { body = null; }
+  if (code !== 200) return { ok: false, error: apiErrorMessage_(code, body, raw), code: code };
+  var text = '';
+  ((body && body.content) || []).forEach(function (c) { if (c.type === 'text') text += c.text; });
+  return parseReceiptReply_(text, categories);
+}
+
+/** 保存するファイル名：YYYYMMDD_支払先_金額.jpg（使えない文字は _） */
+function receiptFileName_(date, payee, amount) {
+  var d = String(date || '').replace(/-/g, '').slice(0, 8) || '日付不明';
+  var who = nfkc_(payee || '').replace(/[\\\/:*?"<>|\r\n\t]/g, '_').replace(/^\s+|\s+$/g, '').slice(0, 40) || '支払先不明';
+  return d + '_' + who + '_' + (receiptAmount_(amount) || 0) + '.jpg';
+}
+
+/** YYYY-MM-DD → 「2026年11月」（年月フォルダ名） */
+function receiptMonthFolderName_(date) {
+  var m = /^(\d{4})-(\d{2})/.exec(String(date || ''));
+  return m ? m[1] + '年' + parseInt(m[2], 10) + '月' : '日付不明';
+}
+
+function receiptRootFolder_() {
+  var id = PropertiesService.getScriptProperties().getProperty('RECEIPT_FOLDER_ID');
+  if (id) return DriveApp.getFolderById(id);
+  var it = DriveApp.getRootFolder().getFoldersByName(RECEIPT_ROOT_NAME);
+  return it.hasNext() ? it.next() : DriveApp.getRootFolder().createFolder(RECEIPT_ROOT_NAME);
+}
+
+/** 写真を「領収書/年月」に保存して fileId を返す。body: {image, date, payee, amount} */
+function receiptSave_(body) {
+  var data = String((body && body.image) || '').replace(/^data:[^,]*,/, '');
+  if (!data) return { ok: false, error: '写真がありません' };
+  var root = receiptRootFolder_();
+  var name = receiptMonthFolderName_(body.date);
+  var it = root.getFoldersByName(name);
+  var folder = it.hasNext() ? it.next() : root.createFolder(name);
+  var blob = Utilities.newBlob(Utilities.base64Decode(data), 'image/jpeg', receiptFileName_(body.date, body.payee, body.amount));
+  var file = folder.createFile(blob);
+  return { ok: true, fileId: file.getId(), url: file.getUrl(), name: file.getName() };
+}
+
+/** GASエディタから手動で実行し、Driveの書き込み（フォルダ作成）を確認する関数。 */
+function testReceiptFolder() {
+  var root = receiptRootFolder_();
+  Logger.log('OK: 保存先フォルダ「' + root.getName() + '」 ' + root.getUrl());
 }
 
 /** 登録済みファイルに「処理済み_」を付けてリネームする。 */
