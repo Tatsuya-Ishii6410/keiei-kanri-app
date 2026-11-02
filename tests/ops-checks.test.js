@@ -1,4 +1,4 @@
-/* 運用チェックのテスト（①週次バックアップ）
+/* 運用チェックのテスト（①週次バックアップ ②入金遅延アラート）
    実行: node tests/ops-checks.test.js
 
    - gas-code.js はまるごと読む。DriveApp・ScriptApp・SpreadsheetApp・LockService・Utilities はモックに差し替える
@@ -70,7 +70,7 @@ function region(name) {
 const app = {};
 vm.createContext(app);
 vm.runInContext(region('import-rules') + '\n' + region('ops-rules') + `
-globalThis.exported = { backupStatusOf };`, app);
+globalThis.exported = { backupStatusOf, overdueReceivables, overdueLevel, reschedulePlannedIn, fillReminder, REMINDER_TEMPLATE_DEFAULT, ymdJp };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -270,6 +270,109 @@ test('アプリの表示：10日超＝アンバー／20日超・未実行＝赤�
   // 失敗のあとで成功していれば、失敗は出さない
   assert.strictEqual(A.backupStatusOf({ lastAt: '2026-11-15 21:00', lastError: '容量不足', lastErrorAt: '2026-11-08 21:00' }, T).error, '');
   assert.strictEqual(A.backupStatusOf({ lastError: '権限がありません', lastErrorAt: '2026-11-08 21:00' }, T).error, '権限がありません');
+});
+
+console.log('② 入金遅延アラート');
+
+const TODAY = '2026-11-02';
+const projects = [{ id: 1, name: '保守', client: '株式会社A' }, { id: 2, name: '開発', client: '株式会社B' }, { id: 3, name: '運用', client: '株式会社C' }];
+const pin = (id, pid, ym, date, amount, extra) => Object.assign({ id, type: '売上', desc: 'X ' + ym + '分 入金予定', amount, status: 'planned_in',
+  date, expectedDate: date, projectId: pid, billingMonth: ym, memo: '' }, extra || {});
+const ids = list => plain(list.map(x => x.id));
+
+test('遅延の判定：前日は遅延（1日）、当日・翌日は遅延ではない', () => {
+  const ledger = [pin(1, 1, '2026-09', '2026-11-01', 110000), pin(2, 2, '2026-09', '2026-11-02', 220000), pin(3, 3, '2026-09', '2026-11-03', 330000)];
+  const r = A.overdueReceivables(ledger, [], [], projects, TODAY);
+  assert.deepStrictEqual(ids(r), [1]);
+  assert.strictEqual(r[0].days, 1);
+  assert.strictEqual(r[0].client, '株式会社A');
+});
+
+test('入金済み（実績）・出金予定は対象外', () => {
+  const ledger = [pin(1, 1, '2026-09', '2026-10-01', 110000, { status: 'actual' }), pin(2, 2, '2026-09', '2026-10-01', 5000, { status: 'planned_out', type: '通信料' })];
+  assert.deepStrictEqual(plain(A.overdueReceivables(ledger, [], [], projects, TODAY)), []);
+});
+
+test('取消した請求書の入金予定は対象外（請求レコードの invoiceId・請求月と明細の案件、どちらの紐づけでも）', () => {
+  const ledger = [pin(1, 1, '2026-09', '2026-10-31', 110000), pin(2, 2, '2026-09', '2026-10-31', 220000), pin(3, 3, '2026-09', '2026-10-31', 330000)];
+  const quotes = [
+    { id: 'INV-202609-001', type: '請求書', status: 'cancelled', client: '株式会社A 御中', items: [] },
+    { id: 'INV-202609-002', type: '請求書', status: 'cancelled', billingMonth: '2026-09', items: [{ projectId: 2 }] },
+    { id: 'INV-202609-003', type: '請求書', status: 'issued', billingMonth: '2026-09', revision: 2, items: [{ projectId: 3 }] }
+  ];
+  const billings = [{ projectId: 1, billingMonth: '2026-09', invoiceId: 'INV-202609-001' }];
+  const r = A.overdueReceivables(ledger, quotes, billings, projects, TODAY);
+  assert.deepStrictEqual(ids(r), [3]);
+  assert.strictEqual(r[0].invoiceNo, 'INV-202609-003-2');   // 訂正版は枝番つき
+  // 取り消して発行し直した請求書があれば、生きている方で出す
+  quotes.push({ id: 'INV-202610-001', type: '請求書', status: 'issued', billingMonth: '2026-09', items: [{ projectId: 2 }] });
+  const r2 = A.overdueReceivables(ledger, quotes, billings, projects, TODAY);
+  assert.deepStrictEqual(ids(r2).sort(), [2, 3]);
+  assert.strictEqual(r2.find(x => x.id === 2).invoiceNo, 'INV-202610-001');
+});
+
+test('案件に紐づかない入金予定も出す（取引先は摘要から）。請求書番号は空', () => {
+  const l = { id: 9, type: '売上', desc: '株式会社Z 2026年9月分 入金予定', amount: 50000, status: 'planned_in', date: '2026-10-15', expectedDate: '2026-10-15', projectId: null };
+  const r = A.overdueReceivables([l], [], [], projects, TODAY);
+  assert.strictEqual(r[0].client, '株式会社Z');
+  assert.strictEqual(r[0].invoiceNo, '');
+  assert.strictEqual(r[0].days, 18);
+});
+
+test('並び順は遅延日数の長い順', () => {
+  const ledger = [pin(1, 1, '2026-09', '2026-10-30', 1), pin(2, 2, '2026-08', '2026-08-31', 1), pin(3, 3, '2026-09', '2026-10-10', 1)];
+  assert.deepStrictEqual(ids(A.overdueReceivables(ledger, [], [], projects, TODAY)), [2, 3, 1]);
+});
+
+test('色分けの境界：1〜7日／8〜30日／31日以上', () => {
+  assert.strictEqual(A.overdueLevel(1), 'low');
+  assert.strictEqual(A.overdueLevel(7), 'low');
+  assert.strictEqual(A.overdueLevel(8), 'mid');
+  assert.strictEqual(A.overdueLevel(30), 'mid');
+  assert.strictEqual(A.overdueLevel(31), 'high');
+  const r = A.overdueReceivables([pin(1, 1, '2026-09', '2026-10-26', 1), pin(2, 2, '2026-09', '2026-10-25', 1),
+    pin(3, 3, '2026-09', '2026-10-03', 1), pin(4, 1, '2026-08', '2026-10-02', 1)], [], [], projects, TODAY);
+  assert.deepStrictEqual(plain(r.map(x => x.days + ':' + x.level)), ['31:high', '30:mid', '8:mid', '7:low']);
+});
+
+test('予定日を変更すると遅延から外れ、変更履歴が備考に残る', () => {
+  const l = pin(1, 1, '2026-09', '2026-10-31', 110000, { memo: '振込予定' });
+  const ledger = [l];
+  assert.strictEqual(A.overdueReceivables(ledger, [], [], projects, TODAY).length, 1);
+  assert.strictEqual(A.reschedulePlannedIn(l, '2026-11-30', '月末払いに変更の連絡', TODAY).ok, true);
+  assert.strictEqual(A.overdueReceivables(ledger, [], [], projects, TODAY).length, 0);
+  assert.strictEqual(l.expectedDate, '2026-11-30');
+  assert.strictEqual(l.memo, '振込予定／【予定日変更 2026-11-02】2026-10-31→2026-11-30：月末払いに変更の連絡');
+  A.reschedulePlannedIn(l, '2026-12-10', '再度延期', TODAY);
+  assert(/2026-10-31→2026-11-30/.test(l.memo) && /2026-11-30→2026-12-10：再度延期/.test(l.memo));   // 履歴は足していく
+});
+
+test('予定日の変更：過去の日付・理由なしは受け付けない（当日はOK＝遅延から外れる）', () => {
+  const l = pin(1, 1, '2026-09', '2026-10-31', 1);
+  assert.strictEqual(A.reschedulePlannedIn(l, '2026-11-01', '理由', TODAY).ok, false);
+  assert.strictEqual(A.reschedulePlannedIn(l, '2026-11-10', ' ', TODAY).ok, false);
+  assert.strictEqual(A.reschedulePlannedIn(l, '', '理由', TODAY).ok, false);
+  assert.strictEqual(l.expectedDate, '2026-10-31');
+  assert.strictEqual(A.reschedulePlannedIn(l, TODAY, '本日入金と連絡', TODAY).ok, true);
+  assert.strictEqual(A.overdueReceivables([l], [], [], projects, TODAY).length, 0);
+});
+
+test('催促文：宛名・請求書番号・金額・期日を差し込む（知らない差し込みはそのまま）', () => {
+  const t = A.fillReminder(A.REMINDER_TEMPLATE_DEFAULT, { '宛名': '株式会社A', '請求書番号': 'INV-202609-001', '金額': '¥110,000', '期日': A.ymdJp('2026-10-31'), '会社名': 'アスリンク株式会社' });
+  assert(t.startsWith('株式会社A 御中'));
+  ['INV-202609-001', '¥110,000', '2026年10月31日', 'アスリンク株式会社'].forEach(w => assert(t.indexOf(w) >= 0, w));
+  assert(!/\{宛名\}|\{金額\}/.test(t));
+  assert.strictEqual(A.fillReminder('{宛名}様 {不明}', { '宛名': 'B' }), 'B様 {不明}');
+});
+
+test('GASとの往復：催促文のひな形（複数行）が消えない', () => {
+  ss = mockSpreadsheet();
+  gas.ensureSheets_(ss);
+  const tpl = '{宛名} 御中\n\nお世話になっております。\n{金額}';
+  gas.writeAll_({ reminder: { template: tpl } });
+  assert.strictEqual(gas.readAll_().reminder.template, tpl);
+  gas.writeAll_({});
+  assert.strictEqual(gas.readAll_().reminder.template, '');
 });
 
 console.log(`\n${passed}件 成功` + (process.exitCode ? '（失敗あり）' : ''));

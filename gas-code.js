@@ -191,6 +191,7 @@ function readAll_() {
     mail: settings.mail,
     bank: settings.bank,
     backup: settings.backup,
+    reminder: settings.reminder,
     taxSettings: settings.taxSettings,
     bankBalance: settings.bankBalance,
     currentFiscalYearId: settings.currentFiscalYearId,
@@ -378,6 +379,7 @@ function readSettings_(sh) {
   var bank = { lastCsvImportDate: '' };
   var inboxFolders = { receipt: '', invoice: '' };
   var backup = { lastAt: '', lastFile: '', lastError: '', lastErrorAt: '' };
+  var reminder = { template: '' };   // 入金の催促文のひな形（空ならアプリの初期の文面）
   var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15,
     calendarId: DEFAULT_CALENDAR_ID, fareCache: {} };
   // 税金設定は、シートに無い項目はキーごと返さない（アプリ側の初期値を潰さないため）
@@ -422,6 +424,8 @@ function readSettings_(sh) {
       inboxFolders[key.substring(13)] = str_(value);
     } else if (key.indexOf('backup.') === 0 && BACKUP_SETTING_FIELDS.indexOf(key.substring(7)) >= 0) {
       backup[key.substring(7)] = str_(value);
+    } else if (key === 'reminder.template') {
+      reminder.template = str_(value);
     } else if (key === 'travel.googleMapsApiKey') {
       travel.googleMapsApiKey = str_(value);
     } else if (key === 'travel.gasolinePrice') {
@@ -481,6 +485,7 @@ function readSettings_(sh) {
     bank: bank,
     inboxFolders: inboxFolders,
     backup: backup,
+    reminder: reminder,
     taxSettings: taxSettings,
     bankBalance: bankBalance,
     currentFiscalYearId: currentFiscalYearId,
@@ -549,6 +554,7 @@ function writeAll_(data) {
   // バックアップの記録は weeklyBackup がシートに直接書く。アプリの値ではなくシート側の値を残す
   var sheetBackup = readSettings_(ss.getSheetByName('settings')).backup;
   BACKUP_SETTING_FIELDS.forEach(function (k) { settings.push(['backup.' + k, str_(sheetBackup[k])]); });
+  settings.push(['reminder.template', str_((data.reminder || {}).template)]);
   var tv = data.travel || {};
   settings.push(['travel.googleMapsApiKey', str_(tv.googleMapsApiKey)]);
   settings.push(['travel.gasolinePrice', num_(tv.gasolinePrice) || 175]);

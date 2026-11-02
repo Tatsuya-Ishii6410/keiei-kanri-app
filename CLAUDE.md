@@ -657,3 +657,18 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   20日超・未実行＝赤。失敗していれば理由を赤で出す（失敗のあとで成功していれば出さない）
   「💾 今すぐバックアップ」は action backupNow（中身は weeklyBackup）
 - 判定は keiei-kanri.html の「@ops-rules-begin〜end」に集約（テストが @import-rules と一緒に切り出して Node で読む。DOM・S を触らない）
+
+## 入金遅延アラート
+- 定義：status='planned_in' で、予定日（expectedDate、無ければ date）が今日より前のもの（overdueReceivables）。当日はまだ遅延ではない
+  ★ 取消した請求書の入金予定は対象外。紐づく請求書（請求レコードの invoiceId、または同じ請求月で同じ案件の明細を持つ請求書）が
+  すべて取消のとき外す（取消で入金予定を残す選択をしたときのため）。発行し直した請求書があれば、そちらの番号で出す
+- ダッシュボードの「⏰ 入金遅延 ○件・合計 ¥○」（赤。renderOverdueStatus）。0件なら「なし」。押すと一覧（modal-overdue）
+- 一覧：取引先（案件の取引先 → 請求書の宛名 → 摘要）・請求書番号（訂正版は枝番つき）・金額・入金予定日・遅延日数。遅延日数の長い順
+  色分けは overdueLevel：1〜7日＝アンバー／8〜30日＝赤／31日以上＝赤・太字・行を赤背景（既存の badge-amber / badge-red / --red-bg）
+- 操作
+  - 「入金済みにする」：CF管理の「✓ 実績に変換」と同じ openPlanConfirm → confirmPlanned（別の処理は作らない）
+  - 「予定日を変更」：新しい日付（今日以降）と理由が必須（reschedulePlannedIn）。expectedDate と date を変え、
+    備考に「【予定日変更 変更日】元→新：理由」を足していく。請求レコードの expectedPayDate も揃える
+  - 「催促文をコピー」：ひな形（settings の reminder.template。空なら REMINDER_TEMPLATE_DEFAULT）に
+    {宛名} {請求書番号} {金額} {期日} {遅延日数} {会社名} を差し込んでクリップボードへ（fillReminder）。メールは送らない
+    ひな形は設定ページの「✉ 入金の催促文（ひな形）」で編集する。初期の文面と同じなら空で保存する
