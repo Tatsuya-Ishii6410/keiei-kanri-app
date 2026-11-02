@@ -450,6 +450,21 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   #modal-preview-quote .actions-row .btn{width:100%;justify-content:center}
 }
 .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--navy)}
+/* ===== 交通費の追加・編集（modal-travel-entry）：ヘッダー／本文（スクロール）／フッター（固定）の3層 =====
+   フッターは常に見える。高さは 100dvh から上下の余白を引いた値（アドレスバーの出入りで切れない）。ホームバー（safe-area）を避ける */
+.te-overlay{padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+.modal.te-modal{display:flex;flex-direction:column;padding:0;overflow:hidden;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px - env(safe-area-inset-bottom))}
+.te-head{flex:none;margin:0;padding:14px 20px 10px;border-bottom:1px solid var(--border)}
+.te-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:14px 20px 6px;scroll-padding:12px}
+.te-foot{flex:none;margin:0;padding:10px 20px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--border);background:var(--bg-primary)}
+.te-modal #te-result:empty,.te-modal .te-under:empty,.te-modal #te-purpose-hint:empty{display:none}
+.te-modal #te-result{margin:0 0 10px}
+.te-modal .te-under{margin:-6px 0 10px}
+.te-modal input[type=date]{min-width:0;width:100%;max-width:100%;display:block;-webkit-appearance:none;appearance:none;text-align:left}
+.te-modal input[type=date]::-webkit-date-and-time-value{text-align:left}
+.te-modal .te-round{margin-top:0!important;min-height:40px}
+.te-modal .te-round-cell{justify-content:flex-end}
+.te-home-btns .te-home{min-height:40px;padding:0 10px}
 .modal-title{font-size:16px;font-weight:700;color:var(--navy)}
 .actions-row{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -717,6 +732,26 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   .actions-row{flex-wrap:wrap}
   .csv-drop-zone,.upload-zone{padding:22px 14px}
   .modal{max-width:95%;padding:18px 16px}
+  /* 交通費の入力：スマホの幅だけ縦の寸法を詰める */
+  .modal.te-modal{padding:0;max-width:100%}
+  .te-head{padding:6px 10px 6px 14px}.te-head .modal-title{font-size:15px}
+  .te-body{padding:8px 14px 4px}
+  .te-foot{padding:8px 14px calc(8px + env(safe-area-inset-bottom))}
+  .te-overlay{padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
+  .modal.te-modal{max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px - env(safe-area-inset-bottom))}
+  .te-modal .te-foot{flex-direction:row;align-items:center}
+  .te-foot .btn{min-height:44px;flex:1;justify-content:center;width:auto}
+  .te-modal .form-row{gap:8px;margin-bottom:6px}
+  .te-modal .form-row.te-row2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .te-modal .form-group{gap:3px;min-width:0}
+  .te-modal .form-label{font-size:12px;line-height:1.25}
+  .te-modal input:not([type=checkbox]),.te-modal select{height:44px;min-height:44px;padding:0 10px}
+  .te-modal .te-round{font-size:12px;line-height:1.3;min-height:44px}
+  .te-home-btns{gap:6px;margin-top:4px}
+  .te-home-btns .te-home{min-height:40px;height:40px;font-size:12px}
+  .te-modal .ui-chips{gap:4px}
+  .te-modal .ui-chip{min-height:44px;font-size:12px;padding:0 4px}
+  .te-modal #te-search-row{margin-bottom:8px}
   .modal.wide,.modal.doc{max-width:95%}
 }
 
@@ -1898,10 +1933,11 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 </div>
 </div>
 
-<div class="modal-overlay" id="modal-travel-entry">
-<div class="modal">
-  <div class="modal-header"><span class="modal-title" id="te-title">交通費を追加</span><button class="btn sm" onclick="closeModal('modal-travel-entry')">✕</button></div>
-  <div class="form-row">
+<div class="modal-overlay te-overlay" id="modal-travel-entry">
+<div class="modal te-modal">
+  <div class="modal-header te-head"><span class="modal-title" id="te-title">交通費を追加</span><button class="btn sm" onclick="closeModal('modal-travel-entry')" aria-label="閉じる">✕</button></div>
+  <div class="te-body" id="te-body">
+  <div class="form-row te-row2">
     <div class="form-group"><label class="form-label">日付</label><input id="te-date" type="date"></div>
     <div class="form-group"><label class="form-label">移動手段</label>
       <select id="te-mode" onchange="toggleTravelSearch();travelStationChanged()">
@@ -1925,13 +1961,13 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
         <div id="te-purpose-hint"></div>
       </div></div>
   </div>
-  <div class="form-row">
-    <div class="form-group"><label class="form-label">金額</label><input id="te-amount" type="number" placeholder="420" oninput="travelFareTouched()">
-      <div id="te-fare-hint" class="ui-scope"></div></div>
-    <div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:22px">
+  <div class="form-row te-row2 te-amount-row">
+    <div class="form-group"><label class="form-label" for="te-amount">金額</label><input id="te-amount" type="number" inputmode="numeric" placeholder="420" oninput="travelFareTouched()"></div>
+    <div class="form-group te-round-cell"><label class="form-label te-round" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:22px">
       <input id="te-round" type="checkbox" style="width:auto"> 往復（金額を2倍にします）
     </label></div>
   </div>
+  <div id="te-fare-hint" class="ui-scope te-under"></div>
   <div class="form-row single" id="te-search-row">
     <div><button class="btn sm" id="te-search" onclick="searchTravelFare()">🔍 運賃を検索</button></div>
   </div>
@@ -1939,7 +1975,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="form-row single">
     <div class="form-group"><label class="form-label">備考（任意）</label><input id="te-memo" type="text" placeholder="同行者など"></div>
   </div>
-  <div class="actions-row">
+  </div>
+  <div class="actions-row te-foot">
     <button class="btn" onclick="closeModal('modal-travel-entry')">キャンセル</button>
     <button class="btn primary" id="te-submit" onclick="saveTravelEntry()">+ 追加</button>
   </div>
@@ -6895,7 +6932,7 @@ function openTravelEntry(id){
   document.getElementById('te-title').textContent=l?'交通費を編集':'交通費を追加';
   document.getElementById('te-submit').textContent=l?'✓ 保存':'+ 追加';
   document.getElementById('te-home-btns').innerHTML=HOME_STATIONS.map(st=>
-    `<button type="button" class="btn sm" onclick="setTravelFrom('${escAttr(st)}')">🏠 ${escAttr(st)}</button>`).join('');
+    `<button type="button" class="btn sm te-home" onclick="setTravelFrom('${escAttr(st)}')">${escAttr(st)}</button>`).join('');
   initVisitCombo().close();
   travelIndexNow();
   renderPurposeChips();
@@ -6904,7 +6941,12 @@ function openTravelEntry(id){
   if(!((parseInt(document.getElementById('te-amount').value)||0)>0))applyTravelFare();
   toggleTravelSearch();
   openModal('modal-travel-entry');
+  const teb=document.getElementById('te-body');if(teb)teb.scrollTop=0;
 }
+
+document.addEventListener('focusin',e=>{
+  if(e.target&&e.target.closest&&e.target.closest('#te-body'))setTimeout(()=>{try{e.target.scrollIntoView({block:'nearest'})}catch(_){}},250);
+});
 
 // 運賃検索は電車・バス（旧「電車・バス」も）のときだけ出す
 function toggleTravelSearch(){

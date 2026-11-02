@@ -876,3 +876,15 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - テスト：tests/dashboard-v2.test.js（判定ルールの境界値・GASの期の往復）。新旧の数字の突き合わせは tests/dashboard-v2-compare.html
   （リポジトリ直下で `python -m http.server 8765` → http://localhost:8765/tests/dashboard-v2-compare.html。GAS_URL を空にして読むのでシートには触らない。
   ?narrow でスマホ幅、?tall で縦長。横スクロールが出ないことも確かめる）
+
+## 交通費の追加・編集モーダルの寸法（スマホ）
+- modal-travel-entry は ヘッダー（.te-head）／本文（.te-body。中身が多いときだけスクロール）／フッター（.te-foot。キャンセル・保存）の3層。
+  フッターは常に見える。最大高さは 100dvh − 上下の余白 − safe-area-inset-bottom（アドレスバーの出入りで切れない・ホームバーを避ける）。
+  本文の欄にフォーカスしたら scrollIntoView で見える位置へ（フッターに隠さない）。追加と編集は同じモーダル
+- ★ スマホの共通ルール（480px以下の .modal の padding、.actions-row の縦積み）が後ろにあるので、この画面は .modal.te-modal で上書きしている
+- スマホの幅だけ：日付と移動手段を2列、金額と往復を2列（.te-row2）。出発地・到着地・訪問先は1列。ラベル12px、入力欄44px、
+  自宅チップは文字だけ・40px、用件チップは1行（入りきらなければ折り返す。横スクロールなし）、タイトル下は1pxの薄い線
+- 日付の欄は width:100%・min-width:0・-webkit-appearance:none・左寄せ（枠からはみ出さない）
+- 運賃の注釈（#te-fare-hint）・運賃検索の結果（#te-result）・用件の提案は、中身があるときだけ場所を取る（:empty は非表示）
+- 実測（375×667）：初期状態で本文が 58px はみ出す（備考の欄だけが下に隠れる）、運賃の注釈あり 120px、編集 108px。390×664 は 61／123／111px。
+  どれも保存ボタンは見え、横スクロールなし
