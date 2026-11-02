@@ -290,6 +290,8 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .dv2-next.is-done{color:var(--ui-good-text);font-weight:700}
 .dash-v2 .dv2-next-dot{width:12px;height:12px;border-radius:50%;border:3px solid var(--ui-accent);background:var(--ui-bg);flex:none}
 .dash-v2 .dv2-ms-next{fill:none;stroke:var(--ui-accent);stroke-width:2.5}
+.dash-v2 .dv2-mtn.is-unset{opacity:.35;filter:saturate(.4)}
+.dash-v2 .dv2-goal-t{font-size:11px;font-weight:700;fill:var(--ui-good-text);paint-order:stroke;stroke:#fff;stroke-width:3px}
 .dash-v2 .dv2-ms-t.is-next{fill:var(--ui-accent-text);font-size:11px}
 .dash-v2 .dv2-hero-rate{display:flex;align-items:baseline;gap:6px;margin:2px 0}
 .dash-v2 .dv2-big{font-size:40px;line-height:1.1;color:var(--ui-accent-text)}
@@ -13104,6 +13106,17 @@ function nextMilestone(rate,confirmed,target){
   return{p,left:Math.max(0,Math.ceil(target*p/100-confirmed))};
 }
 
+/* 山の表示の状態（境界）。rate＝確定の達成率、landing＝着地見込み（どちらも目標が無ければ null）
+   unset（目標未設定）：マーカーを出さない（山は薄く）／reached（確定で100%以上）：現在地は山頂・「目標達成」／normal
+   位置は 0〜100 に収める（0円は麓、100%超は山頂）。表示する数字（landingText）は正確な値のまま */
+function heroState(rate,landing,target){
+  if(!(target>0)||rate===null||rate===undefined)return{mode:'unset',meP:null,landP:null,showMarkers:false,landingText:''};
+  const clamp=v=>Math.max(0,Math.min(100,v));
+  return{mode:rate>=100?'reached':'normal',meP:clamp(rate),
+    landP:landing===null||landing===undefined?null:clamp(landing),showMarkers:true,
+    landingText:landing===null||landing===undefined?'':landing.toFixed(1)+'%'};
+}
+
 // その日から days 日間（当日を含む）か。date が空なら false
 function withinDays(date,todayYmd,days){
   return !!date&&date<=todayYmd&&date>addDaysYmd(todayYmd,-days);
@@ -13521,9 +13534,10 @@ function renderDv2Hero(D){
     return;
   }
   const H=D.hero,rate=H.rate,landing=H.landing,sp=D.split;
+  const st=heroState(rate,landing,D.target);
   const nx=nextMilestone(rate,sp.confirmed,D.target);
-  const pos=routePoint(DV2_ROUTE,rate===null?0:Math.min(100,rate)/100);
-  const lpos=landing!==null&&landing!==rate?routePoint(DV2_ROUTE,Math.min(100,landing)/100):null;
+  const pos=routePoint(DV2_ROUTE,(st.meP||0)/100);
+  const lpos=st.showMarkers&&st.landP!==null&&landing!==rate?routePoint(DV2_ROUTE,st.landP/100):null;
   const markers=[rate!==null?pos:null,lpos].filter(Boolean);
   // 祝福：確定でマイルストーンに新しく到達したときだけ（初めては記録だけ。localStorage が使えなければ出さない）。届いた日も残す（ハイライト用）
   let fresh=[];
@@ -13539,10 +13553,10 @@ function renderDv2Hero(D){
   }
   const from=dv2LastPos&&!dv2ReducedMotion()?dv2LastPos:pos;
   dv2LastPos=pos;
-  const ms=H.milestones.map(m=>{
+  const ms=!st.showMarkers?'':H.milestones.map(m=>{
     const pt=routePoint(DV2_ROUTE,m.p/100),lb=msLabelPos(pt,markers,m.p),cel=fresh.indexOf(m.p)>=0,next=nx&&nx.p===m.p;
     return`<g class="${cel?'dv2-ms-cel':''}" style="transform-origin:${pt[0]}px ${pt[1]}px">`
-      +(next?`<circle cx="${pt[0]}" cy="${pt[1]}" r="12" class="dv2-ms-next"/>`:'')
+      +(next?`<circle cx="${pt[0]}" cy="${pt[1]}" r="20" fill="url(#dv2nextglow)"/><circle cx="${pt[0]}" cy="${pt[1]}" r="12" class="dv2-ms-next"/>`:'')
       +`<circle cx="${pt[0]}" cy="${pt[1]}" r="${next?8:6.5}" class="${m.done?'dv2-ms-done':'dv2-ms'}"/>`
       +(m.done?`<path d="M${pt[0]-3} ${pt[1]} l2 2.5 l4 -4.5" class="dv2-ms-check"/>`:'')
       +`<text x="${lb.x}" y="${lb.y}" text-anchor="${lb.anchor}" class="dv2-ms-t${next?' is-next':''}">${next?'次 ':''}${m.p}%</text></g>`;
@@ -13561,7 +13575,7 @@ function renderDv2Hero(D){
           <div class="plan" title="翌月から期末の契約にもとづく予定額"><span class="k">予測</span><b class="dv2-num">${dv2Yen(sp.planned)}</b></div>
         </div>
         ${nx?`<div class="dv2-next" title="次の目標地点（確定ベース）"><span class="dv2-next-dot" aria-hidden="true"></span>次の地点 <b>${nx.p}%</b>：あと <b class="dv2-num">${dv2Yen(nx.left)}</b><span class="dv2-note">（確定）</span></div>`
-          :`<div class="dv2-next is-done">✓ 確定で年間目標に到達しました</div>`}`
+          :`<div class="dv2-next is-done">✓ 目標達成（確定で年間目標に到達しました）</div>`}`
       :`<div class="dv2-h2">売上目標が未設定です</div>
         <div class="dv2-muted">確定の実績 <b class="dv2-num">${dv2Yen(sp.confirmed)}</b>（確定＋予測 ${dv2Yen(sp.total)}）</div>
         <button class="dv2-btn primary" onclick="dv2GoFiscal()">期の設定で目標を入れる</button>`}
@@ -13572,13 +13586,14 @@ function renderDv2Hero(D){
         <div>予測＝翌月から期末（${sp.plannedMonths.length}か月）の契約の予定額。着地見込み＝（確定＋予測 ${dv2Yen(sp.total)}）÷ 目標＝期間サマリーの達成率。入金予定は混ぜず、統計的な外挿もしません</div>
         <button class="dv2-link dv2-tap" onclick="dv2GoForecast()">案件予実を開く ›</button></div>`:''}
     </div>
-    <svg class="dv2-mtn" viewBox="0 0 320 170" role="img" aria-label="売上目標の山。現在地は確定の達成率 ${rate===null?'未設定':rate.toFixed(1)+'%'}${nx?`、次の目標地点 ${nx.p}%`:''}${landing!==null?`、着地見込み ${landing.toFixed(1)}%`:''}">
+    <svg class="dv2-mtn is-${st.mode}" viewBox="0 0 320 170" role="img" aria-label="${st.mode==='unset'?'売上目標の山（目標未設定）':`売上目標の山。現在地は確定の達成率 ${rate.toFixed(1)}%${st.mode==='reached'?'（目標達成）':''}${nx?`、次の目標地点 ${nx.p}%`:''}${landing!==null?`、着地見込み ${st.landingText}`:''}`}">
       <defs>
         <linearGradient id="dv2gA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C7D6FF"/><stop offset="1" stop-color="#EEF3FF"/></linearGradient>
         <linearGradient id="dv2gB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A9BFFB"/><stop offset="1" stop-color="#C9B6FA"/></linearGradient>
         <linearGradient id="dv2gC" x1="0" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#3976F6"/><stop offset=".55" stop-color="#6A63F2"/><stop offset="1" stop-color="#8758F5"/></linearGradient>
         <linearGradient id="dv2gS" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#17233D" stop-opacity=".05"/><stop offset="1" stop-color="#17233D" stop-opacity=".32"/></linearGradient>
         <radialGradient id="dv2glow"><stop offset="0" stop-color="#3976F6" stop-opacity=".6"/><stop offset="1" stop-color="#3976F6" stop-opacity="0"/></radialGradient>
+        <radialGradient id="dv2nextglow"><stop offset="0" stop-color="#3976F6" stop-opacity=".35"/><stop offset=".6" stop-color="#8758F5" stop-opacity=".12"/><stop offset="1" stop-color="#8758F5" stop-opacity="0"/></radialGradient>
       </defs>
       <path d="M0 170 L58 104 L96 128 L150 66 L184 96 L212 78 L230 170 Z" fill="url(#dv2gA)"/>
       <path d="M0 170 L40 140 L80 152 L120 118 L160 140 L200 120 L240 150 L240 170 Z" fill="url(#dv2gB)" opacity=".8"/>
@@ -13589,11 +13604,12 @@ function renderDv2Hero(D){
       <polyline points="${DV2_ROUTE.map(p=>p.join(',')).join(' ')}" class="dv2-route"/>
       ${ms}
       <path d="M250 24 L250 4 L266 10 L250 16" class="dv2-flag"/>
-      ${lpos?`<circle cx="${lpos[0]}" cy="${lpos[1]}" r="8" class="dv2-landing-mark"><title>着地見込み ${landing.toFixed(1)}%</title></circle>`:''}
-      ${rate!==null?`<g class="dv2-me" id="dv2-me" style="transform:translate(${from[0]}px,${from[1]}px)">
+      ${st.mode==='reached'?'<text x="244" y="12" text-anchor="end" class="dv2-goal-t">目標達成</text>':''}
+      ${lpos?`<circle cx="${lpos[0]}" cy="${lpos[1]}" r="8" class="dv2-landing-mark"><title>着地見込み ${st.landingText}</title></circle>`:''}
+      ${st.showMarkers?`<g class="dv2-me" id="dv2-me" style="transform:translate(${from[0]}px,${from[1]}px)">
         <circle r="18" fill="url(#dv2glow)"/><circle r="8"/><title>現在地（確定）${rate.toFixed(1)}%</title></g>`:''}
     </svg>`;
-  if(rate!==null&&(from[0]!==pos[0]||from[1]!==pos[1]))
+  if(st.showMarkers&&(from[0]!==pos[0]||from[1]!==pos[1]))
     requestAnimationFrame(()=>requestAnimationFrame(()=>{const me=document.getElementById('dv2-me');if(me)me.style.transform=`translate(${pos[0]}px,${pos[1]}px)`;}));
   dv2CountUp(el);
 }

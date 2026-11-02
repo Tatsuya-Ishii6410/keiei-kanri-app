@@ -24,7 +24,7 @@ vm.runInContext(pctSrc[0] + '\n' + html.slice(html.indexOf('\n', begin) + 1, htm
 globalThis.exported = { dashGreeting, monthOverMonth, dashMilestones, routePoint, forecastSplit,
   normClientName, newCustomerCount, retentionRate, winRate, ringState,
   heroProgress, msLabelPos, niceAxis, pct, plannedWindow, dashCondition, milestoneCelebration, recordMonth, bigChanges,
-  actionItems, dashMissionList, deadlineLabel, dashInsights, paceLevel, nextMilestone, withinDays, overdueZeroRecord, dashHighlights };`, app);
+  actionItems, dashMissionList, deadlineLabel, dashInsights, paceLevel, nextMilestone, withinDays, overdueZeroRecord, dashHighlights, heroState };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -382,6 +382,37 @@ test('目標ペース：確定達成率≧期の経過率（ちょうど同じ�
   assert.strictEqual(many.length, 3);
   assert.deepStrictEqual(many.map(x => x.key), ['record:4', 'margin:4', 'new:5']);
   assert(!JSON.stringify(many).match(/月次締め|バックアップ|請求書|銀行明細|取込待ち/));
+});
+
+console.log('第4次：山の表示の境界');
+
+test('確定が0円：現在地は麓（0%）、マーカーは出す', () => {
+  const h = A.heroProgress({ confirmed: 0, planned: 3000000, total: 3000000 }, 6000000, A.pct);
+  const st = plain(A.heroState(h.rate, h.landing, 6000000));
+  assert.deepStrictEqual([st.mode, st.meP, st.showMarkers], ['normal', 0, true]);
+  assert.deepStrictEqual(plain(A.routePoint([[0, 100], [100, 0]], st.meP / 100)), [0, 100]);        // ルートの最初＝麓
+});
+
+test('確定で100%以上：現在地は山頂（100で止める）・目標達成。祝福は確定が届いたときだけ', () => {
+  const h = A.heroProgress({ confirmed: 7200000, planned: 0, total: 7200000 }, 6000000, A.pct);
+  const st = plain(A.heroState(h.rate, h.landing, 6000000));
+  assert.deepStrictEqual([st.mode, st.meP, h.reached], ['reached', 100, true]);
+  assert.strictEqual(A.nextMilestone(h.rate, 7200000, 6000000), null);                               // 次の地点は出さない
+  // 予測込みで100%を超えても、確定が届かなければ目標達成にしない
+  const h2 = A.heroProgress({ confirmed: 3000000, planned: 4000000, total: 7000000 }, 6000000, A.pct);
+  assert.strictEqual(A.heroState(h2.rate, h2.landing, 6000000).mode, 'normal');
+});
+
+test('目標未設定：マーカーを出さない（山は薄く。期の設定へのボタンは画面側）', () => {
+  const h = A.heroProgress({ confirmed: 2000000, planned: 0, total: 2000000 }, 0, A.pct);
+  assert.deepStrictEqual(plain(A.heroState(h.rate, h.landing, 0)), { mode: 'unset', meP: null, landP: null, showMarkers: false, landingText: '' });
+  assert.strictEqual(A.heroState(null, null, 6000000).mode, 'unset');
+});
+
+test('着地見込みが100%を超える：見込みのマーカーは山頂、数字は正確に', () => {
+  const h = A.heroProgress({ confirmed: 3000000, planned: 4410000, total: 7410000 }, 6000000, A.pct);
+  const st = plain(A.heroState(h.rate, h.landing, 6000000));
+  assert.deepStrictEqual([st.meP, st.landP, st.landingText], [50, 100, '123.5%']);
 });
 
 console.log('GASとの往復（期の KPI 目標）');
