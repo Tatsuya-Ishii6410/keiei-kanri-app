@@ -1607,7 +1607,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   <div class="form-row">
     <div class="form-group"><label class="form-label">日付</label><input id="te-date" type="date"></div>
     <div class="form-group"><label class="form-label">移動手段</label>
-      <select id="te-mode" onchange="toggleTravelSearch()">
+      <select id="te-mode" onchange="toggleTravelSearch();travelStationChanged()">
         <option>電車・バス</option><option>タクシー</option><option>車</option><option>その他</option>
       </select>
     </div>
@@ -1629,7 +1629,8 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       </div></div>
   </div>
   <div class="form-row">
-    <div class="form-group"><label class="form-label">金額</label><input id="te-amount" type="number" placeholder="420"></div>
+    <div class="form-group"><label class="form-label">金額</label><input id="te-amount" type="number" placeholder="420" oninput="travelFareTouched()">
+      <div id="te-fare-hint" class="ui-scope"></div></div>
     <div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:22px">
       <input id="te-round" type="checkbox" style="width:auto"> 往復（金額を2倍にします）
     </label></div>
@@ -5773,6 +5774,125 @@ function applyReturnAutofill(st,from,to){
   return o;
 }
 const isHomeVisit=v=>!!normVisit(v)&&normVisit(v)===normVisit(VISIT_HOME);
+
+/* ---- 同じ区間の過去の運賃 ----
+   参照元：同じ出発駅・到着駅（normStation で比べる）・同じ手段（電車・バスだけ）の、実績の交通費で金額が0より大きい行。
+   ★ 運賃が「AI推定のまま、人が確認していない行」は使わない（推定の誤りが広がらないように）
+     カレンダーから作った行（calId が予定ID）は、運賃キャッシュ（travel.fareCache）がその区間で manual かつ
+     片道の金額が一致するときだけ確認済み。それ以外の行（手入力・入力モーダルで追加）は確認済み
+   金額は片道（往復の行は半分）で扱う */
+const FARE_AUTO_MODE='電車・バス';
+const FARE_MAX_OPTIONS=3;
+
+function fareKeyNorm(from,to){return normStation(from)+'|'+normStation(to)}
+
+// 運賃キャッシュを、駅名をそろえたキーで引けるようにする（キャッシュのキーは入力どおりの「出発|到着」）
+function normFareCache(cache){
+  const out={};
+  Object.keys(cache||{}).forEach(k=>{
+    const i=k.indexOf('|');
+    if(i<0)return;
+    out[fareKeyNorm(k.slice(0,i),k.slice(i+1))]=Object.assign({key:k},cache[k]);
+  });
+  return out;
+}
+
+// カレンダーから作った行（calId が予定ID。デビット通知・領収書・銀行明細の印ではない）
+function isCalendarTravel(l){
+  const c=String((l&&l.calId)||'');
+  return !!c&&!/^(mail|rcpt|bank):/.test(c);
+}
+
+// 片道の金額（往復の行は半分）
+function legFareOf(l,p){
+  const a=parseInt(l&&l.amount)||0;
+  return p&&p.round?Math.round(a/2):a;
+}
+
+// 運賃が確認済みか。cacheN は normFareCache の戻り値
+function isFareConfirmed(l,p,cacheN){
+  if(!isCalendarTravel(l))return true;
+  const c=(cacheN||{})[fareKeyNorm(p.from,p.to)];
+  return !!c&&c.confidence==='manual'&&(parseInt(c.amount)||0)===legFareOf(l,p)&&legFareOf(l,p)>0;
+}
+
+// バス停らしい駅名（バスは逆区間を参照しない。手段は「電車・バス」で1つなので駅名で見分ける）
+function isBusStop(name){return /バス|停留所/.test(normStation(name))}
+
+/* 過去の運賃。返り値 {source:'same'|'reverse'|'', options:[{amount,last}]}
+   options は片道の金額ごとに最新の日付で、新しい順に最大3つ（先頭が採用する金額）。
+   逆区間（出発と到着を入れ替え）は、同じ区間の行が1件もなく、どちらもバス停でないときだけ */
+function pastFares(ledger,partsOf,cache,from,to,mode){
+  const none={source:'',options:[]};
+  const f=normStation(from),t=normStation(to);
+  if(!f||!t||f===t||mode!==FARE_AUTO_MODE)return none;
+  const cacheN=normFareCache(cache);
+  const rows=[];
+  (ledger||[]).forEach(l=>{
+    if(!l||l.type!=='交通費'||(l.status||'actual')!=='actual'||l.desc===TRAVEL_BLANK_DESC)return;
+    if(!((parseInt(l.amount)||0)>0))return;
+    const p=partsOf(l)||{};
+    if(p.mode!==FARE_AUTO_MODE)return;
+    if(!isFareConfirmed(l,p,cacheN))return;
+    rows.push({pf:normStation(p.from),pt:normStation(p.to),amount:legFareOf(l,p),date:String(l.date||''),id:l.id||0});
+  });
+  const pick=list=>{
+    list.sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+    const seen={},out=[];
+    list.forEach(r=>{if(!seen[r.amount]&&out.length<FARE_MAX_OPTIONS){seen[r.amount]=true;out.push({amount:r.amount,last:r.date});}});
+    return out;
+  };
+  const same=rows.filter(r=>r.pf===f&&r.pt===t);
+  if(same.length)return{source:'same',options:pick(same)};
+  if(isBusStop(from)||isBusStop(to))return none;
+  const rev=rows.filter(r=>r.pf===t&&r.pt===f);
+  return rev.length?{source:'reverse',options:pick(rev)}:none;
+}
+
+/* 入力モーダルの運賃の自動反映。st={auto,value}（モーダルの中だけで持つ）
+   運賃欄が空・0円、またはまだ自動反映のままなら、参照元の金額（×mult。往復の行は2）を入れる。
+   参照元が無くなったら、自動反映のままの金額だけ空に戻す。手で入れた金額は触らない
+   返り値 {amount(文字列), auto, value} */
+function fareAutofill(st,amountStr,found,mult){
+  const cur=parseInt(amountStr)||0;
+  const isAuto=!!(st&&st.auto)&&String(amountStr)===String(st.value);
+  if(cur>0&&!isAuto)return{amount:String(amountStr),auto:false,value:''};
+  const opt=found&&found.options&&found.options[0];
+  if(opt){const v=String(opt.amount*(mult||1));return{amount:v,auto:true,value:v};}
+  return{amount:isAuto?'':String(amountStr||''),auto:false,value:''};
+}
+
+// 運賃を確認したとみなして、キャッシュをその区間の manual（片道の金額）にするか
+// カレンダーから作った行だけ。運賃欄を手で書き換えた（touched）か「運賃を確認した」（confirmed）ときだけ
+function shouldConfirmFare(l,flags){
+  return isCalendarTravel(l)&&!!(flags&&(flags.touched||flags.confirmed));
+}
+
+/* カレンダーの運賃計算の順番：1. 過去の実績（pastFares。信頼度は高）2. 運賃キャッシュ 3. AI検索
+   rows はプレビューの行 {from,to,mode}。返り値 {past:[{row,amount}], cached:[{row,entry}], missing:[キー]}
+   missing（AI検索する区間）は「出発|到着」（入力どおり）の重複なし。過去実績で取れた行は数えない */
+function calcFareSources(rows,ledger,partsOf,cache){
+  const cacheN=normFareCache(cache);
+  const out={past:[],cached:[],missing:[]};
+  (rows||[]).forEach(r=>{
+    const pf=pastFares(ledger,partsOf,cache,r.from,r.to,r.mode);
+    if(pf.options.length){out.past.push({row:r,amount:pf.options[0].amount});return;}
+    const c=cacheN[fareKeyNorm(r.from,r.to)];
+    if(c&&parseInt(c.amount)>0){out.cached.push({row:r,entry:c});return;}
+    const key=String(r.from||'').trim()+'|'+String(r.to||'').trim();
+    if(out.missing.indexOf(key)<0)out.missing.push(key);
+  });
+  return out;
+}
+
+// キャッシュに manual を書く。すでに同じ区間（駅名をそろえて同じ）のキーがあればそのキーを使う
+function confirmFareInCache(cache,from,to,leg,today){
+  if(!(leg>0)||!normStation(from)||!normStation(to))return null;
+  const hit=normFareCache(cache)[fareKeyNorm(from,to)];
+  const key=hit?hit.key:String(from).trim()+'|'+String(to).trim();
+  cache[key]={amount:leg,confidence:'manual',at:today||''};
+  return key;
+}
 // ===== @travel-rules-end
 let editTravelId=null;
 let editTravelRound=false;
@@ -6141,6 +6261,64 @@ function initVisitCombo(){
 // 出発地・到着地を入れたら候補を開く（候補が無ければ何も出さない）
 // 自動入力の状態（モーダルの中だけ。保存しない）
 let travelAuto={visit:false,purpose:false};
+// 運賃：自動反映（auto/value/found/mult）、手で書き換えたか（touched）、「運賃を確認した」を押したか（confirmed）、
+// 開いた行が未確認の推定か（unconfirmed）
+let travelFare={auto:false,value:'',found:null,mult:1,touched:false,confirmed:false,unconfirmed:false};
+
+function travelFareMult(){return(editTravelId!==null&&editTravelRound)?2:1}
+
+// 出発・到着・手段から過去の運賃を引き、運賃欄が空・0円か自動反映のままなら入れる
+function applyTravelFare(){
+  const el=document.getElementById('te-amount');
+  const found=pastFares(S.ledger,travelPartsOf,(S.travel||{}).fareCache,
+    document.getElementById('te-from').value,document.getElementById('te-to').value,document.getElementById('te-mode').value);
+  const r=fareAutofill(travelFare,el.value,found,travelFareMult());
+  el.value=r.amount;
+  travelFare.auto=r.auto;travelFare.value=r.value;travelFare.found=r.auto?found:null;travelFare.mult=travelFareMult();
+  renderFareHint();
+}
+
+function renderFareHint(){
+  const el=document.getElementById('te-fare-hint');
+  if(!el)return;
+  const md=d=>{const m=/^\d{4}-(\d{2})-(\d{2})/.exec(d||'');return m?`${+m[1]}/${+m[2]}`:''};
+  let html='';
+  if(travelFare.auto&&travelFare.found){
+    const f=travelFare.found,o=f.options[0];
+    html+=`<div style="font-size:11px;color:var(--ui-muted);margin-top:4px">`
+      +(f.source==='reverse'?`逆区間から参照（最終 ${md(o.last)}）`:`過去の運賃：${o.amount.toLocaleString('ja-JP')}円（最終 ${md(o.last)}）`)
+      +(travelFare.mult>1?'・往復':'')+`</div>`;
+    if(f.options.length>1){
+      html+=`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">`+f.options.map(x=>{
+        const v=String(x.amount*travelFare.mult);
+        return`<button type="button" class="sc-chip" style="${v===travelFare.value?'color:var(--ui-accent);border-color:var(--ui-accent);font-weight:700':''}" onclick="pickPastFare(${x.amount})" title="最終 ${md(x.last)}">${x.amount.toLocaleString('ja-JP')}円</button>`;
+      }).join('<span style="color:var(--ui-muted);align-self:center">／</span>')+`</div>`;
+    }
+  }
+  if(travelFare.unconfirmed){
+    html+=travelFare.confirmed
+      ?`<div style="font-size:11px;color:var(--ui-accent);margin-top:4px;font-weight:700">✓ 運賃を確認済みにします（保存すると反映）</div>`
+      :`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px"><span style="font-size:11px;color:var(--ui-muted)">運賃：推定（未確認）</span>`
+        +`<button type="button" class="sc-chip" onclick="confirmTravelFare()">✓ 運賃を確認した</button></div>`;
+  }
+  el.innerHTML=html;
+}
+
+function pickPastFare(amount){
+  const v=String(amount*travelFare.mult);
+  document.getElementById('te-amount').value=v;
+  travelFare.value=v;travelFare.auto=true;
+  renderFareHint();
+}
+// 運賃欄を手で書き換えたら、自動反映の表示を消す
+function travelFareTouched(){
+  travelFare.auto=false;travelFare.found=null;travelFare.touched=true;
+  renderFareHint();
+}
+function confirmTravelFare(){
+  travelFare.confirmed=true;
+  renderFareHint();
+}
 
 // 出発地・到着地が変わったとき：帰りの行なら「自宅」「帰宅」を自動で入れ、そうでなければ候補を開く
 // （帰りの行では候補を自動で開かない。欄をタップすれば出発駅から候補を引く）
@@ -6154,6 +6332,7 @@ function travelStationChanged(){
   travelAuto={visit:next.autoVisit,purpose:next.autoPurpose};
   if(next.choice!==travelPurposeChoice){travelPurposeChoice=next.choice;renderPurposeChips();}
   else renderPurposeHint();
+  applyTravelFare();
   if(!visitCombo)return;
   // 出発地を先に入れたときに開いた候補も、帰りの行になったら閉じる
   if(isReturnTrip(from,to))visitCombo.close();
@@ -6288,6 +6467,9 @@ function openTravelEntry(id){
   const ps=purposeToState(l?l.purpose:'');
   travelPurposeChoice=ps.choice;
   travelAuto={visit:false,purpose:false};   // 開いたときは自動入力しない（過去の行は書き換えない）
+  travelFare={auto:false,value:'',found:null,mult:1,touched:false,confirmed:false,
+    unconfirmed:!!l&&isCalendarTravel(l)&&(parseInt(l.amount)||0)>0
+      &&!isFareConfirmed(l,travelPartsOf(l),normFareCache((S.travel||{}).fareCache))};
   document.getElementById('te-purpose-other').value=ps.text;
   document.getElementById('te-amount').value=l&&l.amount?l.amount:'';
   document.getElementById('te-memo').value=l?(l.memo||''):'';
@@ -6300,6 +6482,9 @@ function openTravelEntry(id){
   initVisitCombo().close();
   travelIndexNow();
   renderPurposeChips();
+  renderFareHint();
+  // 運賃が空・0円の行（カレンダーから作った要編集の行など）は、区間が入っていれば過去の運賃を入れる（保存するまで台帳は変えない）
+  if(!((parseInt(document.getElementById('te-amount').value)||0)>0))applyTravelFare();
   toggleTravelSearch();
   openModal('modal-travel-entry');
 }
@@ -6322,6 +6507,7 @@ async function searchTravelFare(){
     const json=await gasCall({action:'fare',from,to});
     if(!json.ok)throw new Error(json.error||'運賃を取得できませんでした');
     document.getElementById('te-amount').value=json.amount;
+    travelFare.auto=false;travelFare.found=null;renderFareHint();
     out.innerHTML=`<div class="alert alert-success">${from} → ${to}：<strong>${fmt(json.amount)}</strong>（IC）を金額に入れました</div>`;
   }catch(e){
     out.innerHTML=`<div class="alert alert-error">❌ ${e.message}<br><small>金額は手入力もできます。</small></div>`;
@@ -6358,6 +6544,11 @@ function saveTravelEntry(){
     const l=S.ledger.find(x=>x.id===editTravelId);
     if(!l){alert('対象が見つかりませんでした');return;}
     Object.assign(l,values);
+    // 到着地や訪問先だけを直した保存は、運賃の確認とみなさない
+    if(shouldConfirmFare(l,travelFare)&&from&&to){
+      if(!S.travel.fareCache)S.travel.fareCache={};
+      confirmFareInCache(S.travel.fareCache,from,to,legFareOf(l,{round:isRound}),today());
+    }
   }else{
     S.ledger.push(Object.assign({id:S.nextLedgerId++},values));
   }
@@ -6379,7 +6570,8 @@ const CAL_DEFAULT_FROM=HOME_STATIONS[0];   // 自宅駅は HOME_STATIONS（@trav
 const CAL_DEFAULT_PERIOD=['2026-03-01','2026-07-31'];
 const CAL_DEFAULT_EXCLUDE='病院,クリニック,医院,内科,歯科';
 const CAL_FARE_CHUNK=10;   // GASの fareBatch は1回10区間まで
-const CAL_CONF={mid:'推定',low:'低（要確認）',manual:'手入力'};
+const CAL_CONF={high:'高',mid:'推定',low:'低（要確認）',manual:'手入力'};
+const CAL_FARE_SRC={past:'過去実績',cache:'キャッシュ',search:'検索'};
 
 let calRows=[];      // プレビュー対象（A・C、復活させたB）
 let calOnline=[];    // B オンライン（除外中）
@@ -6525,7 +6717,7 @@ function calHomeChanged(){
   calRows.concat(calOnline).forEach(r=>{
     if(!isHomeStation(r.from)||normStation(r.from)===normStation(st))return;
     r.from=st;
-    if(r.conf!=='manual'){r.fare='';r.conf='';r.fareError='';}
+    if(r.conf!=='manual'){r.fare='';r.conf='';r.fareError='';r.fareSrc='';}
     r.dup=calDupOf(r);
   });
   renderCalImport();
@@ -6546,6 +6738,7 @@ function calEdit(i,field,el){
     r.fare=v;
     r.conf=v===''?'':'manual';
     r.fareError='';
+    r.fareSrc='';
     // 手修正した運賃は次回から使えるようにキャッシュへ
     if(v!==''&&r.from.trim()&&r.to.trim()){
       if(!S.travel.fareCache)S.travel.fareCache={};
@@ -6555,7 +6748,7 @@ function calEdit(i,field,el){
   }else{
     r[field]=el.value;
     // 区間が変わったら推定運賃は使えない（手入力の値は残す）
-    if((field==='from'||field==='to'||field==='mode')&&r.conf!=='manual'){r.fare='';r.conf='';r.fareError='';}
+    if((field==='from'||field==='to'||field==='mode')&&r.conf!=='manual'){r.fare='';r.conf='';r.fareError='';r.fareSrc='';}
   }
   r.dup=calDupOf(r);
   renderCalImport();
@@ -6590,7 +6783,7 @@ function calModeOptions(cur){
 function calFareCell(r,i){
   const amt=calRowAmount(r);
   return`<input type="number" value="${r.fare}" onchange="calEdit(${i},'fare',this)" style="width:84px;font-size:12px;padding:4px 6px;text-align:right">`
-    +(r.fare!==''&&r.conf!=='manual'?'<div style="font-size:10px;color:var(--text-muted)">推定</div>':'')
+    +(r.fare!==''&&r.conf!=='manual'?`<div style="font-size:10px;color:var(--text-muted)">${r.fareSrc?CAL_FARE_SRC[r.fareSrc]:'推定'}</div>`:'')
     +(r.round&&amt?`<div style="font-size:10px;color:var(--text-muted)">往復 ${fmt(amt)}</div>`:'');
 }
 
@@ -6669,13 +6862,13 @@ async function calcCalFares(){
   const targets=calRows.filter(r=>r.from.trim()&&r.to.trim()&&r.mode==='電車・バス'&&r.conf!=='manual');
   if(targets.length===0){alert('運賃を計算できる行がありません（出発・到着が入っている電車・バスの行が対象です）');return;}
 
-  const apply=(r,c)=>{r.fare=parseInt(c.amount)||'';r.conf=c.confidence||'mid';r.fareError='';};
-  const missing=[];
-  targets.forEach(r=>{
-    const c=cache[calFareKey(r)];
-    if(c&&parseInt(c.amount)>0)apply(r,c);
-    else if(missing.indexOf(calFareKey(r))<0)missing.push(calFareKey(r));
-  });
+  const apply=(r,c,src)=>{r.fare=parseInt(c.amount)||'';r.conf=c.confidence||'mid';r.fareError='';r.fareSrc=src;};
+  // 1. 過去の実績 → 2. 運賃キャッシュ → 3. AI検索（calcFareSources。過去実績で取れた行は検索しない）
+  const plan=calcFareSources(targets,S.ledger,travelPartsOf,cache);
+  plan.past.forEach(x=>apply(x.row,{amount:x.amount,confidence:'high'},'past'));
+  plan.cached.forEach(x=>apply(x.row,x.entry,'cache'));
+  const missing=plan.missing;
+  const nPast=plan.past.length;
 
   const btn=document.getElementById('ci-fare');
   btn.disabled=true;
@@ -6690,13 +6883,13 @@ async function calcCalFares(){
         const key=res.from+'|'+res.to;
         if(res.ok)cache[key]={amount:res.amount,confidence:res.confidence||'mid',at:today()};
         targets.filter(r=>calFareKey(r)===key).forEach(r=>{
-          if(res.ok)apply(r,res);
+          if(res.ok)apply(r,res,'search');
           else{r.fare='';r.conf='low';r.fareError=res.error||'取得失敗';failed++;}
         });
       });
     }
     calMsg(`<div class="alert alert-success">✓ ${targets.length}行の運賃を入れました`
-      +(missing.length?`（新しく検索 ${missing.length}区間）`:'（すべて保存済みの運賃）')
+      +`（過去実績 ${nPast}行／キャッシュ ${plan.cached.length}行／新しく検索 ${missing.length}区間）`
       +(failed?`。取得できなかった行が ${failed}件あります`:'')+'</div>');
   }catch(e){
     calMsg(`<div class="alert alert-error">❌ ${e.message}<br><small>取得できた分は反映済みです。運賃は手入力もできます。</small></div>`);
