@@ -277,6 +277,17 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .lv-good .dv2-cond-title{color:var(--ui-good-text)}.dash-v2 .lv-caution .dv2-cond-title{color:var(--ui-caution-text)}
 .dash-v2 .lv-warn .dv2-cond-title{color:var(--ui-warn-text)}.dash-v2 .lv-none .dv2-cond-title{color:var(--ui-muted)}
 .dash-v2 .dv2-cond-title{font-size:16px;font-weight:700}
+/* 朝日凛子：44pxの円形アバター＋1行。フェードインだけ（動きを減らす設定ではなし） */
+.dash-v2 .rinko-av{position:relative;width:44px;height:44px;flex:none;border-radius:50%;background:var(--ui-tint-blue);overflow:visible}
+.dash-v2 .rinko-av img{display:block;width:44px;height:44px;border-radius:50%;object-fit:cover;animation:rinko-in 300ms ease-out 1 both}
+.dash-v2 .rinko-badge{position:absolute;right:-3px;bottom:-3px;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:700;color:#fff;background:var(--lv);box-shadow:0 0 0 2px var(--ui-surface,#fff)}
+.dash-v2 .rinko-line{margin:2px 0 0;font-size:13px;line-height:1.5;color:var(--ui-muted-strong);overflow-wrap:anywhere}
+.dash-v2 .dv2-hl .rinko-row{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.dash-v2 .dv2-hl .rinko-av{background:rgba(255,255,255,.9)}
+.dash-v2 .dv2-hl .rinko-line{margin:0;color:#fff;font-weight:700}
+@keyframes rinko-in{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.dash-v2 .rinko-av img{animation:none}}
 .dash-v2 .dv2-kicker{font-size:11px;color:var(--ui-muted);font-weight:700}
 .dash-v2 .dv2-rules{margin:0 0 6px;padding-left:18px}.dash-v2 .dv2-rules li{margin-bottom:4px}
 .dash-v2 .dv2-rule-st{font-size:11px;font-weight:700;margin-left:6px}.dash-v2 .st-hit .dv2-rule-st{color:var(--ui-warn-text)}.dash-v2 .st-skip .dv2-rule-st,.dash-v2 .st-miss .dv2-rule-st{color:var(--ui-muted)}
@@ -1517,6 +1528,14 @@ body.dv2-on .tb-menu{display:none!important}
       <button class="btn primary" onclick="saveInboxFolders()">✓ 保存する</button>
     </div>
     <div id="inbox-folder-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">🙋 ダッシュボードの案内役</span></div>
+    <label style="display:flex;align-items:center;gap:10px;min-height:44px;font-size:14px;cursor:pointer">
+      <input type="checkbox" id="s-rinko" onchange="setRinkoOn(this.checked)" style="width:20px;height:20px">凛子を表示する
+    </label>
+    <div style="font-size:12px;color:var(--text-secondary);line-height:1.7">新ダッシュボードの経営コンディションと今月のハイライトに、朝日凛子のアイコンと一言を出します。
+      オフにしても判定の文字はそのまま出ます（この設定はこのブラウザに保存します）。</div>
   </div>
   <div class="card">
     <div class="card-header"><span class="card-title">✉ 入金の催促文（ひな形）</span></div>
@@ -12105,6 +12124,7 @@ function applyPlanToAllMonths(){
 const COMPANY_FIELDS=['name','rep','zip','addr','tel','email','bankName','bankBranch','accountType','accountNumber','accountHolder','invoice','capital','payment','shareWith','note'];
 
 function loadSettingsForm(){
+  const rkEl=document.getElementById('s-rinko');if(rkEl)rkEl.checked=rinkoOn();
   const c=S.company;
   COMPANY_FIELDS.forEach(k=>{
     const el=document.getElementById('s-'+k);if(el)el.value=c[k]||'';
@@ -13167,6 +13187,39 @@ function dashHighlights(x){
     out.push({key:'pace:'+x.fyId,icon:'✓',text:`確定達成率 ${x.rate.toFixed(1)}% が期の経過 ${x.elapsed.toFixed(1)}% 以上（目標ペース）`});
   return out.slice(0,3);
 }
+
+/* 朝日凛子（ダッシュボードの案内役）。数字・判定は変えない。既存の経営コンディションとハイライトの結果から表情と一言を選ぶだけ
+   一言は です・ます、1行40文字以内。{名前} の形で実データを差し込める（rinkoPhrase）。決まった数字は書かない
+   表情：順調＝ウインク／要確認・注意＝考える／重大（赤）＝画像なし・既存の文字だけ／ハイライト＝笑顔／データなし＝考える
+   ★ 悪い知らせにウインク・笑顔は使わない。「真剣」の表情は使わない */
+const RINKO_PHRASES={
+  good:'今月も順調です。この調子でいきましょう。',
+  check:'確認したい点が、あります。下の項目を見てみましょう。',
+  highlight:'今月の達成です。おつかれさまでした。',
+  empty:'まだデータがありません。入力すると、ここに表示されます。'
+};
+const RINKO_FACES=['wink','smile','think'];
+// 経営コンディションの段階（dashCondition の level）→ 表情と一言。重大（warn）と不明な段階は null（画像も一言も出さない）
+function rinkoForCondition(level,hasData){
+  if(level==='good')return{face:'wink',phrase:'good'};
+  if(level==='caution')return{face:'think',phrase:'check'};
+  if(level==='none')return{face:'think',phrase:hasData?'check':'empty'};
+  return null;
+}
+// ハイライト：1件以上のときだけ笑顔
+function rinkoForHighlights(count){return count>0?{face:'smile',phrase:'highlight'}:null;}
+// 一言に実データを差し込む（{名前} → vars の値。無い名前はそのまま）
+function rinkoPhrase(key,vars){
+  const t=RINKO_PHRASES[key]||'';
+  return t.replace(/\{([^{}]+)\}/g,(m,k)=>vars&&vars[k]!==undefined&&vars[k]!==null?String(vars[k]):m);
+}
+// 表示のオン・オフ（localStorage の値。'0' だけオフ。未設定・読めないときはオン）
+function rinkoEnabled(stored){return stored!=='0';}
+// アバターの画像（44px で表示。112px と 224px だけを使い、拡大はしない）
+function rinkoAvatarSrc(face){
+  const f=RINKO_FACES.indexOf(face)>=0?face:'think';
+  return{src:`images/rinko/rinko-${f}-avatar-112.webp`,srcset:`images/rinko/rinko-${f}-avatar-112.webp 1x, images/rinko/rinko-${f}-avatar-224.webp 2x`};
+}
 // ===== @dash-rules-end
 
 
@@ -13411,14 +13464,27 @@ function dv2GoCash(){
 function dv2Toggle(k){dv2Open[k]=!dv2Open[k];renderDashV2();}
 function dv2Scroll(id){const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:dv2ReducedMotion()?'auto':'smooth',block:'start'});}
 
+/* 朝日凛子の表示（設定ページの「凛子を表示する」。このブラウザの localStorage。読めなければオン） */
+const RINKO_LS_KEY='bizapp_rinko_v1';
+function rinkoOn(){let v=null;try{v=localStorage.getItem(RINKO_LS_KEY);}catch(e){}return rinkoEnabled(v);}
+function setRinkoOn(on){try{localStorage.setItem(RINKO_LS_KEY,on?'1':'0');}catch(e){}if(typeof renderDashV2==='function')try{renderDashV2();}catch(e){}}
+// 円形アバター（装飾なので alt は空。一言は普通の文字として読ませる）
+function rinkoAvatar(face,badge){
+  const a=rinkoAvatarSrc(face);
+  return`<span class="rinko-av" data-face="${face}"><img src="${a.src}" srcset="${a.srcset}" width="44" height="44" alt="" decoding="async">${badge?`<span class="rinko-badge" aria-hidden="true">${badge}</span>`:''}</span>`;
+}
+function dv2HasData(){return !!((S.projects&&S.projects.length)||(S.ledger&&S.ledger.length));}
+
 // 経営コンディション
 function renderDv2Condition(D){
   const c=dashCondition({cash:D.cash,outSoon:D.outSoon,overdue:D.od.length,rate:D.rate,elapsed:D.elapsedRate});
   const el=document.getElementById('dv2-cond');
-  el.className='dv2-card dv2-cond lv-'+c.level;
+  const rk=rinkoOn()?rinkoForCondition(c.level,dv2HasData()):null;
+  el.className='dv2-card dv2-cond lv-'+c.level+(rk?' has-rinko':'');
   el.dataset.key=c.key;
-  el.innerHTML=`<div class="dv2-cond-main"><span class="dv2-cond-icon" aria-hidden="true">${c.icon}</span>
-      <div><div class="dv2-kicker">経営コンディション</div><div class="dv2-cond-title">${c.title}</div></div>
+  el.dataset.rinko=rk?rk.face:'';
+  el.innerHTML=`<div class="dv2-cond-main">${rk?rinkoAvatar(rk.face,c.icon):`<span class="dv2-cond-icon" aria-hidden="true">${c.icon}</span>`}
+      <div><div class="dv2-kicker">経営コンディション</div><div class="dv2-cond-title">${c.title}</div>${rk?`<p class="rinko-line">${escAttr(rinkoPhrase(rk.phrase))}</p>`:''}</div>
       <button class="dv2-link dv2-tap" onclick="dv2Toggle('cond')" aria-expanded="${!!dv2Open.cond}">判定の根拠 ${dv2Open.cond?'▲':'▼'}</button></div>
     ${dv2Open.cond?`<div class="dv2-basis"><ol class="dv2-rules">${c.rules.map(r=>`<li class="st-${r.state}"><b>${r.name}</b>
       <span class="dv2-rule-st">${r.state==='hit'?'該当':r.state==='skip'?'判定しない':'該当なし'}</span><br>${escAttr(r.detail)}</li>`).join('')}</ol>
@@ -13720,7 +13786,10 @@ function renderDv2Highlights(D){
   const seen=dv2ReducedMotion()?undefined:dv2LS(ls=>JSON.parse(ls.getItem('bizapp_dash_hl_seen_v3')||'[]'));
   const fresh=Array.isArray(seen)?list.filter(h=>seen.indexOf(h.key)<0).map(h=>h.key):[];
   if(Array.isArray(seen)&&fresh.length)dv2LS(ls=>ls.setItem('bizapp_dash_hl_seen_v3',JSON.stringify(seen.concat(fresh).slice(-60))));
+  const rk=rinkoOn()?rinkoForHighlights(list.length):null;
+  el.dataset.rinko=rk?rk.face:'';
   el.innerHTML=`<div class="dv2-card-head"><h3 class="dv2-h3">今月のハイライト</h3><span class="dv2-hl-note">自動判定（AI分析ではありません）</span></div>
+    ${rk?`<div class="rinko-row">${rinkoAvatar(rk.face)}<p class="rinko-line">${escAttr(rinkoPhrase(rk.phrase))}</p></div>`:''}
     <ul class="dv2-hl-list">${list.map(h=>`<li class="${fresh.indexOf(h.key)>=0?'is-new':''}" data-key="${escAttr(h.key)}"><span class="dv2-hl-icon" aria-hidden="true">${h.icon}</span>${escAttr(h.text)}</li>`).join('')}</ul>`;
 }
 

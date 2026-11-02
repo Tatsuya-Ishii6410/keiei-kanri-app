@@ -24,7 +24,8 @@ vm.runInContext(pctSrc[0] + '\n' + html.slice(html.indexOf('\n', begin) + 1, htm
 globalThis.exported = { dashGreeting, monthOverMonth, dashMilestones, routePoint, forecastSplit,
   normClientName, newCustomerCount, retentionRate, winRate, ringState,
   heroProgress, msLabelPos, niceAxis, pct, plannedWindow, dashCondition, milestoneCelebration, recordMonth, bigChanges,
-  actionItems, dashMissionList, deadlineLabel, dashInsights, paceLevel, nextMilestone, withinDays, overdueZeroRecord, dashHighlights, heroState };`, app);
+  actionItems, dashMissionList, deadlineLabel, dashInsights, paceLevel, nextMilestone, withinDays, overdueZeroRecord, dashHighlights, heroState,
+  RINKO_PHRASES, RINKO_FACES, rinkoForCondition, rinkoForHighlights, rinkoPhrase, rinkoEnabled, rinkoAvatarSrc };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -448,5 +449,79 @@ test('fiscalYears の新規顧客目標数・継続率目標・成約率目標�
   const sheetOld = { getLastRow: () => rows.length, getLastColumn: () => old.length, getRange: () => ({ getValues: () => rows }) };
   assert.strictEqual(gas.readFiscalYears_(sheetOld)[0].newCustomerTarget, '');
 });
+
+console.log('朝日凛子（表情・一言・表示の切り替え）');
+
+test('表情の対応：順調＝ウインク／少し遅れ＝考える／重大（赤）＝画像なし／判定材料不足＝考える', () => {
+  const lv = l => A.dashCondition({ cash: null, outSoon: { total: 0, count: 0, until: '' }, overdue: 0, rate: l[0], elapsed: l[1] }).level;
+  assert.strictEqual(lv([50, 50]), 'good');
+  assert.deepStrictEqual(plain(A.rinkoForCondition('good', true)), { face: 'wink', phrase: 'good' });
+  assert.strictEqual(lv([40, 50]), 'caution');
+  assert.deepStrictEqual(plain(A.rinkoForCondition('caution', true)), { face: 'think', phrase: 'check' });
+  assert.strictEqual(lv([20, 50]), 'warn');
+  assert.strictEqual(A.rinkoForCondition('warn', true), null);
+  assert.deepStrictEqual(plain(A.rinkoForCondition('none', true)), { face: 'think', phrase: 'check' });
+  assert.deepStrictEqual(plain(A.rinkoForCondition('none', false)), { face: 'think', phrase: 'empty' });
+  assert.strictEqual(A.rinkoForCondition('unknown', true), null);
+});
+
+test('悪い知らせ（資金繰り・入金遅延・遅れ）にはウインク・笑顔を使わない（重大は画像も出さない）', () => {
+  const base = { cash: null, outSoon: { total: 0, count: 0, until: '' }, overdue: 0, rate: 50, elapsed: 50 };
+  const cases = [Object.assign({}, base, { cash: 100, outSoon: { total: 500, count: 1, until: '' } }),
+    Object.assign({}, base, { overdue: 2 }), Object.assign({}, base, { rate: 10 })];
+  cases.forEach(x => {
+    const c = A.dashCondition(x);
+    assert.strictEqual(c.level, 'warn');
+    assert.strictEqual(A.rinkoForCondition(c.level, true), null);
+  });
+  ['caution', 'warn', 'none'].forEach(l => [true, false].forEach(d => {
+    const r = A.rinkoForCondition(l, d);
+    assert(!r || (r.face !== 'wink' && r.face !== 'smile'), l);
+  }));
+});
+
+test('ハイライト：1件以上のときだけ笑顔。0件は出さない', () => {
+  assert.deepStrictEqual(plain(A.rinkoForHighlights(2)), { face: 'smile', phrase: 'highlight' });
+  assert.strictEqual(A.rinkoForHighlights(0), null);
+});
+
+test('一言：です・ます、1行40文字以内、決まった数字を含まない。実データを差し込める', () => {
+  Object.keys(A.RINKO_PHRASES).forEach(k => {
+    const t = A.RINKO_PHRASES[k];
+    assert(t.length <= 40, k + ' が40文字を超えています');
+    assert(/(す|しょう|した)。$/.test(t), k + ' がです・ます調で終わっていません');
+    assert(!/[0-9０-９]/.test(t), k + ' に数字が入っています');
+  });
+  assert.strictEqual(A.rinkoPhrase('good'), A.RINKO_PHRASES.good);
+  A.RINKO_PHRASES.test = '{月}も順調です。';
+  assert.strictEqual(A.rinkoPhrase('test', { 月: '11月' }), '11月も順調です。');
+  assert.strictEqual(A.rinkoPhrase('test', {}), '{月}も順調です。');
+  delete A.RINKO_PHRASES.test;
+});
+
+test('表示の切り替え：既定はオン、"0" だけオフ（読めないときもオン）。保存した値を読み直しても同じ', () => {
+  assert.strictEqual(A.rinkoEnabled(null), true);
+  assert.strictEqual(A.rinkoEnabled(undefined), true);
+  assert.strictEqual(A.rinkoEnabled('1'), true);
+  assert.strictEqual(A.rinkoEnabled('0'), false);
+  const store = {}; const ls = { setItem: (k, v) => { store[k] = String(v); }, getItem: k => (k in store ? store[k] : null) };
+  ls.setItem('bizapp_rinko_v1', '0'); assert.strictEqual(A.rinkoEnabled(ls.getItem('bizapp_rinko_v1')), false);
+  ls.setItem('bizapp_rinko_v1', '1'); assert.strictEqual(A.rinkoEnabled(ls.getItem('bizapp_rinko_v1')), true);
+});
+
+test('画像：真剣の表情は使わない。アバターは 112px／224px の WebP があり、それより大きくしない', () => {
+  assert.deepStrictEqual(plain(A.RINKO_FACES).sort(), ['smile', 'think', 'wink']);
+  assert(!/rinko-(serious|shinken)/.test(html), '真剣の表情を参照しています');
+  A.RINKO_FACES.forEach(f => {
+    const a = A.rinkoAvatarSrc(f);
+    [a.src].concat(a.srcset.split(',').map(x => x.trim().split(' ')[0])).forEach(src => {
+      const b = fs.readFileSync(path.join(root, src));
+      assert.strictEqual(b.toString('ascii', 8, 12), 'WEBP', src);
+    });
+    assert(fs.existsSync(path.join(root, 'images/rinko/rinko-' + f + '.webp')));
+  });
+  assert.strictEqual(A.rinkoAvatarSrc('serious').src, 'images/rinko/rinko-think-avatar-112.webp');
+});
+
 
 console.log(`\n${passed}件 成功` + (process.exitCode ? '（失敗あり）' : ''));

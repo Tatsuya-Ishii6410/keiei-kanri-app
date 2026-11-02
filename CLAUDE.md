@@ -920,3 +920,24 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - アニメーションの時間：カウントアップ600ms（DV2_MS.count・読み込みにつき1回）／山の現在地600ms／リング600ms（最初の表示だけ。dv2RingDrawn）／
   マイルストーン到達500ms／KPIのタップ120ms／グラフ切替250ms（6・12か月を押したときだけ。dv2TrendSwitched）／詳細の展開250ms。
   スクロールでは再生しない。動きを減らす設定ではすべて無効（.dash-v2 の中の animation・transition を止める）
+
+## 朝日凛子（新ダッシュボードの案内役）
+- 素材は images/rinko/（別ファイル。HTMLに埋め込まない）。rinko-{wink,smile,think}.webp（全身寄り・透過）と
+  円形アバター rinko-{wink,smile,think}-avatar-112.webp / -224.webp。画面は44pxで表示し、srcset で 1x＝112・2x＝224（拡大はしない）
+  ★「真剣」の表情は使わない・作らない。名札は空白のまま
+- デプロイ（.github/workflows/deploy.yml）は index.html に加えて images/ も _site に入れる
+- 判定は変えない。既存の結果から表情と一言を選ぶだけ（@dash-rules の rinkoForCondition / rinkoForHighlights）
+  | 経営コンディション（dashCondition の level） | 表情 | 一言 |
+  | good（順調です） | ウインク | good |
+  | caution（目標より少し遅れています） | 考える | check |
+  | warn（資金繰りに注意・入金の確認が必要・目標より遅れています）＝重大 | 画像なし | なし（既存の文字だけ） |
+  | none（判定材料が不足）・データあり | 考える | check |
+  | none・データなし（案件も収支も0件）＝空の状態 | 考える | empty |
+  ハイライトは1件以上のときだけ笑顔＋highlight。★ 悪い知らせにウインク・笑顔は使わない
+- 置き場所は最大2つ：①経営コンディションのカード（アイコンの代わりに44pxのアバター。段階のアイコンは右下の小さな印に）／
+  ②今月のハイライト（見出しの下に1行）。③空の状態は①の中に出す（①と同時には出ない）
+- 一言は RINKO_PHRASES（です・ます、1行40文字以内、決まった数字を書かない）。{名前} で実データを差し込める（rinkoPhrase）
+- 設定ページ「🙋 ダッシュボードの案内役」の「凛子を表示する」。localStorage の bizapp_rinko_v1（'0' だけオフ。未設定・読めないときはオン）
+  オフでも経営コンディションの文字はそのまま
+- 画像は alt=""（装飾）。一言は普通の文字。フェードインは表情ごとに最初の1回だけ（rinkoFaded）、動きを減らす設定ではなし
+- 素材の作り方：rembg（u2netp）＋外枠につながる単色の背景の塗りつぶし＋ふちを1px削る＋いちばん大きい連結成分だけ残す（✦の透かしを除く）
