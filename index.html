@@ -565,6 +565,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     ※売上は案件発生ベース。経費・役員報酬・税金・公課はCF管理の実績値。入金待ちはCF管理の入金予定
   </div>
   <div id="d-bank-import" style="font-size:13px;margin:-8px 0 6px"></div>
+  <div id="d-backup-status" style="font-size:13px;margin:0 0 6px"></div>
   <div id="d-inbox-status" style="font-size:13px;margin:0 0 6px"></div>
   <div id="d-invoice-status" style="font-size:13px;margin:0 0 16px"></div>
   <div class="two-col">
@@ -2244,6 +2245,8 @@ const defaultState={
   mail:{lastDebitSync:''},        // デビット通知メールの取込済みの最終日（YYYY-MM-DD）
   bank:{lastCsvImportDate:''},    // 銀行明細CSVを最後に登録した日（YYYY-MM-DD）
   inboxFolders:{receipt:'',invoice:''},   // 受信箱フォルダのID（GASの週次読み取りが読む）
+  // スプレッドシートの週次バックアップの記録（GASの weeklyBackup が settings に書く。アプリからは書き換えない）
+  backup:{lastAt:'',lastFile:'',lastError:'',lastErrorAt:''},
   // 財務情報（融資力診断で使う）
   finance:{loan:0},
   /* 税金・社会保険の計算設定。
@@ -2490,7 +2493,7 @@ function keepLocalWhenMissing(remote){
   ['nextBillingId','nextFiscalYearId','nextFixedCostId','bankBalance'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
-  ['travel','finance','taxSettings','mail','bank','inboxFolders'].forEach(k=>{
+  ['travel','finance','taxSettings','mail','bank','inboxFolders','backup'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
   if(d.travel&&S.travel&&d.travel!==S.travel){
@@ -3043,8 +3046,42 @@ function renderBankImportStatus(){
     +`<span style="font-size:11px;color:var(--text-muted);margin-left:6px">（${days}日前）</span>`;
 }
 
+// ダッシュボードの「💾 最終バックアップ」。10日超＝アンバー／20日超・未実行＝赤。失敗していれば理由を赤で出す
+function renderBackupStatus(){
+  const el=document.getElementById('d-backup-status');
+  if(!el)return;
+  const st=backupStatusOf(S.backup,localToday());
+  const btn=`<button class="btn sm" style="margin-left:8px" id="backup-now-btn" onclick="backupNow()">💾 今すぐバックアップ</button>`;
+  el.innerHTML=`💾 最終バックアップ：<span class="badge ${st.cls}">${escAttr(st.label)}</span>`
+    +(st.days>=0?`<span style="font-size:11px;color:var(--text-muted);margin-left:6px">（${st.days}日前）</span>`:'')
+    +btn
+    +(st.error?`<div style="font-size:12px;color:var(--red-text);margin-top:2px">⚠ バックアップ失敗（${escAttr(st.errorAt)}）：${escAttr(st.error)}</div>`:'');
+}
+
+async function backupNow(){
+  if(!gasEnabled()){alert('GAS_URL が設定されていません');return;}
+  const b=document.getElementById('backup-now-btn');
+  if(b){b.disabled=true;b.textContent='バックアップ中…';}
+  try{
+    const r=await gasCall({action:'backupNow'});
+    if(!r)throw new Error('応答がありません');
+    if(r.ok===false&&!r.at)throw new Error(r.error||'失敗しました');   // 古いデプロイ（action が無い）など
+    S.backup=Object.assign({},S.backup,r.ok
+      ?{lastAt:r.at,lastFile:r.name,lastError:'',lastErrorAt:''}
+      :{lastError:r.error,lastErrorAt:r.at});
+    saveLocal();
+    alert(r.ok?`💾 バックアップしました（${r.name}）`+(r.trashed?`\n古いバックアップ${r.trashed}件をゴミ箱へ移しました`:'')
+      :'バックアップに失敗しました。\n'+r.error);
+  }catch(e){
+    alert('バックアップを実行できませんでした。\n'+e.message+'\n（GASを新しいバージョンでデプロイし直したか確認してください）');
+  }finally{
+    renderBackupStatus();
+  }
+}
+
 function updateDashboard(){
   renderBankImportStatus();
+  renderBackupStatus();
   renderInboxStatus();
   renderInvoiceDocStatus();
   const mi=getMonth();
@@ -10906,6 +10943,28 @@ function matchPlannedOut(ledger,date,amount,days){
     .sort((a,b)=>Math.abs(dayDiff(date,at(a)))-Math.abs(dayDiff(date,at(b))))[0]||null;
 }
 // ===== @import-rules-end
+
+// ===== 運用チェックの判定（バックアップ・入金遅延・月次締め） ===== @ops-rules-begin
+/*    テスト（tests/ops-checks.test.js）が @import-rules と一緒に切り出して Node で読む。
+   ★ DOM や S を直接触らないこと（ledger などは引数で渡す） */
+
+/* 最終バックアップの表示。backup は settings の backup.*（lastAt は 'YYYY-MM-DD HH:mm'）
+   10日超＝アンバー／20日超・未実行＝赤。失敗（lastErrorAt が lastAt より新しい）なら error に理由 */
+function backupStatusOf(backup,todayYmd){
+  const b=backup||{};
+  const last=String(b.lastAt||'');
+  const failed=!!b.lastError&&(!last||String(b.lastErrorAt||'')>=last);
+  const out={cls:'badge-red',label:'未実行',days:-1,error:failed?String(b.lastError):'',errorAt:String(b.lastErrorAt||'')};
+  if(!last)return out;
+  const days=dayDiff(last.slice(0,10),todayYmd);
+  const m=/^\d{4}-(\d{2})-(\d{2})(?:\s+(\d{2}:\d{2}))?/.exec(last);
+  out.label=m?`${+m[1]}月${+m[2]}日`+(m[3]?' '+m[3]:''):last;
+  out.days=isNaN(days)?-1:days;
+  out.cls=days>20?'badge-red':days>10?'badge-amber':'badge-green';
+  return out;
+}
+
+// ===== @ops-rules-end
 
 // 文字コードを判定して読む（UTF-8で読めなければShift-JIS）
 function readCsvFile(file){

@@ -43,6 +43,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - tests/invoice-drafts.test.js：請求書の下書き・訂正のテスト。`node tests/invoice-drafts.test.js` で実行する
 - tests/receipt-import.test.js：領収書の読み取り・誰と／用件・重複判定のテスト（AIの呼び出しはモック）
 - tests/inbox-scan.test.js：受信箱の週次読み取り・取込待ちからの登録・一括登録・重複判定のテスト（AI・Driveはモック）
+- tests/ops-checks.test.js：週次バックアップ・入金遅延・月次締めチェックのテスト（Drive・GASはモック）
 - .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
 - netlify.toml：旧Netlify用の設定（移行後も念のため残している）
 
@@ -638,3 +639,21 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 重複：領収書は receiptDupOf（同額・前後1日。デビット通知・銀行CSVの経費も）。受取請求書は payableDupOf
   （同じ請求元で、同じ請求書番号、または同額・同じ月）。どちらも「重複の可能性」でチェックOFF
 - 受取請求書の出金予定は、銀行明細CSVの出金と突合できる（matchPlannedOut。「銀行明細CSV取込」の節）
+
+## スプレッドシートの週次バックアップ
+- GAS：weeklyBackup()。データのスプレッドシート全体を、マイドライブ直下の「経営管理アプリ_バックアップ」（無ければ作る）に
+  「appデータ_YYYYMMDD_HHmm」でコピーする（makeCopy）
+- 世代管理：直近8件（BACKUP_KEEP）を残し、古いものはゴミ箱へ（setTrashed。完全削除はしない）
+  ★ 対象は「そのフォルダの直下にある、名前が BACKUP_NAME_RE（appデータ_8桁_4桁）に合うスプレッドシート」だけ
+  （backupTrashTargets_）。ほかのファイルには触らない
+- 時間トリガー：毎週日曜 21〜22時。GASエディタで setupBackupTrigger() を1回実行して作る（同じ関数のトリガーがあれば作らない）。
+  止めるときは removeBackupTrigger()。トリガーの作成・削除は ensureWeeklyTrigger_ / removeTriggers_（受信箱の週次読み取りと共通）
+- 本体 runBackup_ は Drive を io で受け取る（テストでモックにするため）
+- 結果は settings シートの backup.lastAt（'YYYY-MM-DD HH:mm'）/ backup.lastFile / backup.lastError / backup.lastErrorAt。
+  失敗（容量不足・権限など）は backupErrorMessage_ で理由にして lastError に入れる（前回の成功の lastAt は残す）
+  書き込みは setSettingValues_（その行だけ書き換え。スクリプトロックを取る）
+  ★ writeAll_ は backup.* をアプリの値ではなくシート側の値のまま書き戻す（アプリの保存で記録が消えない・古い値で上書きしない）
+- アプリ：ダッシュボードの「💾 最終バックアップ：○月○日」（renderBackupStatus / backupStatusOf）。10日超＝アンバー／
+  20日超・未実行＝赤。失敗していれば理由を赤で出す（失敗のあとで成功していれば出さない）
+  「💾 今すぐバックアップ」は action backupNow（中身は weeklyBackup）
+- 判定は keiei-kanri.html の「@ops-rules-begin〜end」に集約（テストが @import-rules と一緒に切り出して Node で読む。DOM・S を触らない）

@@ -123,6 +123,7 @@ function doPost(e) {
     if (action === 'receiptRead') return respond_(receiptRead_(body.image, body.categories), '');
     if (action === 'receiptSave') return respond_(receiptSave_(body), '');
     if (action === 'inboxScan') return respond_(weeklyInboxScan(), '');
+    if (action === 'backupNow') return respond_(weeklyBackup(), '');
     if (action === 'inboxList') return respond_({ ok: true, items: inboxOpenItems_() }, '');
     if (action === 'inboxRetry') return respond_(inboxRetry_(body.fileId), '');
     if (action === 'inboxDone') return respond_(inboxDone_(body), '');
@@ -189,6 +190,7 @@ function readAll_() {
     travel: settings.travel,
     mail: settings.mail,
     bank: settings.bank,
+    backup: settings.backup,
     taxSettings: settings.taxSettings,
     bankBalance: settings.bankBalance,
     currentFiscalYearId: settings.currentFiscalYearId,
@@ -375,6 +377,7 @@ function readSettings_(sh) {
   var mail = { lastDebitSync: '' };
   var bank = { lastCsvImportDate: '' };
   var inboxFolders = { receipt: '', invoice: '' };
+  var backup = { lastAt: '', lastFile: '', lastError: '', lastErrorAt: '' };
   var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15,
     calendarId: DEFAULT_CALENDAR_ID, fareCache: {} };
   // 税金設定は、シートに無い項目はキーごと返さない（アプリ側の初期値を潰さないため）
@@ -417,6 +420,8 @@ function readSettings_(sh) {
       bank.lastCsvImportDate = ymd_(value);
     } else if (key === 'inboxFolders.receipt' || key === 'inboxFolders.invoice') {
       inboxFolders[key.substring(13)] = str_(value);
+    } else if (key.indexOf('backup.') === 0 && BACKUP_SETTING_FIELDS.indexOf(key.substring(7)) >= 0) {
+      backup[key.substring(7)] = str_(value);
     } else if (key === 'travel.googleMapsApiKey') {
       travel.googleMapsApiKey = str_(value);
     } else if (key === 'travel.gasolinePrice') {
@@ -475,6 +480,7 @@ function readSettings_(sh) {
     mail: mail,
     bank: bank,
     inboxFolders: inboxFolders,
+    backup: backup,
     taxSettings: taxSettings,
     bankBalance: bankBalance,
     currentFiscalYearId: currentFiscalYearId,
@@ -540,6 +546,9 @@ function writeAll_(data) {
   var ibf = data.inboxFolders || {};
   settings.push(['inboxFolders.receipt', str_(ibf.receipt)]);
   settings.push(['inboxFolders.invoice', str_(ibf.invoice)]);
+  // バックアップの記録は weeklyBackup がシートに直接書く。アプリの値ではなくシート側の値を残す
+  var sheetBackup = readSettings_(ss.getSheetByName('settings')).backup;
+  BACKUP_SETTING_FIELDS.forEach(function (k) { settings.push(['backup.' + k, str_(sheetBackup[k])]); });
   var tv = data.travel || {};
   settings.push(['travel.googleMapsApiKey', str_(tv.googleMapsApiKey)]);
   settings.push(['travel.gasolinePrice', num_(tv.gasolinePrice) || 175]);
@@ -1295,19 +1304,147 @@ function inboxDone_(body) {
 /** 毎週月曜の朝（7〜8時）に weeklyInboxScan を動かすトリガーを作る。GASエディタで1回だけ手動実行する。
     すでにあれば作らない（重複させない） */
 function setupWeeklyTrigger() {
-  var exists = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'weeklyInboxScan'; });
-  if (exists) { Logger.log('weeklyInboxScan のトリガーはすでにあります（重複して作りません）'); return; }
-  ScriptApp.newTrigger('weeklyInboxScan').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(7).create();
-  Logger.log('毎週月曜 7〜8時に weeklyInboxScan を実行するトリガーを作りました');
+  return ensureWeeklyTrigger_('weeklyInboxScan', ScriptApp.WeekDay.MONDAY, 7, '毎週月曜 7〜8時');
 }
 
 /** weeklyInboxScan のトリガーを削除する（自動読み取りを止めたいとき） */
 function deleteWeeklyTrigger() {
+  return removeTriggers_('weeklyInboxScan');
+}
+
+/** handler の時間トリガー（毎週 weekDay の hour 時台）を作る。同じ関数のトリガーがあれば作らない。
+    作ったら true。ほかの関数のトリガーには触らない */
+function ensureWeeklyTrigger_(handler, weekDay, hour, label) {
+  var exists = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === handler; });
+  if (exists) { Logger.log(handler + ' のトリガーはすでにあります（重複して作りません）'); return false; }
+  ScriptApp.newTrigger(handler).timeBased().onWeekDay(weekDay).atHour(hour).create();
+  Logger.log(label + 'に ' + handler + ' を実行するトリガーを作りました');
+  return true;
+}
+
+/** handler のトリガーだけを削除する。削除した件数を返す */
+function removeTriggers_(handler) {
   var n = 0;
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'weeklyInboxScan') { ScriptApp.deleteTrigger(t); n++; }
+    if (t.getHandlerFunction() === handler) { ScriptApp.deleteTrigger(t); n++; }
   });
-  Logger.log('weeklyInboxScan のトリガーを ' + n + '件 削除しました');
+  Logger.log(handler + ' のトリガーを ' + n + '件 削除しました');
+  return n;
+}
+
+
+// ===== スプレッドシートの週次バックアップ ==========================
+/* weeklyBackup()：データのスプレッドシート全体を、マイドライブの「経営管理アプリ_バックアップ」に
+   「appデータ_YYYYMMDD_HHmm」としてコピーする。直近 BACKUP_KEEP 件を残し、古いものはゴミ箱へ。
+   ★ ゴミ箱へ移すのは「このフォルダの直下にある、この名前の形式のスプレッドシート」だけ。ほかのファイルには触らない
+   結果（最終バックアップ日時・失敗理由）は settings シートの backup.* に書く（バックアップ対象のシートとは別の行）。
+   writeAll_ はこの行をシート側の値のまま残す */
+var BACKUP_FOLDER_NAME = '経営管理アプリ_バックアップ';
+var BACKUP_KEEP = 8;
+var BACKUP_NAME_RE = /^appデータ_\d{8}_\d{4}$/;
+var BACKUP_SETTING_FIELDS = ['lastAt', 'lastFile', 'lastError', 'lastErrorAt'];
+
+/** バックアップのファイル名（appデータ_YYYYMMDD_HHmm） */
+function backupFileName_(date, tz) {
+  return 'appデータ_' + Utilities.formatDate(date, tz, 'yyyyMMdd_HHmm');
+}
+
+/** ゴミ箱へ移すファイルのID。files は [{id, name, mimeType}]。
+    名前の形式が合うスプレッドシートだけを新しい順（名前＝日時）に並べ、keep 件より古いものを返す */
+function backupTrashTargets_(files, keep) {
+  var mine = (files || []).filter(function (f) {
+    return BACKUP_NAME_RE.test(String(f.name || '')) && (!f.mimeType || f.mimeType === 'application/vnd.google-apps.spreadsheet');
+  });
+  mine.sort(function (a, b) { return a.name < b.name ? 1 : a.name > b.name ? -1 : 0; });
+  return mine.slice(keep).map(function (f) { return f.id; });
+}
+
+/** バックアップの本体。Drive は io で受け取る（テストでモックにするため）
+    io: { copy(name) → {id, name}, listFiles() → [{id,name,mimeType}], trash(id), now() → Date, tz }
+    返り値 { ok, fileId, name, trashed } */
+function runBackup_(io) {
+  var name = backupFileName_(io.now(), io.tz);
+  var copied = io.copy(name);
+  var targets = backupTrashTargets_(io.listFiles(), BACKUP_KEEP);
+  targets.forEach(function (id) { if (id !== copied.id) io.trash(id); });
+  return { ok: true, fileId: copied.id, name: copied.name || name, trashed: targets.length };
+}
+
+/** 失敗の理由を、画面に出せる日本語にする（容量不足・権限など） */
+function backupErrorMessage_(err) {
+  var m = String(err && err.message || err || '');
+  if (/storage|quota|容量|space/i.test(m)) return 'Googleドライブの容量が不足しています（' + m + '）';
+  if (/permission|権限|authoriz|access denied|許可/i.test(m)) return '権限がありません。GASエディタで weeklyBackup を一度実行して承認してください（' + m + '）';
+  if (/limit|上限|too many/i.test(m)) return 'Googleの利用上限に達しました。時間をおいて再実行してください（' + m + '）';
+  return m || '不明なエラー';
+}
+
+/** マイドライブ直下の「経営管理アプリ_バックアップ」フォルダ（無ければ作る） */
+function backupFolder_() {
+  var it = DriveApp.getRootFolder().getFoldersByName(BACKUP_FOLDER_NAME);
+  return it.hasNext() ? it.next() : DriveApp.getRootFolder().createFolder(BACKUP_FOLDER_NAME);
+}
+
+/** settings シートの key 行を書き換える（無ければ足す）。ほかの行には触らない */
+function setSettingValues_(ss, values) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = ss.getSheetByName('settings');
+    var last = sh.getLastRow();
+    var keys = last > 1 ? sh.getRange(2, 1, last - 1, 1).getValues().map(function (r) { return str_(r[0]); }) : [];
+    Object.keys(values).forEach(function (k) {
+      var i = keys.indexOf(k);
+      var row = i >= 0 ? i + 2 : sh.getLastRow() + 1;
+      if (i < 0) keys.push(k);
+      sh.getRange(row, 1, 1, 2).setNumberFormat('@').setValues([[k, str_(values[k])]]);
+    });
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** 時間トリガー（毎週日曜の夜）とアプリの「💾 今すぐバックアップ」（action backupNow）から呼ぶ */
+function weeklyBackup() {
+  var ss = openSpreadsheet_();
+  var tz = timezone_(ss);
+  var stamp = function () { return Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm'); };
+  var result;
+  try {
+    var folder = backupFolder_();
+    result = runBackup_({
+      now: function () { return new Date(); },
+      tz: tz,
+      copy: function (name) {
+        var f = DriveApp.getFileById(SPREADSHEET_ID).makeCopy(name, folder);
+        return { id: f.getId(), name: f.getName() };
+      },
+      listFiles: function () {
+        var out = [], it = folder.getFiles();     // フォルダ直下だけ
+        while (it.hasNext()) { var f = it.next(); out.push({ id: f.getId(), name: f.getName(), mimeType: f.getMimeType() }); }
+        return out;
+      },
+      trash: function (id) { DriveApp.getFileById(id).setTrashed(true); }
+    });
+    result.at = stamp();
+    setSettingValues_(ss, { 'backup.lastAt': result.at, 'backup.lastFile': result.name, 'backup.lastError': '', 'backup.lastErrorAt': '' });
+  } catch (err) {
+    result = { ok: false, error: backupErrorMessage_(err), at: stamp() };
+    try { setSettingValues_(ss, { 'backup.lastError': result.error, 'backup.lastErrorAt': result.at }); } catch (e2) { }
+  }
+  Logger.log(JSON.stringify(result));
+  return result;
+}
+
+/** 毎週日曜の夜（21〜22時）に weeklyBackup を動かすトリガーを作る。GASエディタで1回だけ手動実行する（重複して作らない） */
+function setupBackupTrigger() {
+  return ensureWeeklyTrigger_('weeklyBackup', ScriptApp.WeekDay.SUNDAY, 21, '毎週日曜 21〜22時');
+}
+
+/** weeklyBackup のトリガーを削除する（自動バックアップを止めたいとき） */
+function removeBackupTrigger() {
+  return removeTriggers_('weeklyBackup');
 }
 
 /** 登録済みファイルに「処理済み_」を付けてリネームする。 */
