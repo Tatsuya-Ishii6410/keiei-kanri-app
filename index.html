@@ -75,6 +75,17 @@ tbody tr[style*="font-weight:bold"] td,td[style*="font-weight:bold"],td[style*="
 .page{display:none}
 .page.active{display:block}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+/* 一覧の上の操作エリア（.list-toolbar）。PC・タブレットは従来の横並び（中の枠は display:contents で並びを変えない）。
+   スマホ（480px以下）はフィルター2列＋［主ボタン］［一括操作 ▾］の2列。ほかの一覧にも同じ形を当てられるようにしてある */
+.list-toolbar .lt-filters,.list-toolbar .lt-actions,.list-toolbar .lt-select{display:contents}
+.list-toolbar .lt-chev,.list-toolbar .lt-menu-wrap{display:none}
+.lt-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:60;min-width:100%;padding:6px;background:#fff;border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 8px 24px rgba(23,35,61,.14);display:flex;flex-direction:column;gap:2px}
+.lt-menu[hidden]{display:none}
+.lt-menu [role=menuitem]{min-height:44px;padding:0 12px;border:0;border-radius:8px;background:none;text-align:left;font:inherit;font-size:14px;color:var(--text-primary);cursor:pointer;white-space:nowrap}
+.lt-menu [role=menuitem]:hover,.lt-menu [role=menuitem]:focus{background:var(--bg-secondary)}
+.lt-menu [role=menuitem]:focus-visible,.list-toolbar .lt-menu-btn:focus-visible,.list-toolbar select:focus-visible,.list-toolbar .lt-primary:focus-visible{outline:2px solid #3976F6;outline-offset:2px}
+@media(max-width:768px){.section-title.title-dup{display:none}}
 .section-title{font-size:17px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px}
 .card{background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;padding:22px 24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(16,24,40,0.05)}
 .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
@@ -833,6 +844,18 @@ body.dv2-on .tb-menu{display:none!important}
   .section-header>div{flex-direction:column;align-items:stretch!important;width:100%}
   .section-header>div>*{width:100%}
   .section-header select,.section-header .btn{width:100%}
+  /* 一覧の上の操作エリア：フィルター2列、［主ボタン］［一括操作 ▾］2列（高さ44px・間隔8px） */
+  .section-header>.list-toolbar{display:flex;flex-direction:column;gap:8px}
+  .list-toolbar .lt-filters,.list-toolbar .lt-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
+  .list-toolbar .lt-select{display:block;position:relative;min-width:0}
+  .list-toolbar .lt-select select{width:100%!important;height:44px;min-height:44px;border-radius:12px;padding:0 34px 0 12px;font-size:16px!important;
+    border:1px solid var(--border);background:#fff;-webkit-appearance:none;appearance:none;text-overflow:ellipsis}
+  .list-toolbar .lt-chev{display:block;position:absolute;right:12px;top:50%;margin-top:-8px;color:#64748B;pointer-events:none}
+  .list-toolbar .lt-wide{display:none}
+  .list-toolbar .lt-actions>*{width:auto;min-width:0}
+  .list-toolbar .lt-primary,.list-toolbar .lt-menu-btn{width:100%;height:44px;min-height:44px;justify-content:center;border-radius:12px}
+  .list-toolbar .lt-menu-wrap{display:block;position:relative}
+  .list-toolbar .lt-menu-btn{background:#fff;border:1px solid var(--border);color:var(--text-primary)}
   .actions-row{flex-direction:column-reverse;align-items:stretch}
   .actions-row .btn{width:100%;justify-content:center}
 
@@ -1057,21 +1080,32 @@ body.dv2-on .tb-menu{display:none!important}
 <!-- PROJECTS -->
 <div id="page-projects" class="page">
   <div class="section-header">
-    <h1 class="section-title">案件管理</h1>
-    <div style="display:flex;gap:8px;align-items:center">
-      <select id="project-invoice-filter" onchange="renderProjects()" style="width:auto;font-size:13px">
+    <h1 class="section-title title-dup">案件管理</h1>
+    <div class="list-toolbar" style="display:flex;gap:8px;align-items:center">
+      <div class="lt-filters">
+      <span class="lt-select"><select id="project-invoice-filter" onchange="renderProjects()" style="width:auto;font-size:13px" aria-label="入金ステータスで絞り込む">
         <option value="">入金: 全て</option>
         <option value="uninvoiced">未請求</option>
         <option value="invoiced">請求済</option>
         <option value="paid">入金済</option>
         <option value="paid_manual">入金済（手動）</option>
-      </select>
-      <select id="project-month" onchange="renderProjects()" style="width:auto;font-size:13px">
+      </select><svg class="lt-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+      <span class="lt-select"><select id="project-month" onchange="renderProjects()" style="width:auto;font-size:13px" aria-label="月で絞り込む">
         <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
-      </select>
-      <button class="btn" onclick="openBulkInvoiceModal()">📄 一括請求書作成</button>
-      <button class="btn" onclick="openBulkStatusModal()">📋 一括ステータス変更</button>
-      <button class="btn primary" onclick="openProjectModal()">+ 案件追加</button>
+      </select><svg class="lt-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+      </div>
+      <div class="lt-actions">
+        <button class="btn lt-wide" onclick="openBulkInvoiceModal()">📄 一括請求書作成</button>
+        <button class="btn lt-wide" onclick="openBulkStatusModal()">📋 一括ステータス変更</button>
+        <button class="btn primary lt-primary" onclick="openProjectModal()">+ 案件追加</button>
+        <div class="lt-menu-wrap">
+          <button class="btn lt-menu-btn" id="proj-bulk-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="proj-bulk-menu" onclick="ltMenu(this)">一括操作 ▾</button>
+          <div class="lt-menu" id="proj-bulk-menu" role="menu" aria-labelledby="proj-bulk-btn" hidden>
+            <button role="menuitem" tabindex="-1" onclick="ltMenu(null);openBulkInvoiceModal()">一括請求書作成</button>
+            <button role="menuitem" tabindex="-1" onclick="ltMenu(null);openBulkStatusModal()">一括ステータス変更</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="metric-grid" style="grid-template-columns:minmax(200px,300px)">
@@ -3209,6 +3243,30 @@ function refreshAll(){
 }
 
 // ページ名（トップバーに表示する）
+/* 一覧の上の「一括操作 ▾」メニュー（.list-toolbar）。btn＝開くボタン（null で閉じる） */
+let ltMenuBtn=null;
+function ltMenu(btn){
+  const open=btn&&btn!==ltMenuBtn;
+  if(ltMenuBtn){const m=document.getElementById(ltMenuBtn.getAttribute('aria-controls'));if(m)m.hidden=true;ltMenuBtn.setAttribute('aria-expanded','false');}
+  const prev=ltMenuBtn;ltMenuBtn=null;
+  if(!open){if(prev&&btn===prev)prev.focus();return;}
+  const m=document.getElementById(btn.getAttribute('aria-controls'));if(!m)return;
+  m.hidden=false;btn.setAttribute('aria-expanded','true');ltMenuBtn=btn;
+  const first=m.querySelector('[role=menuitem]');if(first)first.focus();
+}
+document.addEventListener('click',e=>{if(ltMenuBtn&&!e.target.closest('.lt-menu-wrap'))ltMenu(null);});
+document.addEventListener('keydown',e=>{
+  if(!ltMenuBtn)return;
+  const btn=ltMenuBtn,m=document.getElementById(btn.getAttribute('aria-controls'));
+  if(e.key==='Escape'){ltMenu(null);btn.focus();return;}
+  if(e.key==='Tab'){ltMenu(null);return;}
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    const items=[...m.querySelectorAll('[role=menuitem]')],i=items.indexOf(document.activeElement);
+    const n=e.key==='ArrowDown'?(i+1)%items.length:(i-1+items.length)%items.length;
+    items[n].focus();e.preventDefault();
+  }
+});
+
 const PAGE_TITLES={dashboard:'ダッシュボード',projects:'案件管理',quotes:'見積・請求',
   ledger:'キャッシュフロー管理',csv:'CSV取込',report:'月次レポート',settings:'設定',close:'月次締め'};
 

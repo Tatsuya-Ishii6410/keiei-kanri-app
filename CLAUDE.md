@@ -951,3 +951,16 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   manifest は持っていない（作っていない）。ホーム画面の名前は <title> と apple-mobile-web-app-title の「経営管理アプリ」
 - ヘッダーのアバター（#dv2-avatar）は avatar-112/224 の画像（40px）。画像が読めないときは従来の頭文字（#dv2-avatar-t）に戻る。メニューの動作は同じ
 - ★ GitHub Pages は deploy.yml が _site に入れたものだけを公開する。images/ を入れる変更（cp -r images _site/images）が必要
+
+## 一覧の上の操作エリア（.list-toolbar。いまは案件管理だけ）
+- 構造：.section-header > h1.section-title.title-dup ＋ .list-toolbar > .lt-filters（.lt-select＝select＋シェブロン）＋ .lt-actions
+  （.lt-wide＝PCだけのボタン／.lt-primary＝主ボタン／.lt-menu-wrap＝「一括操作 ▾」とメニュー .lt-menu）
+- PC・タブレット（481px以上）は従来の横並びのまま（中の枠は display:contents。メニューは出さない）
+- スマホ（480px以下）：フィルター2列・［＋案件追加］［一括操作 ▾］2列（高さ44px・角丸12px・間隔8px。select は自作のシェブロン）
+  メニューの中身は「一括請求書作成」「一括ステータス変更」で、PCのボタンと同じ関数を呼ぶ。外側のタップ・Esc で閉じる、↑↓で移動、Tab で閉じる（ltMenu）
+- .title-dup：上のバーのタイトルと同じ文字の見出しにだけ付ける。768px以下で隠す（案件管理だけ。ほかの見出しは触らない）
+- 実測（375px）：操作エリア 272px → 96px。PC（1440px）は変化なし
+- 同じ形（全幅で縦に積まれる）の画面。まだ直していない：
+  CF管理（月セレクト＋ボタン8つ＋「前月の請求済み案件を入金予定にする」。見出し「キャッシュフロー管理」も上のバーと同じ）／
+  交通費台帳（月セレクト＋ボタン6つ）／見積・請求（月セレクトが全幅。見出しは「見積・請求管理」で上のバーの「見積・請求」とは違う）／
+  月次締め（月セレクト＋「← ダッシュボード」）
