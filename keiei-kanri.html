@@ -1879,9 +1879,32 @@ function docStatusOf(q){return q&&INVOICE_DOC_STATES[q.status]?q.status:'issued'
 function liveInvoice(q){return isInvoiceDoc(q)&&docStatusOf(q)!=='cancelled'}
 function invRevision(q){return Math.max(1,parseInt(q&&q.revision)||1)}
 // 表示用の番号。訂正したら枝番を付ける（INV-202611-003-2）。id 自体は変えない
+// 下書きは番号を持たない（空文字）。番号は「発行」で初めて振る
 function invoiceDisplayNo(q){
+  if(isInvoiceDoc(q)&&docStatusOf(q)==='draft')return'';
   const r=invRevision(q);
   return String((q&&q.id)||'')+(isInvoiceDoc(q)&&r>1?'-'+r:'');
+}
+
+// 下書きの仮ID（番号ではない。シートの id 列と画面の操作のキーにだけ使う）
+const DRAFT_ID_PREFIX='DRAFT-';
+function isDraftId(id){return String(id||'').indexOf(DRAFT_ID_PREFIX)===0}
+
+/* 下書きを発行する。このとき初めて請求書番号を振る（newNo）ので、下書きを削除しても欠番は出ない。
+   仮IDを参照していた請求レコードの invoiceId も新しい番号に付け替える。
+   以前の版で番号付きのまま作られた下書きは、その番号をそのまま使う（すでに振った番号を捨てない）
+   戻り値 {ok, error, oldId, id} */
+function issueInvoiceDoc(q,newNo,billings,at){
+  if(!isInvoiceDoc(q)||docStatusOf(q)!=='draft')return{ok:false,error:'下書きの請求書だけ発行できます'};
+  const oldId=q.id;
+  if(isDraftId(oldId)){
+    if(!newNo)return{ok:false,error:'請求書番号がありません'};
+    q.id=newNo;
+    (billings||[]).forEach(b=>{if(b.invoiceId===oldId)b.invoiceId=newNo;});
+  }
+  q.status='issued';
+  q.issuedAt=at||'';
+  return{ok:true,oldId,id:q.id};
 }
 
 // 読み込んだ書類をそろえる（GASからは history が JSON 文字列で来ることもある）
@@ -1980,7 +2003,7 @@ function invoiceDocAmount(q){
 }
 
 /* 未作成の請求対象から下書き（status='draft'）を作る。D.quotes に追加し、作ったものを返す
-   opts: {newId:()=>番号, itemName:(p,ym)=>品名, note}
+   opts: {newId:()=>仮ID（DRAFT-…。番号は発行時に振る）, itemName:(p,ym)=>品名, note}
    2回呼んでも、1回目の下書きがあるので同じ案件・同じ月はもう作らない */
 function createDraftInvoices(D,ym,opts){
   opts=opts||{};
@@ -3554,11 +3577,13 @@ function saveInvoiceEdit(){
 // 下書きを発行済みにする。紐づく請求レコードを請求済にし、入金予定を作る（一括請求書と同じ）
 function issueDraftInvoice(id){
   const q=S.quotes.find(x=>x.id===id);if(!q||docStatusOf(q)!=='draft')return;
-  if(!confirm(`${q.id}（${q.client||''}・${fmt(q.amount)}）を発行済みにします。\n発行後の変更は「訂正」として履歴に残ります。よろしいですか？`))return;
-  q.status='issued';
-  q.issuedAt=nowStamp();
+  if(!confirm(`下書き（${q.client||''}・${fmt(q.amount)}）を発行します。\nこの時点で請求書番号を振ります。発行後の変更は「訂正」として履歴に残ります。よろしいですか？`))return;
+  // 仮IDで紐づいているレコードを、番号を付け替える前に拾っておく
+  const links=linkedBillingsOf(q);
+  const r=issueInvoiceDoc(q,isDraftId(q.id)?makeDocNumber('請求書'):'',billingList(),nowStamp());
+  if(!r.ok){alert(r.error);return;}
   let planned=0;
-  linkedBillingsOf(q).forEach(b=>{
+  links.forEach(b=>{
     const p=S.projects.find(x=>x.id===b.projectId);
     if(p&&invoiceStatusOf(p)==='uninvoiced')p.invoiceStatus='invoiced';
     b.invoiceId=q.id;
@@ -3567,7 +3592,7 @@ function issueDraftInvoice(id){
     if(b.invoiceStatus==='invoiced'&&addPlannedInForBilling(b))planned++;
   });
   saveState();renderQuotes();refreshAll();
-  if(planned)alert(`発行しました（${planned}件をCF管理の入金予定として登録しました）`);
+  alert(`発行しました（請求書番号 ${q.id}）`+(planned?`\n${planned}件をCF管理の入金予定として登録しました`:''));
   currentQuoteData=q;showPreviewModal();
 }
 
@@ -3633,6 +3658,11 @@ function openInvoiceHistory(id){
 
 /* ---- 月末の下書き自動作成（アプリを開いたとき） ---- */
 
+let draftSeq=0;
+function newDraftId(){
+  return DRAFT_ID_PREFIX+Date.now().toString(36)+'-'+(draftSeq++).toString(36)+Math.floor(Math.random()*1296).toString(36);
+}
+
 function invoiceItemName(p,ym){return `${p.name}（${invYmJp(ym)}分）`}
 
 function checkInvoiceDraftsOnOpen(){
@@ -3662,7 +3692,7 @@ function createInvoiceDraftsNow(){
   const ym=pendingDraftYm;
   if(!ym)return;
   const made=createDraftInvoices(S,ym,{
-    newId:()=>makeDocNumber('請求書'),
+    newId:newDraftId,
     itemName:invoiceItemName,
     note:S.company.note||''
   });

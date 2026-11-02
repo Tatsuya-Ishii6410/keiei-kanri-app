@@ -24,7 +24,7 @@ vm.createContext(app);
 vm.runInContext(html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + `
 globalThis.exported = { docStatusOf, invoiceDisplayNo, normalizeQuoteDoc, invoiceDetectYm,
   missingInvoiceTargets, createDraftInvoices, applyInvoiceEdit, cancelInvoiceDoc, canDeleteQuote,
-  invoiceFileName, invoiceMonthOf, invoiceKey };`, app);
+  invoiceFileName, invoiceMonthOf, invoiceKey, issueInvoiceDoc, isDraftId };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -60,9 +60,17 @@ function fixture() {
     quotes: []
   };
 }
+// 下書きの仮ID（アプリの newDraftId の代わり）
 function idMaker() {
   let n = 1;
-  return () => 'INV-202611-' + String(n++).padStart(3, '0');
+  return () => 'DRAFT-test-' + (n++);
+}
+// 請求書番号の採番（アプリの makeDocNumber の代わり）。呼ばれた回数だけ番号が進む
+function numberer() {
+  let n = 1;
+  const f = () => 'INV-202611-' + String(n++).padStart(3, '0');
+  f.used = () => n - 1;
+  return f;
 }
 
 console.log('検出する月（アプリを開いた日）');
@@ -176,7 +184,7 @@ test('下書きは自由に書き換えられ、履歴も枝番も付かない',
   assert.strictEqual(q.items[0].total, 120000);
   assert.strictEqual(q.client, '株式会社アルファ 経理部 御中');
   assert.strictEqual(q.history.length, 0);
-  assert.strictEqual(A.invoiceDisplayNo(q), q.id);
+  assert.strictEqual(A.invoiceDisplayNo(q), '');     // 下書きは番号を出さない
   assert.strictEqual(q.status, 'draft');
 });
 
@@ -186,6 +194,74 @@ test('下書きは削除できる／発行済み・取消済みは削除でき�
   assert.strictEqual(A.canDeleteQuote({ type: '請求書' }), false);              // 既存データ
   assert.strictEqual(A.canDeleteQuote({ type: '請求書', status: 'cancelled' }), false);
   assert.strictEqual(A.canDeleteQuote({ type: '見積書' }), true);
+});
+
+console.log('請求書番号は発行時に採番');
+
+test('下書きは仮ID（DRAFT-）で、表示する番号は空。作成しただけでは番号を消費しない', () => {
+  const D = fixture();
+  const next = numberer();
+  const made = A.createDraftInvoices(D, '2026-10', { newId: idMaker() });
+  assert.strictEqual(made.length, 3);
+  made.forEach(q => {
+    assert.ok(A.isDraftId(q.id), q.id);
+    assert.strictEqual(A.invoiceDisplayNo(q), '');
+  });
+  assert.strictEqual(next.used(), 0);
+});
+
+test('発行で番号が付き、請求レコードの invoiceId も付け替わる', () => {
+  const D = fixture();
+  const next = numberer();
+  const [q] = A.createDraftInvoices(D, '2026-10', { newId: idMaker() });
+  const draftId = q.id;
+  const r = A.issueInvoiceDoc(q, next(), D.monthlyBillings, '2026-11-02 12:00');
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.oldId, draftId);
+  assert.strictEqual(q.id, 'INV-202611-001');
+  assert.strictEqual(q.status, 'issued');
+  assert.strictEqual(q.issuedAt, '2026-11-02 12:00');
+  assert.strictEqual(A.invoiceDisplayNo(q), 'INV-202611-001');
+  assert.strictEqual(D.monthlyBillings[0].invoiceId, 'INV-202611-001');
+  assert.ok(!D.monthlyBillings.some(b => b.invoiceId === draftId));
+  // 発行済みをもう一度発行はできない
+  assert.strictEqual(A.issueInvoiceDoc(q, next(), D.monthlyBillings, 'x').ok, false);
+  // 番号を付け替えても、同じ月・同じ案件の下書きは作り直さない
+  assert.strictEqual(A.createDraftInvoices(D, '2026-10', { newId: idMaker() }).length, 0);
+});
+
+test('下書きを削除しても欠番が出ない（発行した順に連番）', () => {
+  const D = fixture();
+  const next = numberer();
+  const made = A.createDraftInvoices(D, '2026-10', { newId: idMaker() });
+  // 2通目の下書きを削除（アプリの deleteQuote と同じく、レコードの invoiceId も外す）
+  const del = made[1];
+  D.quotes = D.quotes.filter(q => q.id !== del.id);
+  D.monthlyBillings.forEach(b => { if (b.invoiceId === del.id) b.invoiceId = null; });
+  const nos = D.quotes.map(q => { A.issueInvoiceDoc(q, next(), D.monthlyBillings, 't'); return q.id; });
+  assert.deepStrictEqual(plain(nos), ['INV-202611-001', 'INV-202611-002']);
+  // 削除した案件は未作成に戻り、次に作る下書きも番号なし
+  const again = A.createDraftInvoices(D, '2026-10', { newId: idMaker() });
+  assert.strictEqual(again.length, 1);
+  assert.strictEqual(A.invoiceDisplayNo(again[0]), '');
+  A.issueInvoiceDoc(again[0], next(), D.monthlyBillings, 't');
+  assert.strictEqual(again[0].id, 'INV-202611-003');
+});
+
+test('番号付きで作られていた古い下書きは、発行してもその番号のまま（新しい番号を消費しない）', () => {
+  const next = numberer();
+  const q = A.normalizeQuoteDoc({ id: 'INV-202611-007', type: '請求書', status: 'draft', items: [] });
+  assert.strictEqual(A.invoiceDisplayNo(q), '');
+  const r = A.issueInvoiceDoc(q, '', [], 't');
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(q.id, 'INV-202611-007');
+  assert.strictEqual(next.used(), 0);
+});
+
+test('仮IDの下書きに番号が渡されなければ発行しない', () => {
+  const q = { id: 'DRAFT-x', type: '請求書', status: 'draft', items: [] };
+  assert.strictEqual(A.issueInvoiceDoc(q, '', [], 't').ok, false);
+  assert.strictEqual(q.status, 'draft');
 });
 
 console.log('発行済みの訂正・取消');

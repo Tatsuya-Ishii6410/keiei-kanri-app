@@ -541,7 +541,11 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 確認ダイアログ［作成する］［今は作成しない（今日は再表示しない）］。後者は localStorage の
   bizapp_invoice_prompt_v1 に今日の日付を入れる（このブラウザだけ）
 - 作成は createDraftInvoices：案件ごとに1通、請求日＝請求月の末日、支払期限＝レコードの入金予定日か翌月末。
-  請求レコードの invoiceId に番号を入れるが、ステータスは未請求のまま。番号は作成時に makeDocNumber で振る
+  請求レコードの invoiceId に仮IDを入れるが、ステータスは未請求のまま
+- ★ 請求書番号は「発行」で初めて振る（issueInvoiceDoc に makeDocNumber の番号を渡す）。
+  下書きの id は仮ID「DRAFT-…」（newDraftId）で、画面・帳票の番号は空（invoiceDisplayNo が ''）、「下書き」とだけ出す。
+  下書きを削除しても番号を消費していないので欠番は出ない。発行時に請求レコードの invoiceId も新番号へ付け替える
+  （以前の版で番号付きのまま作られた下書きは、その番号のまま発行する）
 - ダッシュボードの「🧾 請求書（○月分）：未作成○件／下書き○件」（renderInvoiceDocStatus）。
   検出期間外は当月を数える。押すと goToInvoices で請求書タブへ（下書きがあれば下書きで絞り込む）
 
