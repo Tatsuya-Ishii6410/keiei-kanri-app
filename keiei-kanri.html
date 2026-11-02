@@ -313,7 +313,7 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .dv2-ms-check{fill:none;stroke:#fff;stroke-width:1.8}
 .dash-v2 .dv2-ms-t{font-size:10px;font-weight:700;fill:var(--ui-text);font-family:'Inter',sans-serif;paint-order:stroke;stroke:#fff;stroke-width:3px}
 .dash-v2 .dv2-flag{fill:var(--ui-warn);stroke:var(--ui-text);stroke-width:1}
-.dash-v2 .dv2-me{transition:transform 400ms ease}
+.dash-v2 .dv2-me{transition:transform 600ms ease}
 .dash-v2 .dv2-me circle:nth-child(2){fill:#fff;stroke:var(--ui-accent);stroke-width:4}
 .dash-v2 .dv2-landing-mark{fill:none;stroke:var(--ui-plan);stroke-width:2;stroke-dasharray:3 2}
 .dash-v2 .dv2-ms-cel{animation:dv2-cel 500ms ease-out 1}
@@ -321,7 +321,7 @@ body.dv2-on .tb-menu{display:none!important}
 /* KPI（スマホ2列・PC4列。淡い色は青と紫を交互） */
 .dash-v2 .dv2-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 @media (min-width:1024px){.dash-v2 .dv2-kpis{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}}
-.dash-v2 .dv2-kpi{position:relative;padding:12px;cursor:pointer;transition:transform 200ms ease}
+.dash-v2 .dv2-kpi{position:relative;padding:12px;cursor:pointer;transition:transform 120ms ease}
 .dash-v2 .dv2-kpi:active{transform:scale(.98)}
 .dash-v2 .dv2-kpi:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
 .dash-v2 .dv2-kpi.tint-blue{background:var(--ui-tint-blue)}.dash-v2 .dv2-kpi.tint-purple{background:var(--ui-tint-purple)}
@@ -339,7 +339,12 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .dv2-ring-wrap{position:relative;width:84px;height:84px;margin:4px auto 0}
 .dash-v2 .dv2-ring{width:84px;height:84px}
 .dash-v2 .dv2-ring .bg{fill:none;stroke:var(--ui-bg);stroke-width:7}
-.dash-v2 .dv2-ring .fg{fill:none;stroke-width:7;stroke-linecap:round;transition:stroke-dasharray 400ms ease}
+.dash-v2 .dv2-ring .fg{fill:none;stroke-width:7;stroke-linecap:round}
+.dash-v2 .dv2-ring.is-anim .fg{animation:dv2-ring 600ms ease-out 1}
+@keyframes dv2-ring{from{stroke-dasharray:0 200}}
+.dash-v2 .dv2-chart.is-switch svg{animation:dv2-fade 250ms ease-out 1}
+@keyframes dv2-fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.dash-v2 .dv2-basis,.dash-v2 #dv2-actions-more:not([hidden]){animation:dv2-fade 250ms ease-out 1}
 .dash-v2 .dv2-ring.lv-good .fg{stroke:var(--ui-good)}.dash-v2 .dv2-ring.lv-caution .fg{stroke:var(--ui-caution)}
 .dash-v2 .dv2-ring.lv-warn .fg{stroke:var(--ui-warn)}.dash-v2 .dv2-ring.lv-none .fg{stroke:var(--ui-accent)}
 .dash-v2 .dv2-ring .land{fill:none;stroke:var(--ui-plan);stroke-width:2;stroke-dasharray:1.5 3;stroke-linecap:round}
@@ -13439,7 +13444,10 @@ function dv2Delta(d,label,quiet){
 
 
 
-// 数値のカウントアップ（400ms・読み込みにつき1回。動きを減らす設定のときはしない）
+/* アニメーションの時間（v2.0）：カウントアップ600ms／山の現在地600ms／リング600ms／マイルストーン到達500ms／タップ120ms／グラフ切替250ms／詳細の展開250ms
+   初回表示・データ変更・明示的な操作のときだけ。スクロールでは再生しない。動きを減らす設定ではすべて無効（CSS と dv2ReducedMotion） */
+const DV2_MS={count:600};
+// 数値のカウントアップ（600ms・読み込みにつき1回。動きを減らす設定のときはしない）
 function dv2CountUp(root){
   if(dv2ReducedMotion())return;
   root.querySelectorAll('[data-count]').forEach(el=>{
@@ -13449,7 +13457,7 @@ function dv2CountUp(root){
     const to=parseFloat(el.dataset.count),f=el.dataset.fmt;
     if(isNaN(to))return;
     const t0=performance.now(),out=v=>f==='pct'?v.toFixed(1)+'%':dv2Yen(v);
-    const step=t=>{const k=Math.min(1,(t-t0)/400);el.textContent=out(k<1?to*(1-Math.pow(1-k,3)):to);if(k<1)requestAnimationFrame(step);};
+    const step=t=>{const k=Math.min(1,(t-t0)/DV2_MS.count);el.textContent=out(k<1?to*(1-Math.pow(1-k,3)):to);if(k<1)requestAnimationFrame(step);};
     requestAnimationFrame(step);
   });
 }
@@ -13468,7 +13476,8 @@ function dv2ActionRow(a,compact,top){
 }
 
 // 売上・利益の推移（SVG）
-function setDv2Trend(n){dv2TrendMonths=n;renderDashV2();}
+let dv2TrendSwitched=false;
+function setDv2Trend(n){dv2TrendMonths=n;dv2TrendSwitched=true;renderDashV2();dv2TrendSwitched=false;}
 function renderDv2Trend(D){
   const el=document.getElementById('dv2-trend');
   const len=dv2TrendMonths||(window.innerWidth<600?6:12);
@@ -13503,7 +13512,7 @@ function renderDv2Trend(D){
       <div class="dv2-seg" role="group" aria-label="期間">${[12,6].map(k=>`<button class="${len===k?'on':''}" aria-pressed="${len===k}" onclick="setDv2Trend(${k})">${k}か月</button>`).join('')}</div></div>
     <div class="dv2-legend"><span><i class="lg-bar"></i>売上（実績）</span><span><i class="lg-plan"></i>売上（予測・*）</span><span><i class="lg-line"></i>営業利益（実績・○は月途中）</span>
       ${hasPrev?'<span><i class="lg-prev"></i>前年同月</span>':'<span>前年同月：データ不足</span>'}<span>★過去最高／▲▼前月比±30%以上</span></div>
-    <div class="dv2-chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="月別の売上と営業利益">
+    <div class="dv2-chart${dv2TrendSwitched?' is-switch':''}"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="月別の売上と営業利益">
       <defs><linearGradient id="dv2bar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3976F6"/><stop offset="1" stop-color="#7D6CF6"/></linearGradient></defs>
       ${ticks}${cols}
       ${pts.length>1?`<polyline points="${pts.map(p=>p[0]+','+p[1]).join(' ')}" class="dv2-line"/>`:''}
@@ -13619,11 +13628,13 @@ function dv2Arc(r,pctv){
   const p=Math.max(0,Math.min(99.99,pctv)),a=p/100*2*Math.PI,x=38+r*Math.sin(a),y=38-r*Math.cos(a);
   return`M38 ${38-r} A${r} ${r} 0 ${p>50?1:0} 1 ${x.toFixed(2)} ${y.toFixed(2)}`;
 }
+let dv2RingDrawn=false;
 function dv2Ring(rate,landing,level){
   const C1=2*Math.PI*26,r=Math.max(0,Math.min(100,rate||0));
   const land=landing===null||landing===undefined?'':landing>=100
     ?'<circle cx="38" cy="38" r="33" class="land"/>':`<path d="${dv2Arc(33,landing)}" class="land"/>`;
-  return`<svg class="dv2-ring lv-${level}" viewBox="0 0 76 76" aria-hidden="true">
+  const anim=!dv2RingDrawn&&!dv2ReducedMotion();dv2RingDrawn=true;
+  return`<svg class="dv2-ring lv-${level}${anim?' is-anim':''}" viewBox="0 0 76 76" aria-hidden="true">
     <circle cx="38" cy="38" r="26" class="bg"/>
     <circle cx="38" cy="38" r="26" class="fg" stroke-dasharray="${(C1*r/100).toFixed(1)} ${C1.toFixed(1)}" transform="rotate(-90 38 38)"/>${land}</svg>`;
 }
