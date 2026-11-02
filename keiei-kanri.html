@@ -168,6 +168,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   --ui-caution:#F59E0B;--ui-caution-soft:rgba(245,158,11,.14);--ui-caution-text:#B45309;
   --ui-warn:#F43F5E;--ui-warn-soft:rgba(244,63,94,.12);--ui-warn-text:#BE123C;
   --ui-plan:#8758F5;--ui-plan-soft:rgba(135,88,245,.12);--ui-border-strong:rgba(23,35,61,.18);
+  --ui-border-solid:#E3E7EF;--ui-line:#EEF1F6;   /* 不透明の枠・区切り線（半透明の重なりで線が濃く見えないように） */
   --ui-radius-card:18px;--ui-shadow-card:0 1px 2px rgba(23,35,61,.04),0 4px 14px rgba(23,35,61,.05);
 }
 .sc-wrap{position:relative}
@@ -226,6 +227,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .dash-v2 .dv2-unit{color:var(--ui-muted);font-weight:700}
 .dash-v2 .dv2-hero-row{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;color:var(--ui-muted)}
 .dash-v2 .dv2-hero-row b{color:var(--ui-text);font-size:16px}
+.dash-v2 .dv2-nw{white-space:nowrap}
 .dash-v2 .dv2-split{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .dash-v2 .dv2-ms-list{display:flex;gap:10px;list-style:none;padding:0;margin:10px 0 0;font-size:12px;color:var(--ui-muted);flex-wrap:wrap}
 .dash-v2 .dv2-ms-list li.done{color:var(--ui-good);font-weight:700}
@@ -239,15 +241,24 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .dash-v2 .dv2-flag{fill:var(--ui-warn);stroke:var(--ui-text);stroke-width:1}
 .dash-v2 .dv2-snow{fill:#fff;opacity:.9}
 .dash-v2 .dv2-me circle{fill:var(--ui-accent);stroke:#fff;stroke-width:3}
-.dash-v2 .dv2-me text{font-size:7px;fill:#fff}
+.dash-v2 .dv2-landing-mark{fill:none;stroke:var(--ui-plan);stroke-width:2;stroke-dasharray:3 2}
+.dash-v2 .dv2-landing{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.dash-v2 .dv2-mid{margin-top:2px}
 .dash-v2 .dv2-spark text{fill:var(--ui-caution);font-size:12px;animation:dv2-twinkle 1.2s ease-out 1 both}
 @keyframes dv2-twinkle{0%{opacity:0;transform:translateY(4px)}40%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}
 /* 要対応の帯（旧の状態の行・メトリクス7枚をそのまま入れる） */
-.dash-v2 .dv2-band{background:var(--ui-bg);border:1px solid var(--ui-border);border-left:4px solid var(--ui-caution);border-radius:var(--ui-radius-card);
-  box-shadow:var(--ui-shadow-card);padding:14px 18px;margin-bottom:16px}
+.dash-v2 .dv2-band{background:var(--ui-bg);border:1px solid var(--ui-border-solid);border-radius:var(--ui-radius-card);
+  box-shadow:inset 4px 0 0 var(--ui-caution);padding:14px 18px 14px 22px;margin-bottom:16px}
 .dash-v2 .dv2-band-title{font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px}
 .dash-v2 #dv-status{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:6px 18px}
-.dash-v2 #dv-status>div{margin:0!important;padding:6px 0;border-bottom:1px dashed var(--ui-border)}
+.dash-v2 #dv-status>div{margin:0!important;padding:6px 0;border-bottom:1px solid var(--ui-line)}
+/* 「→ 一覧へ」などの矢印リンクとバッジは、途中で折り返さず1つのかたまりで次の行へ */
+.dash-v2 #dv-status span[style*="margin-left:6px"],.dash-v2 #dv-status .badge{display:inline-block;white-space:nowrap}
+/* iOS Safari の既定のボタンの見た目（影・グラデーション）を出さない */
+.dash-v2 button,.dash-v2 select{-webkit-appearance:none;appearance:none}
+.dash-v2 select{background-image:linear-gradient(45deg,transparent 50%,var(--ui-muted) 50%),linear-gradient(135deg,var(--ui-muted) 50%,transparent 50%);
+  background-position:calc(100% - 14px) 52%,calc(100% - 9px) 52%;background-size:5px 5px;background-repeat:no-repeat;padding-right:24px!important}
+.dash-v2 #dv-status .btn{box-shadow:none}
 .dash-v2 #dv-status>div:empty{display:none}
 .dash-v2 .dv2-band details summary,.dash-v2 .dv2-more summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--ui-accent);padding:8px 0}
 .dash-v2 #dv-metrics .metric-grid{margin-bottom:8px}
@@ -285,6 +296,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .dash-v2 .dv2-chart{position:relative}
 .dash-v2 .dv2-chart svg{width:100%;height:auto;display:block}
 .dash-v2 .dv2-grid{stroke:var(--ui-border);stroke-width:1}
+.dash-v2 .dv2-grid0{stroke:var(--ui-muted);stroke-width:1}
 .dash-v2 .dv2-axis{font-size:11px;fill:var(--ui-muted);font-family:'Inter','Noto Sans JP',sans-serif}
 .dash-v2 .dv2-bar{fill:var(--ui-accent)}
 .dash-v2 .dv2-bar-plan{fill:var(--ui-plan-soft);stroke:var(--ui-plan);stroke-width:1;stroke-dasharray:3 2}
@@ -756,9 +768,9 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     </header>
     <section class="dv2-card dv2-hero" id="dv2-hero"><div class="dv2-skel"></div></section>
     <section class="dv2-band" id="dv2-band" aria-label="要対応">
-      <div class="dv2-band-title">⚠ 要対応・状況（旧ダッシュボードの状態の行）</div>
+      <div class="dv2-band-title">⚠ 要対応・状況</div>
       <div id="dv2-slot-status"></div>
-      <details id="dv2-metrics-box"><summary>詳細指標（旧ダッシュボードのメトリクス7項目）</summary><div id="dv2-slot-metrics"></div></details>
+      <details id="dv2-metrics-box"><summary>詳細指標</summary><div id="dv2-slot-metrics"></div></details>
     </section>
     <section class="dv2-kpis" id="dv2-kpis"><div class="dv2-skel"></div><div class="dv2-skel"></div><div class="dv2-skel"></div><div class="dv2-skel"></div></section>
     <div class="dv2-main">
@@ -769,7 +781,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     </div>
     <section class="dv2-card dv2-advice" id="dv2-advice"></section>
     <details class="dv2-more" id="dv2-more" ontoggle="if(this.open)drawMonthlyChart()">
-      <summary>旧ダッシュボードの詳細（期間サマリー・計画差異・月次推移・進行中の案件・更新アラート）</summary>
+      <summary>詳細データ（期間サマリー・計画差異・月次推移・進行中の案件・更新アラート）</summary>
       <div id="dv2-slot-summary"></div><div id="dv2-slot-rest"></div>
     </details>
   </div>
@@ -12633,18 +12645,62 @@ function routePoint(points,frac){
   return points[0].slice();
 }
 
-/* 期の売上を「確定」と「予定」に分ける（着地予測）。
-   absMonths は期の絶対月、currentAbs は今月。前月までが確定、当月以降が予定（契約ベース）。
+/* 期の売上を「確定」と「予測」に分ける。
+   absMonths は期の絶対月、currentAbs は今月。当月までが確定（＝売上・利益の推移の「実績」と同じ）、翌月以降が予測（契約ベース）。
    salesOf(abs) は projectSalesAtAbsTotal（期間サマリー・案件予実と同じ）。合計は fiscalTotals(fy).sales と一致する */
 function forecastSplit(absMonths,currentAbs,salesOf){
   const out={confirmed:0,planned:0,total:0,confirmedMonths:[],plannedMonths:[]};
   (absMonths||[]).forEach(a=>{
     const v=salesOf(a)||0;
-    if(a<currentAbs){out.confirmed+=v;out.confirmedMonths.push(a);}
+    if(a<=currentAbs){out.confirmed+=v;out.confirmedMonths.push(a);}
     else{out.planned+=v;out.plannedMonths.push(a);}
     out.total+=v;
   });
   return out;
+}
+
+/* 山頂の進捗。★ 達成率・現在地・マイルストーン・ミッションは確定（実績）だけで出す。
+   予測込み（確定＋予測＝期間サマリーの値）は「着地見込み」として別に出す。pctFn は既存の pct（小数1桁）
+   返り値 {rate, landing, milestones, reached}（目標が無ければ rate・landing は null） */
+function heroProgress(split,target,pctFn){
+  const rate=target>0?pctFn(split.confirmed,target):null;
+  const landing=target>0?pctFn(split.total,target):null;
+  return{rate,landing,milestones:dashMilestones(rate),reached:rate!==null&&rate>=100};
+}
+
+/* マイルストーンの文字の置き場所：右（既定）。山頂（100%）・マーカーと重なるときは左、左も重なるなら上
+   pt=[x,y]、markers=[[x,y],...]（現在地・着地見込み）。返り値 {x,y,anchor} */
+function msLabelPos(pt,markers,p){
+  const hit=(lx,ly,anchor)=>(markers||[]).some(m=>{
+    const x0=anchor==='end'?lx-26:anchor==='middle'?lx-13:lx,x1=x0+26;
+    return m[0]+10>x0&&m[0]-10<x1&&Math.abs(m[1]-ly)<13;
+  });
+  const right={x:pt[0]+11,y:pt[1]+4,anchor:'start'};
+  const left={x:pt[0]-11,y:pt[1]+4,anchor:'end'};
+  const above={x:pt[0],y:pt[1]-12,anchor:'middle'};
+  if(p!==100&&!hit(right.x,right.y,right.anchor))return right;
+  if(!hit(left.x,left.y,left.anchor))return left;
+  return above;
+}
+
+/* グラフの縦軸：0を含む、区切りのよい目盛り（1・2・2.5・5×10^n）。返り値 {min,max,step,ticks}
+   count を省くと、4〜6区切りのうち、いちばん無駄の少ない（幅の狭い）ものを選ぶ */
+function niceAxis(lo,hi,count){
+  if(!count){
+    let best=null;
+    [4,5,6].forEach(c=>{const a=niceAxis(lo,hi,c);if(!best||a.max-a.min<best.max-best.min)best=a;});
+    return best;
+  }
+  lo=Math.min(0,lo||0);hi=Math.max(0,hi||0);
+  if(hi===lo)hi=lo+1;
+  const raw=(hi-lo)/(count||4);
+  const mag=Math.pow(10,Math.floor(Math.log10(raw)));
+  const n=raw/mag;
+  const step=(n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*mag;
+  const min=Math.floor(lo/step)*step,max=Math.ceil(hi/step)*step;
+  const ticks=[];
+  for(let v=min;v<=max+step/2;v+=step)ticks.push(Math.round(v*1000)/1000);
+  return{min,max,step,ticks};
 }
 
 // 取引先名をそろえる（比べるときだけ）：全角半角・空白、前後の「株式会社」「(株)」「㈱」を除く
@@ -12813,6 +12869,12 @@ function dv2SetPeriod(){
 function dv2Yen(n){return(n<0?'−':'')+'¥'+Math.abs(Math.round(n||0)).toLocaleString('ja-JP')}
 function dv2YmLabel(abs){return`${Math.floor(abs/12)}年${abs%12+1}月`}
 function dv2Short(abs){return`${abs%12+1}月`}
+// 縦軸の目盛りの文字（1万円以上の刻みは「万」、それ未満は円）
+function dv2AxisLabel(v,step){
+  if(v===0)return'0';
+  if(step>=10000){const m=v/10000;return(m<0?'−':'')+Math.abs(m).toLocaleString('ja-JP',{maximumFractionDigits:1})+'万';}
+  return(v<0?'−':'')+Math.abs(v).toLocaleString('ja-JP');
+}
 function dv2Man(n){const v=Math.round((n||0)/10000);return(v<0?'−':'')+Math.abs(v).toLocaleString('ja-JP')+'万'}
 
 /* その絶対月の数字（旧ダッシュボードのメトリクスと同じ関数）
@@ -12857,10 +12919,12 @@ function dashV2Data(){
   const now=new Date();
   const curAbs=now.getFullYear()*12+now.getMonth();
   const month=dashMonthNumbers(abs),prev=dashMonthNumbers(abs-1);
-  const fiscal=fy?fiscalTotals(fy):null;                       // 期間サマリーと同じ
+  const fiscal=fy?fiscalTotals(fy):null;                       // 期間サマリーと同じ（確定＋予測）
   const target=fy?(parseInt(fy.salesTarget)||0):0;
-  const rate=fy&&target>0?pct(fiscal.sales,target):null;        // 期間サマリーと同じ達成率
   const split=fy?forecastSplit(fiscalAbsMonths(fy),curAbs,projectSalesAtAbsTotal):null;
+  // ★ 達成率は確定（実績）だけ。予測込み（期間サマリーの達成率と同じ）は着地見込み
+  const hero=split?heroProgress(split,target,pct):{rate:null,landing:null,milestones:dashMilestones(null),reached:false};
+  const rate=hero.rate;
   const aw=awaitingPayment();
   const od=overdueNow();
   const invYm=invoiceDetectYm(localToday())||localToday().slice(0,7);
@@ -12869,11 +12933,12 @@ function dashV2Data(){
   const closeYm=prevYm(localToday());
   const closeOpen=closeChecksFor(closeYm).filter(x=>x.status==='ng').length;
   const months=fy?fiscalAbsMonths(fy):[];
-  const elapsed=months.filter(a=>a<curAbs).length;
-  return{mi,fy,yr,abs,curAbs,month,prev,fiscal,target,rate,split,aw,od,invYm,missing,drafts,closeYm,closeOpen,
+  const elapsed=months.filter(a=>a<=curAbs).length;
+  return{mi,fy,yr,abs,curAbs,month,prev,fiscal,target,rate,hero,split,aw,od,invYm,missing,drafts,closeYm,closeOpen,
     elapsedRate:months.length?Math.round(elapsed/months.length*1000)/10:null,
-    paceRate:split&&target>0?pct(split.confirmed,target):null,
-    cash:bankBalance()};
+    paceRate:rate,
+    // 残高は数値で保存しているので、未設定と0円を区別できない（0は「未設定（または0円）」）
+    cash:bankBalance()||null};
 }
 
 /* ---- 描画 ---- */
@@ -12883,7 +12948,7 @@ function renderDashV2(){
   if(!root)return;
   dv2SyncSelects();
   const D=dashV2Data();
-  const missions=dashMissions({target:D.target,sales:D.fiscal?D.fiscal.sales:0,rate:D.rate,
+  const missions=dashMissions({target:D.target,sales:D.split?D.split.confirmed:0,rate:D.rate,
     overdue:D.od.length,overdueTotal:D.od.reduce((a,x)=>a+x.amount,0),missingInvoices:D.missing,draftInvoices:D.drafts,
     inbox:Array.isArray(inboxItems)?inboxItems.length:null,closeOpen:D.closeOpen,closeYmLabel:invYmJp(D.closeYm)+'分'});
   const open=missions.filter(m=>m.key!=='target'&&!m.done).length;
@@ -12923,50 +12988,55 @@ function renderDv2Hero(D){
       <button class="dv2-btn primary" onclick="dv2GoFiscal()">期の設定で目標を入れる</button></div>`;
     return;
   }
-  const rate=D.rate;
-  const ms=dashMilestones(rate);
+  const H=D.hero,rate=H.rate,landing=H.landing,sp=D.split;
   const pos=routePoint(DV2_ROUTE,rate===null?0:Math.min(100,rate)/100);
-  const msMarks=ms.map(m=>{
-    const [x,y]=routePoint(DV2_ROUTE,m.p/100);
-    return`<g><circle cx="${x}" cy="${y}" r="7" class="${m.done?'dv2-ms-done':'dv2-ms'}"/>`
-      +(m.done?`<path d="M${x-3} ${y} l2 2.5 l4 -4.5" class="dv2-ms-check"/>`:'')
-      +`<text x="${x+10}" y="${y+4}" class="dv2-ms-t">${m.p}%</text></g>`;
+  const lpos=landing!==null&&landing!==rate?routePoint(DV2_ROUTE,Math.min(100,landing)/100):null;
+  const markers=[rate!==null?pos:null,lpos].filter(Boolean);
+  const msMarks=H.milestones.map(m=>{
+    const pt=routePoint(DV2_ROUTE,m.p/100);
+    const lb=msLabelPos(pt,markers,m.p);
+    return`<g><circle cx="${pt[0]}" cy="${pt[1]}" r="7" class="${m.done?'dv2-ms-done':'dv2-ms'}"/>`
+      +(m.done?`<path d="M${pt[0]-3} ${pt[1]} l2 2.5 l4 -4.5" class="dv2-ms-check"/>`:'')
+      +`<text x="${lb.x}" y="${lb.y}" text-anchor="${lb.anchor}" class="dv2-ms-t">${m.p}%</text></g>`;
   }).join('');
-  const sp=D.split;
-  const celebrate=rate!==null&&rate>=100&&dv2ShouldCelebrate(fy);
+  const celebrate=H.reached&&dv2ShouldCelebrate(fy);
   el.innerHTML=`
     <div class="dv2-hero-text">
       <div class="dv2-kicker">${escAttr(fy.name)}の売上目標（山頂）</div>
       ${D.target>0?`
-        <div class="dv2-hero-rate"><span class="dv2-num dv2-big" data-count="${rate}" data-fmt="pct" data-key="hero-rate">${rate.toFixed(1)}%</span><span class="dv2-unit">達成</span></div>
-        <div class="dv2-hero-row"><span>累計</span><b class="dv2-num">${dv2Yen(D.fiscal.sales)}</b><span class="dv2-sep">／</span><span>目標</span><b class="dv2-num">${dv2Yen(D.target)}</b></div>
-        <div class="dv2-split" aria-label="確定と予定の内訳">
+        <div class="dv2-hero-rate"><span class="dv2-num dv2-big" data-count="${rate}" data-fmt="pct" data-key="hero-rate">${rate.toFixed(1)}%</span><span class="dv2-unit">達成（確定）</span></div>
+        <div class="dv2-hero-row"><span class="dv2-nw">確定の累計 <b class="dv2-num">${dv2Yen(sp.confirmed)}</b></span><span class="dv2-sep">／</span><span class="dv2-nw">目標 <b class="dv2-num">${dv2Yen(D.target)}</b></span></div>
+        <div class="dv2-landing"><span class="dv2-chip dv2-plan">着地見込み ${landing.toFixed(1)}%</span>
+          <span class="dv2-note">確定＋予測 ${dv2Yen(sp.total)}</span></div>
+        <div class="dv2-split" aria-label="確定と予測の内訳">
           <span class="dv2-chip dv2-actual">確定 ${dv2Yen(sp.confirmed)}</span>
-          <span class="dv2-chip dv2-plan">予定（予測） ${dv2Yen(sp.planned)}</span>
+          <span class="dv2-chip dv2-plan">予測 ${dv2Yen(sp.planned)}</span>
         </div>
-        <ul class="dv2-ms-list">${ms.map(m=>`<li class="${m.done?'done':''}">${m.done?'✓':'○'} ${m.p}%</li>`).join('')}</ul>`
+        <ul class="dv2-ms-list" aria-label="マイルストーン（確定）">${H.milestones.map(m=>`<li class="${m.done?'done':''}">${m.done?'✓':'○'} ${m.p}%</li>`).join('')}</ul>`
       :`<div class="dv2-h2">売上目標が未設定です</div>
-        <div class="dv2-muted">期の売上累計（期間サマリーと同じ）：<b class="dv2-num">${dv2Yen(D.fiscal.sales)}</b></div>
+        <div class="dv2-muted">確定の累計：<b class="dv2-num">${dv2Yen(sp.confirmed)}</b>（確定＋予測 ${dv2Yen(sp.total)}）</div>
         <button class="dv2-btn primary" onclick="dv2GoFiscal()">期の設定で目標を入れる</button>`}
       <button class="dv2-link" onclick="dv2Toggle('hero')" aria-expanded="${!!dv2Open.hero}">集計期間と売上の定義 ${dv2Open.hero?'▲':'▼'}</button>
       ${dv2Open.hero?`<div class="dv2-basis">
         <div>集計期間：${escAttr(fiscalLabel(fy))}（${escAttr(fy.name)}）</div>
-        <div>売上の定義：ダッシュボード・期間サマリーと同じ案件ベース（発生ベース）。請求レコードがあればその金額、無ければ案件の月額（fiscalTotals）</div>
-        <div>★ 期間サマリーの値は期の全月の合計で、翌月以降は契約にもとづく予定額を含みます。内訳：確定（前月まで ${sp.confirmedMonths.length}か月）／予定（当月から期末 ${sp.plannedMonths.length}か月）</div>
-        <div>達成率＝累計 ÷ 期の売上目標（小数1桁。期間サマリーと同じ）</div>
+        <div>売上の定義：ダッシュボード・期間サマリーと同じ案件ベース（発生ベース）。請求レコードがあればその金額、無ければ案件の月額</div>
+        <div>達成率・現在地・マイルストーン＝確定の累計 ÷ 期の売上目標（小数1桁）。確定は期首から当月まで（${sp.confirmedMonths.length}か月。売上・利益の推移の「実績」と同じ）</div>
+        <div>着地見込み＝（確定＋予測）÷ 目標。予測は翌月から期末（${sp.plannedMonths.length}か月）の契約にもとづく予定額。期間サマリーの達成率と同じ値です</div>
       </div>`:''}
     </div>
-    <svg class="dv2-mtn${celebrate?' dv2-celebrate':''}" viewBox="0 0 260 190" role="img" aria-label="売上目標の山。現在地は達成率 ${rate===null?'未設定':rate.toFixed(1)+'%'}">
+    <svg class="dv2-mtn${celebrate?' dv2-celebrate':''}" viewBox="0 0 260 190" role="img" aria-label="売上目標の山。現在地は確定の達成率 ${rate===null?'未設定':rate.toFixed(1)+'%'}${landing!==null?`、着地見込み ${landing.toFixed(1)}%`:''}">
       <defs><linearGradient id="dv2g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--ui-accent)"/><stop offset="1" stop-color="var(--ui-purple)"/></linearGradient></defs>
       <path d="M0 185 L48 128 L78 150 L128 92 L150 112 L170 96 L170 185 Z" class="dv2-mtn-back"/>
       <path d="M8 185 L230 20 L260 70 L260 185 Z" fill="url(#dv2g)" opacity=".22"/>
       <path d="M212 34 L230 20 L246 44 L236 40 L228 48 L220 40 Z" class="dv2-snow"/>
       <polyline points="${DV2_ROUTE.map(p=>p.join(',')).join(' ')}" class="dv2-route"/>
       ${msMarks}
-      <path d="M230 28 L230 6 L246 12 L230 18" class="dv2-flag"/>
-      ${rate!==null?`<g class="dv2-me"><circle cx="${pos[0]}" cy="${pos[1]}" r="9"/><text x="${pos[0]}" y="${pos[1]+4}" text-anchor="middle">●</text></g>`:''}
+      <path d="M230 26 L230 6 L246 12 L230 18" class="dv2-flag"/>
+      ${lpos?`<circle cx="${lpos[0]}" cy="${lpos[1]}" r="8" class="dv2-landing-mark"><title>着地見込み ${landing.toFixed(1)}%</title></circle>`:''}
+      ${rate!==null?`<g class="dv2-me"><circle cx="${pos[0]}" cy="${pos[1]}" r="9"><title>現在地（確定）${rate.toFixed(1)}%</title></circle></g>`:''}
       ${celebrate?'<g class="dv2-spark"><text x="214" y="20">✦</text><text x="246" y="34">✧</text><text x="222" y="44">✦</text></g>':''}
     </svg>`;
+  dv2CountUp(el);
 }
 function dv2ShouldCelebrate(fy){
   if(dv2ReducedMotion())return false;
@@ -12997,6 +13067,17 @@ function dv2Spark(values,cls){
   return`<svg class="dv2-sparkline ${cls||''}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}"/></svg>`;
 }
 
+// 月途中の前月比：色を付けず、矢印も控えめ（赤の強調を出さない）
+function dv2DeltaQuiet(d,label){
+  if(d===null||d===undefined)return`<span class="dv2-delta none">${label}：比較できません</span>`;
+  return`<span class="dv2-delta none">${label} ${d>0?'+':''}${d.toFixed(1)}%（参考）</span>`;
+}
+// 残高を入れる場所（CF管理の口座残高）
+function dv2GoCash(){
+  showPage('ledger',document.querySelectorAll('.nav-btn')[3]);
+  setTimeout(()=>{const el=document.getElementById('cf-balance');if(el){el.scrollIntoView({block:'center'});el.focus();}},50);
+}
+
 // 前月比などの表示（色＋矢印＋文字）
 function dv2Delta(d,label){
   if(d===null||d===undefined)return`<span class="dv2-delta none">${label}：比較できません</span>`;
@@ -13012,27 +13093,34 @@ function renderDv2Kpis(D){
   const ym=dv2YmLabel(D.abs);
   const mom=monthOverMonth(D.month.sales,D.prev.sales);
   const pmom=D.prev.profit!==0?Math.round((D.month.profit-D.prev.profit)/Math.abs(D.prev.profit)*1000)/10:null;
+  // 対象月が当月なら、経費は入力済みの分だけ（月途中）。営業利益の前月比は色と矢印を控えめにする
+  const midMonth=D.abs===D.curAbs;
+  const midNote=midMonth?'<div class="dv2-note dv2-mid">月途中（経費は入力済みの分のみ）</div>':'';
   const cards=[
     {key:'sales',label:'月間売上',value:D.month.sales,fmt:'yen',
       sub:dv2Delta(mom,'前月比'),status:mom===null?['none','－','比較なし']:mom>0?['good','▲','前月より増加']:mom===0?['none','●','横ばい']:['warn','▼','前月より減少'],
       spark:dv2Spark(nums.map(n=>n.sales),'blue'),go:"showPage('projects',document.querySelectorAll('.nav-btn')[1])",
-      basis:`${ym}の売上（案件ベース・発生ベース）。旧ダッシュボードの「売上」と同じ（salesAtMonth）。前月比は${dv2YmLabel(D.abs-1)}と比較。推移は直近6か月`},
+      basis:`${ym}の売上（案件ベース・発生ベース）。詳細指標の「売上」と同じ（salesAtMonth）。前月比は${dv2YmLabel(D.abs-1)}と比較。推移は直近6か月`},
     {key:'profit',label:'営業利益',value:D.month.profit,fmt:'yen',
-      sub:dv2Delta(pmom,'前月比'),status:D.month.profit>=0?['good','●','黒字']:['warn','▼','赤字'],
+      sub:(midMonth?dv2DeltaQuiet(pmom,'前月比'):dv2Delta(pmom,'前月比'))+midNote,
+      status:midMonth?['none','●','月途中']:D.month.profit>=0?['good','●','黒字']:['warn','▼','赤字'],
       spark:dv2Spark(nums.map(n=>n.profit),'green'),go:"showPage('ledger',document.querySelectorAll('.nav-btn')[3])",
-      basis:`${ym}の営業利益＝売上 −（経費合計＋役員報酬＋税金・公課）。経費などはCF管理の実績。旧ダッシュボードの「営業利益」と同じ（operatingProfit）`},
-    {key:'rate',label:'売上目標達成率',value:D.rate,fmt:'pct',
-      sub:D.target>0?`<span class="dv2-delta none">目標 ${dv2Yen(D.target)}</span>`:'<span class="dv2-delta none">目標未設定</span>',
+      basis:`${ym}の営業利益＝売上 −（経費合計＋役員報酬＋税金・公課）。経費などはCF管理の実績。詳細指標の「営業利益」と同じ（operatingProfit）`},
+    {key:'rate',label:'売上目標達成率（確定）',value:D.rate,fmt:'pct',
+      sub:D.target>0?`<span class="dv2-delta none">目標 ${dv2Yen(D.target)}</span><div class="dv2-note">着地見込み ${D.hero.landing.toFixed(1)}%（予測込み）</div>`:'<span class="dv2-delta none">目標未設定</span>',
       status:D.rate===null?['none','－','未設定']:D.rate>=100?['good','✓','達成']:D.rate>=70?['caution','!','あと少し']:['warn','!','要注意'],
       spark:'',go:'dv2GoForecast()',
-      basis:D.fy?`${escAttr(D.fy.name)}（${escAttr(fiscalLabel(D.fy))}）の売上累計 ÷ 売上目標。期間サマリーと同じ値（期の全月。翌月以降は契約の予定額を含む）`:'期が未登録'},
-    {key:'cash',label:'現預金残高',value:D.cash,fmt:'yen',
-      sub:'<span class="dv2-delta none">前月比：推移データなし</span>',status:['none','●','現在の値'],
-      spark:'',go:"showPage('ledger',document.querySelectorAll('.nav-btn')[3])",
-      basis:'CF管理の口座残高（設定の財務情報と共通の1つの値）。履歴を持たないため、推移と前月比は出しません'}
+      basis:D.fy?`${escAttr(D.fy.name)}（${escAttr(fiscalLabel(D.fy))}）の確定の累計（期首〜当月）÷ 売上目標。着地見込みは確定＋予測（翌月〜期末の契約の予定額）÷ 目標で、期間サマリーの達成率と同じ`:'期が未登録'},
+    {key:'cash',label:'現預金残高',value:D.cash,fmt:'yen',nullText:'未設定（または0円）',
+      sub:D.cash===null
+        ?'<button class="dv2-link" onclick="event.stopPropagation();dv2GoCash()">残高を入れる ›</button>'
+        :'<span class="dv2-delta none">前月比：推移データなし</span>',
+      status:D.cash===null?['none','－','未設定']:['none','●','現在の値'],
+      spark:'',go:'dv2GoCash()',
+      basis:'CF管理の口座残高（設定の財務情報と共通の1つの値）。履歴を持たないため、推移と前月比は出しません。数値で保存しているため、未設定と0円は区別できません'}
   ];
   el.innerHTML=cards.map(c=>{
-    const valTxt=c.value===null?'未設定':c.fmt==='pct'?c.value.toFixed(1)+'%':dv2Yen(c.value);
+    const valTxt=c.value===null?(c.nullText||'未設定'):c.fmt==='pct'?c.value.toFixed(1)+'%':dv2Yen(c.value);
     return`<article class="dv2-card dv2-kpi" role="button" tabindex="0" onclick="${c.go}" onkeydown="if(event.key==='Enter')${c.go}">
       <div class="dv2-kpi-top"><span class="dv2-kpi-label">${c.label}</span>
         <span class="dv2-status ${c.status[0]}" title="${c.status[2]}"><span aria-hidden="true">${c.status[1]}</span> ${c.status[2]}</span></div>
@@ -13079,16 +13167,18 @@ function renderDv2Trend(D){
   const hasPrev=rows.some(r=>r.prevYear>0);
   const W=640,H=230,L=46,R=10,T=14,B=34;
   const vals=rows.flatMap(r=>[r.sales,r.profit===null?0:r.profit,hasPrev?r.prevYear:0]);
-  const max=Math.max(1,...vals),min=Math.min(0,...vals);
+  const ax=niceAxis(Math.min(...vals),Math.max(...vals));
+  const max=ax.max,min=ax.min;
   const y=v=>T+(max-v)/((max-min)||1)*(H-T-B);
   const bw=(W-L-R)/rows.length;
-  const ticks=[max,(max+min)/2,min].map(v=>`<g><line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" class="dv2-grid"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end" class="dv2-axis">${dv2Man(v)}</text></g>`).join('');
+  const bar=(v,x,w,cls)=>`<rect x="${x}" y="${Math.min(y(0),y(v))}" width="${w}" height="${Math.abs(y(0)-y(v))}" class="${cls}"/>`;
+  const ticks=ax.ticks.map(v=>`<g><line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" class="${v===0?'dv2-grid0':'dv2-grid'}"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end" class="dv2-axis">${dv2AxisLabel(v,ax.step)}</text></g>`).join('');
   const bars=rows.map((r,i)=>{
     const x=L+i*bw,w=Math.max(4,bw*(hasPrev?0.36:0.56));
-    const prevBar=hasPrev?`<rect x="${x+bw/2-w-1}" y="${y(Math.max(0,r.prevYear))}" width="${w}" height="${Math.abs(y(0)-y(Math.max(0,r.prevYear)))}" class="dv2-bar-prev"/>`:'';
+    const prevBar=hasPrev?bar(r.prevYear,x+bw/2-w-1,w,'dv2-bar-prev'):'';
     const bx=hasPrev?x+bw/2+1:x+(bw-w)/2;
     return`<g class="dv2-col" data-i="${i}">${prevBar}
-      <rect x="${bx}" y="${y(Math.max(0,r.sales))}" width="${w}" height="${Math.abs(y(0)-y(Math.max(0,r.sales)))}" class="${r.plan?'dv2-bar-plan':'dv2-bar'}"/>
+      ${bar(r.sales,bx,w,r.plan?'dv2-bar-plan':'dv2-bar')}
       <text x="${x+bw/2}" y="${H-B+16}" text-anchor="middle" class="dv2-axis">${dv2Short(r.a)}${r.plan?'*':''}</text>
       <rect x="${x}" y="${T}" width="${bw}" height="${H-T-B}" class="dv2-hit" onmouseenter="dv2Tip(${i})" onclick="dv2Tip(${i})"><title>${dv2YmLabel(r.a)}</title></rect></g>`;
   }).join('');
@@ -13176,8 +13266,8 @@ function renderDv2Forecast(D){
     </div>
     <button class="dv2-link" onclick="dv2Toggle('fc')">予測の前提 ${dv2Open.fc?'▲':'▼'}</button>
     ${dv2Open.fc?`<div class="dv2-basis">
-      <div>確定：${lm}（前月まで）の案件ベースの売上</div>
-      <div>予測：${pm}（当月から期末）。請求レコードがある月はその金額（${recs}件）、無い月は案件の月額</div>
+      <div>確定：${lm}（期首から当月まで。売上・利益の推移の「実績」と同じ）の案件ベースの売上</div>
+      <div>予測：${pm}（翌月から期末）。請求レコードがある月はその金額（${recs}件）、無い月は案件の月額</div>
       <div>案件予実・期間サマリーと同じ関数（projectSalesAtAbsTotal）。入金予定（入金ベース）は混ぜていません。統計的な外挿はしていません</div>
     </div>`:''}`;
 }

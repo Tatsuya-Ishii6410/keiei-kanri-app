@@ -18,9 +18,12 @@ const end = html.indexOf('@dash-rules-end');
 assert(begin > 0 && end > begin, 'keiei-kanri.html に @dash-rules の範囲が見つかりません');
 const app = {};
 vm.createContext(app);
-vm.runInContext(html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + `
+const pctSrc = /function pct\(actual,target\)\{[\s\S]*?\n\}/.exec(html);
+assert(pctSrc, 'keiei-kanri.html に pct() が見つかりません');
+vm.runInContext(pctSrc[0] + '\n' + html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + `
 globalThis.exported = { dashGreeting, monthOverMonth, dashHeadline, dashMilestones, routePoint, forecastSplit,
-  normClientName, newCustomerCount, retentionRate, winRate, ringState, dashMissions, dashAdvice };`, app);
+  normClientName, newCustomerCount, retentionRate, winRate, ringState, dashMissions, dashAdvice,
+  heroProgress, msLabelPos, niceAxis, pct };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -81,17 +84,58 @@ test('現在地はルート上の割合の位置（0%＝ふもと、100%＝山�
 
 console.log('着地予測');
 
-test('確定（前月まで）＋予定（当月から期末）＝期の合計（期間サマリーと同じ関数の結果をそのまま足す）', () => {
+test('確定（期首から当月まで＝推移の「実績」と同じ）＋予測（翌月から期末）＝期の合計（期間サマリーと同じ関数の結果をそのまま足す）', () => {
   const months = []; for (let a = abs(2026, 3); a <= abs(2027, 2); a++) months.push(a);
   const sales = a => (a - abs(2026, 3) + 1) * 1000;          // 1000, 2000, ... 12000
   const r = A.forecastSplit(months, abs(2026, 11), sales);
-  assert.strictEqual(r.confirmedMonths.length, 8);           // 3月〜10月
-  assert.strictEqual(r.plannedMonths.length, 4);             // 11月〜2月
-  assert.strictEqual(r.confirmed, 36000);                    // 1000〜8000
-  assert.strictEqual(r.planned, 42000);                      // 9000〜12000
+  assert.strictEqual(r.confirmedMonths.length, 9);           // 3月〜11月（当月を含む）
+  assert.strictEqual(r.plannedMonths.length, 3);             // 12月〜2月
+  assert.strictEqual(r.confirmed, 45000);                    // 1000〜9000
+  assert.strictEqual(r.planned, 33000);                      // 10000〜12000
   assert.strictEqual(r.total, months.reduce((a, m) => a + sales(m), 0));
   // 期が終わっていれば全部が確定
   assert.strictEqual(A.forecastSplit(months, abs(2027, 4), sales).planned, 0);
+});
+
+test('★ 達成率は確定だけ：確定が25%未満・予測込みが75%以上でも、チェックマークは付かない（着地見込みは別）', () => {
+  const split = { confirmed: 1400000, planned: 3500000, total: 4900000 };   // 目標600万：確定23.3%・見込み81.7%
+  const h = A.heroProgress(split, 6000000, A.pct);
+  assert.strictEqual(h.rate, 23.3);
+  assert.strictEqual(h.landing, 81.7);
+  assert.deepStrictEqual(plain(h.milestones).map(m => m.done), [false, false, false, false]);
+  assert.strictEqual(h.reached, false);
+  // 予測込みで100%を超えても、確定が届かなければ達成（お祝い）にしない
+  assert.strictEqual(A.heroProgress({ confirmed: 5000000, planned: 2000000, total: 7000000 }, 6000000, A.pct).reached, false);
+  assert.strictEqual(A.heroProgress({ confirmed: 6000000, planned: 0, total: 6000000 }, 6000000, A.pct).reached, true);
+  // 目標が無ければどちらも出さない
+  const n = A.heroProgress(split, 0, A.pct);
+  assert.strictEqual(n.rate, null); assert.strictEqual(n.landing, null);
+  // ミッションも確定で：あと ¥4,600,000
+  const m = A.dashMissions({ target: 6000000, sales: split.confirmed, rate: h.rate, overdue: 0, missingInvoices: 0, inbox: 0, closeOpen: 0 });
+  assert.strictEqual(m[0].title, '売上目標まであと ¥4,600,000');
+  assert.strictEqual(m[0].progress, 23.3);
+});
+
+test('マイルストーンの文字はマーカーと重ならない側へ（山頂の100%は右に出さない）', () => {
+  // マーカーがない → 右
+  assert.deepStrictEqual(plain(A.msLabelPos([100, 100], [], 50)), { x: 111, y: 104, anchor: 'start' });
+  // 文字のすぐ右にマーカー → 左
+  assert.strictEqual(A.msLabelPos([100, 100], [[118, 101]], 75).anchor, 'end');
+  // 左右どちらもマーカー → 上
+  assert.strictEqual(A.msLabelPos([100, 100], [[118, 101], [82, 101]], 75).anchor, 'middle');
+  // 100% は右端で切れるので左
+  assert.strictEqual(A.msLabelPos([230, 26], [], 100).anchor, 'end');
+});
+
+test('グラフの縦軸：0を含む区切りのよい目盛り', () => {
+  assert.deepStrictEqual(plain(A.niceAxis(-380000, 560000, 4)), { min: -500000, max: 750000, step: 250000, ticks: [-500000, -250000, 0, 250000, 500000, 750000] });
+  const a = A.niceAxis(0, 500000, 4);
+  assert.deepStrictEqual(plain(a.ticks), [0, 200000, 400000, 600000]);            // 0・20万・40万・60万
+  assert.deepStrictEqual(plain(A.niceAxis(-400000, 600000, 5).ticks), [-400000, -200000, 0, 200000, 400000, 600000]);
+  assert(A.niceAxis(120000, 480000, 4).ticks.indexOf(0) >= 0);           // 正の値だけでも0から
+  assert.deepStrictEqual(plain(A.niceAxis(0, 0, 4).ticks), [0, 0.25, 0.5, 0.75, 1]);
+  // 区切りの数を省くと、いちばん幅の狭い目盛り：−60万〜50万 → −60万〜60万（20万刻み）。−100万まで広げない
+  assert.deepStrictEqual(plain(A.niceAxis(-600000, 500000)), { min: -600000, max: 600000, step: 200000, ticks: [-600000, -400000, -200000, 0, 200000, 400000, 600000] });
 });
 
 console.log('重要KPI');

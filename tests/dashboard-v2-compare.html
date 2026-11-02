@@ -49,8 +49,9 @@ function run(){
       {id:1,date:ym(0,0)+'-05',type:'通信料',desc:'回線',amount:55000,status:'actual'},
       {id:2,date:ym(0,0)+'-10',type:'役員報酬',desc:'役員報酬',amount:200000,status:'actual'},
       {id:3,date:ym(0,-1)+'-10',type:'システム利用料',desc:'SaaS',amount:33000,status:'actual'},
-      {id:4,date:ym(0,-1)+'-20',expectedDate:ym(0,-1)+'-20',type:'売上',desc:'株式会社A 入金予定',amount:330000,status:'planned_in',projectId:1,billingMonth:ym(0,-2)}];
-    S.bankBalance=1234567;S.nextLedgerId=5;
+      {id:4,date:ym(0,-1)+'-20',expectedDate:ym(0,-1)+'-20',type:'売上',desc:'株式会社A 入金予定',amount:330000,status:'planned_in',projectId:1,billingMonth:ym(0,-2)},
+      {id:5,date:ym(0,-3)+'-15',type:'その他経費',desc:'機器購入',amount:900000,status:'actual'}];   // 営業利益がマイナスの月（縦軸の0より下）
+    S.bankBalance=1234567;S.nextLedgerId=6;
     w.renderFiscalSelects();
     d.getElementById('fiscal-select').value='1';
     d.getElementById('month-select').value=String(now.getMonth());
@@ -61,13 +62,24 @@ function run(){
       check('月間売上（旧「売上」＝新KPI）',yen(d.getElementById('d-sales').textContent),kpi('sales'));
       check('営業利益（旧「営業利益」＝新KPI）',yen(d.getElementById('d-profit').textContent),kpi('profit'));
       check('現預金残高（設定の値＝新KPI）',w.bankBalance(),kpi('cash'));
+      // 残高0（未設定と区別できない）は「未設定（または0円）」と出し、¥0 にしない
+      const keepCash=S.bankBalance;S.bankBalance=0;w.updateDashboard();
+      check('残高0は「未設定（または0円）」',/未設定/.test(d.querySelector('#dv2-kpis .dv2-kpi:nth-child(4) .dv2-kpi-val').textContent),true);
+      S.bankBalance=keepCash;w.updateDashboard();
       const fs=d.getElementById('fiscal-summary').querySelectorAll('tbody tr')[0].querySelectorAll('td');
-      const heroRow=d.querySelector('#dv2-hero .dv2-hero-row b');
-      check('期の売上累計（期間サマリー＝ヒーロー）',yen(fs[2].textContent),yen(heroRow&&heroRow.textContent));
-      check('売上目標達成率（期間サマリー＝ヒーロー＝KPI）',num(fs[3].textContent),kpi('rate'));
-      check('ヒーローの達成率の表示',num(fs[3].textContent),num(d.querySelector('#dv2-hero .dv2-big').textContent));
+      const fy=w.dashboardFiscalYear();
+      // 確定の累計（ヒーロー）＝着地予測カードの「確定（実績）」
+      const heroConfirmed=yen((d.querySelector('#dv2-hero .dv2-hero-row b')||{}).textContent);
+      const fcConfirmed=yen(d.querySelectorAll('#dv2-forecast .dv2-fc-rows b')[0].textContent);
+      check('確定の累計（ヒーロー＝着地予測カードの確定）',heroConfirmed,fcConfirmed);
+      // ★ 達成率は確定だけ：pct(確定の累計, 期の売上目標)。ヒーロー＝KPI
+      check('達成率（確定）＝pct(確定, 目標)（ヒーロー）',w.pct(fcConfirmed,fy.salesTarget),num(d.querySelector('#dv2-hero .dv2-big').textContent));
+      check('達成率（確定）＝KPIカード',num(d.querySelector('#dv2-hero .dv2-big').textContent),kpi('rate'));
+      // 予測込みは着地見込み＝期間サマリーの達成率
+      check('着地見込み＝期間サマリーの達成率（予測込み）',num(fs[3].textContent),num(d.querySelector('#dv2-hero .dv2-landing .dv2-chip').textContent));
       const fc=yen(d.querySelector('#dv2-forecast .dv2-fc-total').textContent);
       check('着地予測の合計＝期間サマリーの売上（同じ関数）',yen(fs[2].textContent),fc);
+      check('確定＋予測＝着地予測の合計',fcConfirmed+yen(d.querySelectorAll('#dv2-forecast .dv2-fc-rows b')[1].textContent),fc);
       const od=(d.getElementById('d-overdue-status').textContent.match(/(\d+)件/)||[])[1];
       const odM=[...d.querySelectorAll('#dv2-missions .dv2-m-title')].map(x=>x.textContent).find(t=>/入金遅延/.test(t))||'';
       check('入金遅延の件数（状態の行＝ミッション）',parseInt(od||'0',10),parseInt((odM.match(/(\d+)件/)||[0,0])[1],10));
@@ -77,6 +89,8 @@ function run(){
       const inv=(d.getElementById('d-invoice-status').textContent.match(/未作成\s*(\d+)件/)||[])[1];
       const invM=[...d.querySelectorAll('#dv2-missions .dv2-m-title')].map(x=>x.textContent).find(t=>/請求書/.test(t))||'';
       check('未作成の請求書（状態の行＝ミッション）',parseInt(inv||'0',10),parseInt((invM.match(/(\d+)件/)||[0,0])[1],10));
+      check('当月は営業利益に「月途中」の注記',!!d.querySelector('#dv2-kpis .dv2-mid'),true);
+      check('縦軸に0の目盛り（マイナスの月があるとき）',[...d.querySelectorAll('#dv2-trend .dv2-axis')].some(t=>t.textContent==='0')&&[...d.querySelectorAll('#dv2-trend .dv2-axis')].some(t=>/^−/.test(t.textContent)),true);
       check('状態の行6つが要対応の帯にある',d.querySelectorAll('#dv2-slot-status #dv-status > div[id^="d-"]').length,6);
       check('メトリクス7枚が要対応の帯にある',d.querySelectorAll('#dv2-slot-metrics .metric-card').length,7);
       // 旧に切り替えると元の場所に戻る
