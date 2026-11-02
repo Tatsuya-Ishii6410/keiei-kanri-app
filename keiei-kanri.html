@@ -9155,13 +9155,25 @@ function isActualExpenseEntry(l){
   return(l.status||'actual')==='actual'&&l.type!=='売上';
 }
 
+// YYYY-MM-DD 同士の日数差（b−a）。読めなければ NaN
+function dayDiff(a,b){
+  const pa=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(a||'')),pb=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(b||''));
+  if(!pa||!pb)return NaN;
+  return(Date.UTC(+pb[1],pb[2]-1,+pb[3])-Date.UTC(+pa[1],pa[2]-1,+pa[3]))/86400000;
+}
+
 /* 銀行明細CSVの1行の重複判定
-   dup     … 同じ日付・金額・摘要の収支がすでにある（従来どおり）
-   mailDup … 同日×同金額のデビット通知取込済みの経費がある（摘要が違うので従来の判定では漏れる） */
+   dup      … 同じ日付・金額・摘要の収支がすでにある（従来どおり）
+   mailDup  … 同日×同金額のデビット通知取込済みの経費がある（摘要が違うので従来の判定では漏れる）
+   mailNear … 同額で日付が前後1日のデビット通知取込済みの経費がある
+              （デビットの処理日とCSVの取引日が1日ずれることがあるため。mailNearDate はその経費の日付）
+   いずれもプレビューではチェックOFF。±1日は別物のこともあるので、登録するかはユーザーが判断する */
 function bankDupFlags(ledger,date,amount,desc,income){
   const dup=ledger.some(l=>l.date===date&&l.amount===amount&&l.desc===desc);
-  const mailDup=!income&&ledger.some(l=>isMailImported(l)&&isActualExpenseEntry(l)&&l.date===date&&l.amount===amount);
-  return{dup,mailDup};
+  const mails=income?[]:ledger.filter(l=>isMailImported(l)&&isActualExpenseEntry(l)&&l.amount===amount);
+  const mailDup=mails.some(l=>l.date===date);
+  const near=mailDup?null:mails.find(l=>Math.abs(dayDiff(date,l.date))===1);
+  return{dup,mailDup,mailNear:!!near,mailNearDate:near?near.date:''};
 }
 
 /* デビット通知（GASの debitMails の items）をプレビュー行にする
@@ -9273,8 +9285,10 @@ async function bankHandleFile(file){
       type:bankGuessType(desc,income),
       dup:f.dup,
       mailDup:f.mailDup,
+      mailNear:f.mailNear,
+      mailNearDate:f.mailNearDate,
       auth:!income&&isAuthLike(amount),
-      checked:!f.dup&&!f.mailDup,
+      checked:!f.dup&&!f.mailDup&&!f.mailNear,
       matchId:match?match.p.id:null,
       matchYm:match?match.ym:null,        // 推定した対象月（YYYY-MM）
       matchGross:match?match.gross:0,     // 突合に使った税込金額
@@ -9295,7 +9309,7 @@ function renderBankPreview(){
   const dates=bankRows.map(r=>r.date).sort();
   const inSum=bankRows.filter(r=>r.income).reduce((a,r)=>a+r.amount,0);
   const outSum=bankRows.filter(r=>!r.income).reduce((a,r)=>a+r.amount,0);
-  const dup=bankRows.filter(r=>r.dup||r.mailDup).length;
+  const dup=bankRows.filter(r=>r.dup||r.mailDup||r.mailNear).length;
   const auth=bankRows.some(r=>r.auth);
 
   document.getElementById('bank-msg').innerHTML=
@@ -9353,6 +9367,7 @@ function bankBadges(r){
   return[
     r.dup?'<span class="badge badge-amber">重複の可能性あり</span>':'',
     r.mailDup?'<span class="badge badge-amber">メール取込済みの可能性</span>':'',
+    r.mailNear?`<span class="badge badge-amber" title="同額のデビット通知取込（${r.mailNearDate}）があります。別の利用なら選択して登録してください">重複の可能性（メール取込 ${r.mailNearDate}）</span>`:'',
     r.auth?AUTH_BADGE:''
   ].filter(Boolean).join(' ');
 }

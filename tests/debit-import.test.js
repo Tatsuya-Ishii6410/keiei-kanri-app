@@ -215,6 +215,33 @@ test('メール取込済み → 銀行明細CSV取込で二重にならない', 
     '2026-11-02', 4323, 'ﾃﾞﾋﾞｯﾄ NEXT', false).mailDup, false);
 });
 
+test('メール取込済みと同額で日付が±1日 → 重複の可能性（mailNear）', () => {
+  const ledger = [{ date: '2026-11-02', type: 'その他経費', desc: 'NEXT（Visaデビット）', amount: 4323, status: 'actual', calId: 'mail:m-next' }];
+  // CSVの取引日が1日後
+  const after = A.bankDupFlags(ledger, '2026-11-03', 4323, 'ﾃﾞﾋﾞｯﾄ NEXT', false);
+  assert.strictEqual(after.mailDup, false);
+  assert.strictEqual(after.mailNear, true);
+  assert.strictEqual(after.mailNearDate, '2026-11-02');
+  // CSVの取引日が1日前
+  assert.strictEqual(A.bankDupFlags(ledger, '2026-11-01', 4323, 'ﾃﾞﾋﾞｯﾄ NEXT', false).mailNear, true);
+  // 月・年をまたいでも1日差として扱う
+  const eom = [{ date: '2026-12-31', type: 'システム利用料', desc: 'VERCEL INC（Visaデビット）', amount: 3000, status: 'actual', calId: 'mail:m-eoy' }];
+  assert.strictEqual(A.bankDupFlags(eom, '2027-01-01', 3000, 'VERCEL', false).mailNear, true);
+  // 同日同額は mailDup のほうだけ（mailNear は立てない）
+  const same = A.bankDupFlags(ledger, '2026-11-02', 4323, 'ﾃﾞﾋﾞｯﾄ NEXT', false);
+  assert.strictEqual(same.mailDup, true);
+  assert.strictEqual(same.mailNear, false);
+  // 2日ずれ・金額違い・入金・メール取込でない経費は対象外
+  assert.strictEqual(A.bankDupFlags(ledger, '2026-11-04', 4323, 'ﾃﾞﾋﾞｯﾄ NEXT', false).mailNear, false);
+  assert.strictEqual(A.bankDupFlags(ledger, '2026-11-03', 4320, 'ﾃﾞﾋﾞｯﾄ NEXT', false).mailNear, false);
+  assert.strictEqual(A.bankDupFlags(ledger, '2026-11-03', 4323, 'ﾌﾘｺﾐ', true).mailNear, false);
+  assert.strictEqual(A.bankDupFlags([{ date: '2026-11-02', type: 'その他経費', desc: 'X', amount: 4323, status: 'actual' }],
+    '2026-11-03', 4323, 'ﾃﾞﾋﾞｯﾄ NEXT', false).mailNear, false);
+  // 出金予定（planned_out）は実績ではないので対象外
+  assert.strictEqual(A.bankDupFlags([Object.assign({}, ledger[0], { status: 'planned_out' })],
+    '2026-11-03', 4323, 'ﾃﾞﾋﾞｯﾄ NEXT', false).mailNear, false);
+});
+
 test('10円以下は認証の可能性（銀行明細側も同じ判定）', () => {
   assert.strictEqual(A.isAuthLike(1), true);
   assert.strictEqual(A.isAuthLike(10), true);
