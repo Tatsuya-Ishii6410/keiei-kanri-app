@@ -82,12 +82,13 @@ function run(){
       check('確定＋予測＝合計',fcConfirmed+fcPlanned,fcTotal);
       // 1枚のカード：最初は未完了の上位3件。上位3件＝重要度順の先頭3件
       const first=[...d.querySelectorAll('#dv2-actions-list .dv2-act')].map(x=>x.dataset.key);
-      check('アクションセンターは最初に上位3件まで',first.length<=3,true);
+      check('アクションセンターは最初に最優先の1件だけ（大きく）',first.length===1&&!!d.querySelector('#dv2-actions-list .dv2-act-top'),true);
       check('「今日の優先アクション」の別カードが無い',d.getElementById('dv2-today'),null);
+      check('見出しのバッジ＝未完了の件数',parseInt((d.getElementById('dv2-actions-n').textContent.match(/(\d+)件/)||[0,0])[1],10),parseInt(d.getElementById('dv2-bell-n').textContent||'0',10));
       // 「すべて表示」で同じカードの中に残りと完了済みを展開して、件数を突き合わせる
       w.eval('dv2Open.actAll=true');w.renderDashV2();
       const allKeys=[...d.querySelectorAll('#dv2-actions-list .dv2-act')].map(x=>x.dataset.key);
-      check('展開した先頭3件＝最初の3件（並び順が同じ）',allKeys.slice(0,3).join(','),first.join(','));
+      check('展開した先頭＝最優先の1件（並び順が同じ）',allKeys[0],first[0]);
       // アクションセンターの件数＝状態の行（同じ集計）。完了は緑の小さな行（0件）
       const act=key=>{const el=d.querySelector(`#dv2-actions-list [data-key="${key}"]`);if(!el)return NaN;return el.classList.contains('dv2-done-chip')?0:parseInt(el.dataset.count||'0',10);};
       const od=(d.getElementById('d-overdue-status').textContent.match(/(\d+)件/)||[])[1];
@@ -103,8 +104,15 @@ function run(){
       const mm=(d.querySelector('#dv2-missions [data-key="close"] .dv2-m-title').textContent.match(/（(\d+)／(\d+)）/)||[]);
       check('月次締め：ミッションの未解決（全体−解決）＝アクションセンター',parseInt(mm[2],10)-parseInt(mm[1],10),act('close'));
       check('月次締めのミッションに期限を出さない',/超過|期限/.test(d.querySelector('#dv2-missions [data-key="close"]').textContent),false);
+      // 次の目標地点の「あと ¥○」＝目標×次の%−確定の実績（確定ベース）
+      const nxt=d.querySelector('#dv2-hero .dv2-next');
+      const np=parseInt((nxt.textContent.match(/(\d+)%：あと/)||[0,0])[1],10),nl=yen(nxt.querySelector('b.dv2-num').textContent);
+      check('次の目標地点の「あと ¥○」（確定ベース）',nl,Math.ceil(fy.salesTarget*np/100-heroConfirmed));
+      check('次の目標地点は確定の達成率より上の、いちばん近いマイルストーン',np,[25,50,75,100].find(m=>m>num(d.querySelector('#dv2-hero .dv2-big').textContent)));
+      // ハイライトに運用タスクを書かない（入金遅延が0件になった、は良い変化として可）
+      check('ハイライトに運用タスクを書かない',/月次締め|バックアップ|請求書|銀行明細|取込待ち/.test(d.getElementById('dv2-hl').textContent),false);
       // インサイトに運用タスク・次の行動を書かない
-      check('インサイトに運用タスクを書かない',/入金遅延|月次締め|バックアップ|請求書|銀行明細|取込待ち|次の行動/.test(d.getElementById('dv2-insights').textContent),false);
+      check('気をつけたい変化に運用タスク・良い変化を書かない',/入金遅延|月次締め|バックアップ|請求書|銀行明細|取込待ち|次の行動|良い変化/.test(d.getElementById('dv2-insights').textContent),false);
       w.eval('dv2Open.actAll=false');w.renderDashV2();
       check('当月は営業利益に「月途中」の注記',!!d.querySelector('#dv2-kpis .dv2-mid'),true);
       const pl=d.querySelector('#dv2-trend .dv2-line');

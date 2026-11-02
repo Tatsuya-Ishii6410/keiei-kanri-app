@@ -24,7 +24,7 @@ vm.runInContext(pctSrc[0] + '\n' + html.slice(html.indexOf('\n', begin) + 1, htm
 globalThis.exported = { dashGreeting, monthOverMonth, dashMilestones, routePoint, forecastSplit,
   normClientName, newCustomerCount, retentionRate, winRate, ringState,
   heroProgress, msLabelPos, niceAxis, pct, plannedWindow, dashCondition, milestoneCelebration, recordMonth, bigChanges,
-  actionItems, dashMissionList, deadlineLabel, dashInsights, paceLevel };`, app);
+  actionItems, dashMissionList, deadlineLabel, dashInsights, paceLevel, nextMilestone, withinDays, overdueZeroRecord, dashHighlights };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -282,24 +282,20 @@ test('ミッション：売上目標は確定ベース、目標を設定したKP
   assert.deepStrictEqual(plain(A.deadlineLabel('2026-10-31', '2026-11-03')), { text: '3日超過', overdue: true });
 });
 
-test('インサイト：注意は数字の変化だけ（前月比−20%以下・ペース−5pt以下）、最大2つ。運用タスクと「次の行動」は書かない', () => {
-  const base = { salesThis: 0, salesPrev: 0, recordNow: false, rate: null, elapsed: null };
+test('気をつけたい変化：数字の変化だけ（前月比−20%以下・ペース−5pt以下）、最大2つ。良い変化・運用タスクは書かない', () => {
+  const base = { salesThis: 0, salesPrev: 0, rate: null, elapsed: null };
   const ins = x => plain(A.dashInsights(Object.assign({}, base, x)));
-  assert.deepStrictEqual(ins({ salesThis: 110, salesPrev: 100 }).map(c => [c.kind, c.lines[0]]), [['good', '売上が前月より +10.0% 増えました']]);  // ちょうど+10%
-  assert.deepStrictEqual(ins({ salesThis: 109, salesPrev: 100 }), []);
-  assert.deepStrictEqual(ins({ salesThis: 80, salesPrev: 100 }).map(c => [c.kind, c.lines[0]]), [['warn', '売上が前月より -20.0% 減りました']]);  // ちょうど−20%
+  assert.deepStrictEqual(ins({ salesThis: 110, salesPrev: 100 }), []);                              // 良い変化はハイライトへ
+  assert.deepStrictEqual(ins({ salesThis: 80, salesPrev: 100 }).map(c => [c.title, c.lines[0]]), [['気をつけたい変化', '売上が前月より -20.0% 減りました']]);  // ちょうど−20%
   assert.deepStrictEqual(ins({ salesThis: 81, salesPrev: 100 }), []);
-  assert.deepStrictEqual(ins({ rate: 45, elapsed: 50 }).map(c => c.kind), ['warn']);            // ちょうど−5pt
+  assert.deepStrictEqual(ins({ rate: 45, elapsed: 50 }).map(c => c.kind), ['warn']);                // ちょうど−5pt
   assert.deepStrictEqual(ins({ rate: 45.1, elapsed: 50 }), []);
-  assert.deepStrictEqual(ins({ rate: 50, elapsed: 50 }).map(c => c.kind), ['good']);
-  // 入金遅延・月次締めなど（アクションセンターの運用タスク）を渡しても、インサイトには出ない
-  const ops = ins({ overdue: 3, closeOpen: 2, overdueResolved: true, topAction: { title: '入金遅延 3件', go: 'overdue' } });
-  assert.deepStrictEqual(ops, []);
-  const both = ins({ salesThis: 70, salesPrev: 100, rate: 20, elapsed: 50, recordNow: true });
-  assert.deepStrictEqual(both.map(c => c.kind), ['good', 'warn']);
-  assert.strictEqual(both[1].lines.length, 2);
-  assert(both.every(c => c.kind !== 'next'));
-  assert(!JSON.stringify(both).match(/入金遅延|月次締め|バックアップ|請求書|銀行明細|取込待ち/));
+  assert.deepStrictEqual(ins({ rate: 50, elapsed: 50 }), []);
+  assert.deepStrictEqual(ins({ overdue: 3, closeOpen: 2, overdueResolved: true, topAction: { title: '入金遅延 3件' } }), []);
+  const both = ins({ salesThis: 70, salesPrev: 100, rate: 20, elapsed: 50 });
+  assert.strictEqual(both.length, 1);
+  assert.strictEqual(both[0].lines.length, 2);
+  assert(!JSON.stringify(both).match(/入金遅延|月次締め|バックアップ|請求書|銀行明細|取込待ち|次の行動/));
 });
 
 test('目標ペースの段階はコンディションと達成率のKPIで同じ（paceLevel）', () => {
@@ -310,6 +306,82 @@ test('目標ペースの段階はコンディションと達成率のKPIで同�
     assert.strictEqual(c.level, A.paceLevel(r, e).level);
     assert.strictEqual(c.title, A.paceLevel(r, e).title);
   });
+});
+
+console.log('第3次：次の目標地点・今月のハイライト');
+
+test('次の目標地点の「あと ¥○」は確定ベース（目標×次の%−確定の累計）。確定で100%以上なら出さない', () => {
+  assert.deepStrictEqual(plain(A.nextMilestone(40, 2400000, 6000000)), { p: 50, left: 600000 });
+  assert.deepStrictEqual(plain(A.nextMilestone(24.9, 1494000, 6000000)), { p: 25, left: 6000 });
+  assert.deepStrictEqual(plain(A.nextMilestone(25, 1500000, 6000000)), { p: 50, left: 1500000 });    // ちょうど25%なら次は50%
+  assert.deepStrictEqual(plain(A.nextMilestone(99.9, 5994000, 6000000)), { p: 100, left: 6000 });
+  assert.strictEqual(A.nextMilestone(100, 6000000, 6000000), null);
+  assert.strictEqual(A.nextMilestone(120, 7200000, 6000000), null);
+  assert.strictEqual(A.nextMilestone(null, 0, 0), null);
+  // 予測込み（着地見込み）が届いていても、確定で届いていなければ次の地点はそのまま
+  const h = A.heroProgress({ confirmed: 1400000, planned: 4700000, total: 6100000 }, 6000000, A.pct);
+  assert.deepStrictEqual(plain(A.nextMilestone(h.rate, 1400000, 6000000)), { p: 25, left: 100000 });
+});
+
+const T = '2026-11-03';
+const hl = x => plain(A.dashHighlights(Object.assign({ hist: [], done: 0, month: 1, today: T, fyId: 1, newCustomers: 0, msDates: {},
+  overdueCount: 0, overdueZeroAt: '', rate: null, elapsed: null }, x)));
+const H = (a, sales, profit) => ({ a, sales, profit: profit === undefined ? 0 : profit });
+
+test('売上の最高記録：完了した月（前月）がそれ以前の売上のある月（2か月以上）より高いときだけ。同額は出さない', () => {
+  const hist = [H(1, 300), H(2, 500), H(3, 400), H(4, 501)];
+  assert.deepStrictEqual(hl({ hist, done: 4, month: 5 }).map(x => x.key), ['record:4']);
+  assert.deepStrictEqual(hl({ hist: [H(1, 300), H(2, 500), H(3, 400), H(4, 500)], done: 4, month: 5 }), []);     // 同額
+  assert.deepStrictEqual(hl({ hist: [H(2, 500), H(4, 900)], done: 4, month: 5 }), []);                         // それ以前が1か月だけ
+  assert.deepStrictEqual(hl({ hist: [H(1, 0), H(2, 500), H(3, 400), H(4, 900)], done: 4, month: 5 }).map(x => x.key), ['record:4']);
+  // 選んでいる月が当月でも、判定は完了した月（前月）
+  assert.deepStrictEqual(hl({ hist: [H(1, 300), H(2, 500), H(3, 400), H(4, 501), H(5, 9999)], done: 4, month: 5 }).map(x => x.key), ['record:4']);
+});
+
+test('利益率の改善：完了した月どうしで営業利益率が+5pt以上（ちょうど5ptは出す）。売上の無い月は比べない', () => {
+  const mk = (p3, p4) => hl({ hist: [H(3, 1000, p3), H(4, 1000, p4)], done: 4, month: 5 });
+  assert.deepStrictEqual(mk(100, 150).map(x => x.key), ['margin:4']);           // 10% → 15%（+5.0pt）
+  assert.deepStrictEqual(mk(100, 149), []);                                     // +4.9pt
+  assert.strictEqual(mk(100, 150)[0].text, '5月の営業利益率が前月より +5.0pt（15.0%）');   // 絶対月4＝5月
+  assert.deepStrictEqual(hl({ hist: [H(3, 0, -100), H(4, 1000, 300)], done: 4, month: 5 }), []);   // 前月の売上が0
+});
+
+test('新規顧客：選んでいる月に初めて受注案件が始まった取引先が1社以上（全期間で判定・表記ゆれをまとめる）', () => {
+  assert.deepStrictEqual(hl({ newCustomers: 1, month: 10 }).map(x => [x.key, x.text]), [['new:10', '新規顧客 1社（11月）']]);
+  assert.deepStrictEqual(hl({ newCustomers: 0 }), []);
+  const info = [{ client: '株式会社A', startAbs: 100, billable: true }, { client: 'A', startAbs: 120, billable: true },   // 前の期に案件あり → 新規ではない
+    { client: '（株）B', startAbs: 120, billable: true }, { client: 'B 株式会社', startAbs: 121, billable: true },
+    { client: 'C', startAbs: 120, billable: false }];                                                                      // 受注前は数えない
+  assert.strictEqual(A.newCustomerCount(info, 120, 120), 1);
+  assert.strictEqual(A.newCustomerCount(info, 121, 121), 0);
+});
+
+test('マイルストーン：確定で新しく届いたものを、届いた日から7日間（当日を含む）。日付の無い記録は出さない', () => {
+  assert.deepStrictEqual(hl({ msDates: { 50: '2026-10-28' } }).map(x => x.key), ['ms:1:50']);    // 6日前
+  assert.deepStrictEqual(hl({ msDates: { 50: '2026-10-27' } }), []);                              // 7日前
+  assert.deepStrictEqual(hl({ msDates: { 50: T } }).map(x => x.key), ['ms:1:50']);
+  assert.deepStrictEqual(hl({ msDates: {} }), []);
+});
+
+test('入金遅延が0件になった：前は1件以上で、いま0件になった日から7日間。記録が無い（初めて）ときは出さない', () => {
+  assert.deepStrictEqual(plain(A.overdueZeroRecord(null, 0, T)), { n: 0, zeroAt: '' });          // 初めては記録だけ
+  assert.deepStrictEqual(plain(A.overdueZeroRecord({ n: 2, zeroAt: '' }, 0, T)), { n: 0, zeroAt: T });
+  assert.deepStrictEqual(plain(A.overdueZeroRecord({ n: 0, zeroAt: '2026-11-01' }, 0, T)), { n: 0, zeroAt: '2026-11-01' });
+  assert.deepStrictEqual(plain(A.overdueZeroRecord({ n: 0, zeroAt: '2026-11-01' }, 1, T)), { n: 1, zeroAt: '' });
+  assert.deepStrictEqual(hl({ overdueCount: 0, overdueZeroAt: '2026-10-28' }).map(x => x.text), ['入金遅延が0件になりました']);
+  assert.deepStrictEqual(hl({ overdueCount: 0, overdueZeroAt: '2026-10-27' }), []);
+  assert.deepStrictEqual(hl({ overdueCount: 1, overdueZeroAt: T }), []);
+  assert.deepStrictEqual(hl({ overdueCount: 0, overdueZeroAt: '' }), []);
+});
+
+test('目標ペース：確定達成率≧期の経過率（ちょうど同じは出す）。最大3件', () => {
+  assert.deepStrictEqual(hl({ rate: 50, elapsed: 50 }).map(x => x.key), ['pace:1']);
+  assert.deepStrictEqual(hl({ rate: 49.9, elapsed: 50 }), []);
+  const many = hl({ hist: [H(1, 300), H(2, 500), H(3, 1000, 100), H(4, 1001, 300)], done: 4, month: 5, newCustomers: 2,
+    msDates: { 25: T }, overdueZeroAt: T, rate: 60, elapsed: 50 });
+  assert.strictEqual(many.length, 3);
+  assert.deepStrictEqual(many.map(x => x.key), ['record:4', 'margin:4', 'new:5']);
+  assert(!JSON.stringify(many).match(/月次締め|バックアップ|請求書|銀行明細|取込待ち/));
 });
 
 console.log('GASとの往復（期の KPI 目標）');
