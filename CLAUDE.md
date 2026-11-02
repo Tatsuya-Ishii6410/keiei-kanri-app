@@ -44,7 +44,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - tests/receipt-import.test.js：領収書の読み取り・誰と／用件・重複判定のテスト（AIの呼び出しはモック）
 - tests/inbox-scan.test.js：受信箱の週次読み取り・取込待ちからの登録・一括登録・重複判定のテスト（AI・Driveはモック）
 - tests/ops-checks.test.js：週次バックアップ・入金遅延・月次締めチェックのテスト（Drive・GASはモック）
-- tests/travel-suggest.test.js：交通費の訪問先の候補（駅名・訪問先の正規化・自宅駅の除外・並び順）のテスト
+- tests/travel-suggest.test.js：交通費の訪問先の候補（駅名・訪問先の正規化・自宅駅の除外・並び順）と用件の選択式のテスト
 - .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
 - netlify.toml：旧Netlify用の設定（移行後も念のため残している）
 
@@ -723,7 +723,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   表示はいちばん使われている表記（同数なら最近）
 - 候補は2段：「この駅の訪問先」（visitSuggestions。最大8件・回数の多い順、同数は最近の順。「5回・最終 10/28」を併記）／
   「取引先から」（clientSuggestions。案件の取引先名で1段目と重複しないもの。新しい案件から最大5件）。駅が空・駅の候補なしは2段目だけ
-- 訪問先を選んで用件が空なら、その訪問先の最後の用件（lastPurposeFor）を「候補：…」として薄く出す。自動では入れない（タップで入る）
+- 訪問先を選んで用件が未選択なら、前回の用件を薄く出す（「交通費の用件（選択式）」の節）
 - 判定は「@travel-rules-begin〜end」（tests/travel-suggest.test.js が切り出して読む。DOM・S を触らない。TRAVEL_BLANK_DESC もここ）
 
 ## 部品：候補つき入力欄 suggestCombo
@@ -733,3 +733,17 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 見た目は CSS 変数 --ui-*（背景 #FFFFFF／本文 #17233D／補助 #64748B／強調 #3976F6／リストの角丸 12px など）。
   ★ 変数は .ui-scope（部品の外枠）の中だけで定義する。既存の画面の色は変えない（今後のデザイン刷新用）
 - 件数・日付は tabular-nums。開閉は150ms、prefers-reduced-motion のときはアニメーションなし。768px以下は候補の高さ44px以上
+
+## 交通費の用件（選択式）
+- 対象は交通費の入力モーダル（openTravelEntry / saveTravelEntry）の用件だけ。★ 経費（交際費など）の用件は自由入力のまま
+- 選択肢は TRAVEL_PURPOSES（打ち合わせ・商談・現地作業）＋「その他」（@travel-rules）。横並びのチップ（te-purpose-chips）で1つ選ぶ。
+  もう一度押すと外れる（未選択でも保存できる）。「その他」のときだけ下に自由入力（te-purpose-other）を出す
+- 保存は purpose 列に文字列のまま（列は増やさない）：選択肢 → その文字列／その他 → 「その他：○○」（purposeFromState）。
+  「その他」でテキストが空なら保存しない（理由を alert）
+- 復元（purposeToState）：選択肢と一致 → そのチップ／「その他：」で始まる → その他＋続きの文字列／
+  それ以外（これまでの自由入力）→ その他＋元の文字列。既存データは編集して保存し直すまで書き換えない
+- 一覧・スマホのカード・PDF・CSV・精算モーダルは purpose をそのまま表示する（変更なし）
+- 訪問先を選んで用件が未選択なら、その訪問先の最後の用件を「前回：○○」として薄く出す（travelPurposeHintFor）。
+  最後の用件が選択肢と一致するときだけ。タップで選ぶ（自動では選ばない）
+- 見た目は部品の選択チップ（.ui-chips / .ui-chip。--ui- 変数を使う）：通常は白背景に薄い境界、選択中は強調色 #3976F6 の背景に白文字・太字
+  （色だけに頼らない）。高さ44px以上、480px以下は文字12pxで1行に収める。切り替えは150ms、prefers-reduced-motion のときはなし

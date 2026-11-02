@@ -161,7 +161,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   --ui-bg:#FFFFFF;--ui-text:#17233D;--ui-muted:#64748B;--ui-accent:#3976F6;
   --ui-accent-soft:rgba(57,118,246,.10);--ui-border:rgba(23,35,61,.10);
   --ui-radius-list:12px;--ui-radius-item:8px;--ui-shadow:0 6px 20px rgba(23,35,61,.10);
-  --ui-space-1:4px;--ui-space-2:8px;--ui-space-3:12px;--ui-motion:150ms;
+  --ui-space-1:4px;--ui-space-2:8px;--ui-space-3:12px;--ui-motion:150ms;--ui-on-accent:#FFFFFF;
 }
 .sc-wrap{position:relative}
 .sc-list{position:absolute;left:0;right:0;top:calc(100% + var(--ui-space-1));z-index:40;
@@ -183,8 +183,17 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   font-size:12px;cursor:pointer;max-width:100%;text-align:left}
 .sc-chip:hover{color:var(--ui-accent);border-color:var(--ui-accent)}
 .te-home-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+/* 部品：選択チップ（横並び・1つだけ選ぶ。もう一度押すと外れる） */
+.ui-chips{display:flex;gap:var(--ui-space-1);flex-wrap:nowrap}
+.ui-chip{flex:1 1 auto;min-height:44px;padding:0 var(--ui-space-2);border:1px solid var(--ui-border);border-radius:var(--ui-radius-item);
+  background:var(--ui-bg);color:var(--ui-text);font-family:inherit;font-size:13px;font-weight:400;white-space:nowrap;cursor:pointer;
+  transition:background-color var(--ui-motion) ease,color var(--ui-motion) ease,border-color var(--ui-motion) ease}
+.ui-chip:hover{border-color:var(--ui-accent)}
+.ui-chip[aria-pressed="true"]{background:var(--ui-accent);border-color:var(--ui-accent);color:var(--ui-on-accent);font-weight:700}
+.ui-chip:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
+@media (max-width:480px){.ui-chip{font-size:12px;padding:0 6px}}
 @media (max-width:768px){.sc-item{min-height:44px}.sc-chip{min-height:32px}}
-@media (prefers-reduced-motion:reduce){.sc-list,.sc-list.open{transition:none;transform:none}}
+@media (prefers-reduced-motion:reduce){.sc-list,.sc-list.open{transition:none;transform:none}.ui-chip{transition:none}}
 .rc-warn{background:var(--amber-bg) !important;border-color:#e0a800 !important}
 .req-mark{color:var(--red)}
 @media (max-width:768px){.rc-grid{grid-template-columns:1fr}.rc-photo{position:static}.rc-photo img{max-height:45vh}.rc-photo iframe{height:50vh}}
@@ -1608,10 +1617,16 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
       <div class="te-home-btns" id="te-home-btns"></div></div>
     <div class="form-group"><label class="form-label">到着地</label><input id="te-to" type="text" placeholder="大阪" onchange="travelStationChanged()"></div>
   </div>
-  <div class="form-row">
-    <div class="form-group"><label class="form-label">訪問先（任意）</label><input id="te-visit" type="text" placeholder="株式会社〇〇" autocomplete="off"></div>
-    <div class="form-group"><label class="form-label">用件（任意）</label><input id="te-purpose" type="text" placeholder="営業同行、打ち合わせ、研修" oninput="renderPurposeHint()">
-      <div id="te-purpose-hint" class="ui-scope"></div></div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label">訪問先（任意）</label><input id="te-visit" type="text" placeholder="株式会社〇〇" autocomplete="off" onchange="renderPurposeHint()"></div>
+  </div>
+  <div class="form-row single">
+    <div class="form-group"><label class="form-label" id="te-purpose-label">用件（任意）</label>
+      <div class="ui-scope">
+        <div class="ui-chips" id="te-purpose-chips" role="group" aria-labelledby="te-purpose-label"></div>
+        <input id="te-purpose-other" type="text" placeholder="用件を入力（例：研修）" style="display:none;margin-top:6px" aria-label="その他の用件">
+        <div id="te-purpose-hint"></div>
+      </div></div>
   </div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">金額</label><input id="te-amount" type="number" placeholder="420"></div>
@@ -5695,6 +5710,41 @@ function lastPurposeFor(index,visit){
   const r=index&&index.purposes[normVisit(visit)];
   return r?r.purpose:'';
 }
+
+/* ---- 交通費の用件（選択式） ----
+   選択肢は TRAVEL_PURPOSES と「その他」。purpose 列には文字列のまま入れる（列は増やさない）
+     打ち合わせ／商談／現地作業 → その文字列、その他 → 「その他：○○」、未選択 → ''
+   ★ 経費（交際費など）の用件は自由入力のまま。ここは交通費の入力モーダルだけ */
+const TRAVEL_PURPOSES=['打ち合わせ','商談','現地作業'];
+const PURPOSE_OTHER='その他';
+const PURPOSE_OTHER_PREFIX='その他：';
+
+// 保存する文字列。「その他」でテキストが空なら保存できない
+function purposeFromState(choice,text){
+  if(!choice)return{ok:true,value:''};
+  if(TRAVEL_PURPOSES.indexOf(choice)>=0)return{ok:true,value:choice};
+  if(choice===PURPOSE_OTHER){
+    const t=String(text||'').trim();
+    if(!t)return{ok:false,error:'用件の「その他」を選んだときは、内容を入力してください（選ばない場合は、もう一度「その他」を押すと外れます）'};
+    return{ok:true,value:PURPOSE_OTHER_PREFIX+t};
+  }
+  return{ok:false,error:'用件を選び直してください'};
+}
+
+// 保存された文字列 → 画面の状態。これまでの自由入力は「その他」＋元の文字列（保存し直すまで書き換えない）
+function purposeToState(value){
+  const v=String(value||'').trim();
+  if(!v)return{choice:'',text:''};
+  if(TRAVEL_PURPOSES.indexOf(v)>=0)return{choice:v,text:''};
+  if(v.indexOf(PURPOSE_OTHER_PREFIX)===0)return{choice:PURPOSE_OTHER,text:v.slice(PURPOSE_OTHER_PREFIX.length)};
+  return{choice:PURPOSE_OTHER,text:v};
+}
+
+// 提案（前回の用件）：その訪問先の最後の用件が選択肢（打ち合わせ・商談・現地作業）と一致するときだけ
+function travelPurposeHintFor(index,visit){
+  const last=lastPurposeFor(index,visit);
+  return TRAVEL_PURPOSES.indexOf(last)>=0?last:'';
+}
 // ===== @travel-rules-end
 let editTravelId=null;
 let editTravelRound=false;
@@ -6071,19 +6121,37 @@ function setTravelFrom(st){
   travelStationChanged();
 }
 
-// 用件が空なら、その訪問先の最後の用件を候補として薄く出す（自動では入れない。タップで入る）
+/* 用件（交通費の入力モーダルだけ）。選択肢は TRAVEL_PURPOSES ＋「その他」（@travel-rules）
+   保存は purpose 列に文字列のまま（「その他」は「その他：○○」）。経費・交際費の用件は自由入力のまま */
+let travelPurposeChoice='';   // '' / 打ち合わせ / 商談 / 現地作業 / その他
+
+function renderPurposeChips(){
+  const el=document.getElementById('te-purpose-chips');
+  if(!el)return;
+  el.innerHTML=TRAVEL_PURPOSES.concat([PURPOSE_OTHER]).map(c=>
+    `<button type="button" class="ui-chip" aria-pressed="${c===travelPurposeChoice}" onclick="pickTravelPurpose('${escAttr(c)}')">${escAttr(c)}</button>`).join('');
+  document.getElementById('te-purpose-other').style.display=travelPurposeChoice===PURPOSE_OTHER?'':'none';
+  renderPurposeHint();
+}
+
+// もう一度同じボタンを押すと選択を外す
+function pickTravelPurpose(c){
+  travelPurposeChoice=travelPurposeChoice===c?'':c;
+  renderPurposeChips();
+  if(travelPurposeChoice===PURPOSE_OTHER)document.getElementById('te-purpose-other').focus();
+}
+
+// 用件が未選択なら、その訪問先の最後の用件（選択肢と一致するものだけ）を「前回：○○」として薄く出す（自動では選ばない）
 function renderPurposeHint(){
   const el=document.getElementById('te-purpose-hint');
   if(!el)return;
-  const purpose=document.getElementById('te-purpose').value.trim();
-  const last=purpose?'':lastPurposeFor(travelIndexNow(),document.getElementById('te-visit').value);
-  el.innerHTML=last?`<button type="button" class="sc-chip" onclick="usePurposeHint()" title="タップで用件に入れます">候補：${escAttr(last)}</button>`:'';
+  const last=travelPurposeChoice?'':travelPurposeHintFor(travelIndexNow(),document.getElementById('te-visit').value);
+  el.innerHTML=last?`<button type="button" class="sc-chip" onclick="usePurposeHint()" title="タップで用件を選びます">前回：${escAttr(last)}</button>`:'';
   el.dataset.value=last||'';
 }
 function usePurposeHint(){
-  const el=document.getElementById('te-purpose-hint');
-  document.getElementById('te-purpose').value=el.dataset.value||'';
-  renderPurposeHint();
+  const v=document.getElementById('te-purpose-hint').dataset.value||'';
+  if(TRAVEL_PURPOSES.indexOf(v)>=0){travelPurposeChoice=v;renderPurposeChips();}
 }
 
 /* ===== 部品：候補つき入力欄 suggestCombo =====================================
@@ -6171,7 +6239,9 @@ function openTravelEntry(id){
   document.getElementById('te-from').value=t.from;
   document.getElementById('te-to').value=t.to;
   document.getElementById('te-visit').value=l?(l.visit||''):'';
-  document.getElementById('te-purpose').value=l?(l.purpose||''):'';
+  const ps=purposeToState(l?l.purpose:'');
+  travelPurposeChoice=ps.choice;
+  document.getElementById('te-purpose-other').value=ps.text;
   document.getElementById('te-amount').value=l&&l.amount?l.amount:'';
   document.getElementById('te-memo').value=l?(l.memo||''):'';
   document.getElementById('te-round').checked=false;
@@ -6182,7 +6252,7 @@ function openTravelEntry(id){
     `<button type="button" class="btn sm" onclick="setTravelFrom('${escAttr(st)}')">🏠 ${escAttr(st)}</button>`).join('');
   initVisitCombo().close();
   travelIndexNow();
-  document.getElementById('te-purpose-hint').innerHTML='';
+  renderPurposeChips();
   toggleTravelSearch();
   openModal('modal-travel-entry');
 }
@@ -6218,7 +6288,9 @@ function saveTravelEntry(){
   const from=document.getElementById('te-from').value.trim();
   const to=document.getElementById('te-to').value.trim();
   const visit=document.getElementById('te-visit').value.trim();
-  const purpose=document.getElementById('te-purpose').value.trim();
+  const pr=purposeFromState(travelPurposeChoice,document.getElementById('te-purpose-other').value);
+  if(!pr.ok){alert(pr.error);document.getElementById('te-purpose-other').focus();return;}
+  const purpose=pr.value;
   const memo=document.getElementById('te-memo').value.trim();
   const round=document.getElementById('te-round').checked;
   let amount=parseInt(document.getElementById('te-amount').value)||0;

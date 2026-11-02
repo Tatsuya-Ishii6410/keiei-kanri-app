@@ -1,4 +1,4 @@
-/* 交通費の訪問先の候補（到着駅から過去の訪問先を選ぶ）のテスト
+/* 交通費の訪問先の候補（到着駅から過去の訪問先を選ぶ）と、用件の選択式のテスト
    実行: node tests/travel-suggest.test.js
 
    - keiei-kanri.html は「@travel-rules-begin」〜「@travel-rules-end」の範囲だけを切り出して読む
@@ -17,7 +17,8 @@ const app = {};
 vm.createContext(app);
 vm.runInContext(html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + `
 globalThis.exported = { HOME_STATIONS, TRAVEL_BLANK_DESC, normStation, isHomeStation, normVisit, visitSideStation,
-  buildVisitIndex, visitSuggestions, clientSuggestions, lastPurposeFor };`, app);
+  buildVisitIndex, visitSuggestions, clientSuggestions, lastPurposeFor,
+  TRAVEL_PURPOSES, purposeFromState, purposeToState, travelPurposeHintFor };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -160,6 +161,75 @@ test('候補が無いとき：駅が空・初めての駅・台帳が空でも�
   assert.deepStrictEqual(plain(A.visitSuggestions(empty, '鷹取', 8)), []);
   assert.deepStrictEqual(plain(A.clientSuggestions([], [], 5)), []);
   assert.deepStrictEqual(plain(A.visitSuggestions(null, '鷹取', 8)), []);
+});
+
+console.log('交通費の用件（選択式）');
+
+test('3つの選択肢：保存はその文字列、復元はそのボタン', () => {
+  A.TRAVEL_PURPOSES.forEach(c => {
+    const r = A.purposeFromState(c, 'テキストは無視');
+    assert.deepStrictEqual(plain(r), { ok: true, value: c });
+    assert.deepStrictEqual(plain(A.purposeToState(r.value)), { choice: c, text: '' });
+  });
+  assert.deepStrictEqual(plain(A.TRAVEL_PURPOSES), ['打ち合わせ', '商談', '現地作業']);
+});
+
+test('「その他：○○」の保存と復元（テキストに「：」があっても崩れない）', () => {
+  const r = A.purposeFromState('その他', '  研修  ');
+  assert.deepStrictEqual(plain(r), { ok: true, value: 'その他：研修' });
+  assert.deepStrictEqual(plain(A.purposeToState(r.value)), { choice: 'その他', text: '研修' });
+  const r2 = A.purposeFromState('その他', '見積：A社の件');
+  assert.strictEqual(r2.value, 'その他：見積：A社の件');
+  assert.deepStrictEqual(plain(A.purposeToState(r2.value)), { choice: 'その他', text: '見積：A社の件' });
+  // 保存し直しても増えていかない
+  assert.strictEqual(A.purposeFromState('その他', A.purposeToState(r2.value).text).value, r2.value);
+});
+
+test('これまでの自由入力は「その他」＋元の文字列で復元し、保存しない限り書き換わらない', () => {
+  assert.deepStrictEqual(plain(A.purposeToState('見積の件')), { choice: 'その他', text: '見積の件' });
+  assert.deepStrictEqual(plain(A.purposeToState('営業同行')), { choice: 'その他', text: '営業同行' });
+  seq = 0;
+  const ledger = [tr('2026-10-01', '青野ヶ原駅', '鷹取', 'くらし工房', '見積の件')];
+  const before = JSON.stringify(ledger);
+  A.purposeToState(ledger[0].purpose);
+  A.buildVisitIndex(ledger, partsOf);
+  A.travelPurposeHintFor(A.buildVisitIndex(ledger, partsOf), 'くらし工房');
+  assert.strictEqual(JSON.stringify(ledger), before);
+  // 編集して保存し直したときだけ「その他：見積の件」になる
+  const st = A.purposeToState(ledger[0].purpose);
+  assert.strictEqual(A.purposeFromState(st.choice, st.text).value, 'その他：見積の件');
+});
+
+test('「その他」でテキストが空なら保存できない（理由つき）', () => {
+  ['', '   ', null, undefined].forEach(t => {
+    const r = A.purposeFromState('その他', t);
+    assert.strictEqual(r.ok, false);
+    assert(/内容を入力/.test(r.error), r.error);
+  });
+});
+
+test('未選択なら空で保存できる', () => {
+  assert.deepStrictEqual(plain(A.purposeFromState('', '')), { ok: true, value: '' });
+  assert.deepStrictEqual(plain(A.purposeFromState('', '残っていた文字')), { ok: true, value: '' });
+  assert.deepStrictEqual(plain(A.purposeToState('')), { choice: '', text: '' });
+  assert.deepStrictEqual(plain(A.purposeToState(undefined)), { choice: '', text: '' });
+});
+
+test('前回の用件の提案は、選択肢（打ち合わせ・商談・現地作業）と一致するときだけ', () => {
+  seq = 0;
+  const idx = A.buildVisitIndex([
+    tr('2026-09-01', '青野ヶ原駅', '鷹取', 'くらし工房', '打ち合わせ'),
+    tr('2026-10-01', '青野ヶ原駅', '鷹取', 'くらし工房様', '商談'),          // 最後の用件（表記ゆれもまとめる）
+    tr('2026-10-01', '青野ヶ原駅', '鷹取', '鷹取病院', 'その他：見学'),
+    tr('2026-09-01', '青野ヶ原駅', '鷹取', '須磨商店', '現地作業'),
+    tr('2026-10-05', '青野ヶ原駅', '鷹取', '須磨商店', '見積の件'),          // 最後が自由入力なら提案しない
+    tr('2026-10-05', '青野ヶ原駅', '鷹取', '用件なし', '')
+  ], partsOf);
+  assert.strictEqual(A.travelPurposeHintFor(idx, 'くらし工房'), '商談');
+  assert.strictEqual(A.travelPurposeHintFor(idx, '鷹取病院'), '');
+  assert.strictEqual(A.travelPurposeHintFor(idx, '須磨商店'), '');
+  assert.strictEqual(A.travelPurposeHintFor(idx, '用件なし'), '');
+  assert.strictEqual(A.travelPurposeHintFor(idx, 'はじめての会社'), '');
 });
 
 console.log(`\n${passed}件 成功` + (process.exitCode ? '（失敗あり）' : ''));
