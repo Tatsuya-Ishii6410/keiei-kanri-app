@@ -291,8 +291,9 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .dv2-hero-rate{display:flex;align-items:baseline;gap:6px;margin:2px 0}
 .dash-v2 .dv2-big{font-size:40px;line-height:1.1;color:var(--ui-accent-text)}
 .dash-v2 .dv2-unit{color:var(--ui-muted);font-weight:700;font-size:12px}
-.dash-v2 .dv2-hero-nums{margin:6px 0 0;display:grid;grid-template-columns:repeat(3,auto);justify-content:start;gap:4px 16px}
-.dash-v2 .dv2-hero-nums>div{display:flex;flex-direction:column;white-space:nowrap}
+.dash-v2 .dv2-hero-nums{margin:6px 0 0;display:flex;flex-wrap:wrap;gap:4px 16px}
+.dash-v2 .dv2-hero-nums>div{display:flex;flex-direction:column;min-width:0;max-width:100%}
+.dash-v2 .dv2-hero-nums b{overflow-wrap:anywhere}
 .dash-v2 .dv2-hero-nums .k{font-size:11px;color:var(--ui-muted-strong)}
 .dash-v2 .dv2-hero-nums b{font-size:14px}
 .dash-v2 .dv2-hero-nums .dv2-hn-main b{font-size:17px}.dash-v2 .dv2-hero-nums .plan b{color:var(--ui-plan-text)}
@@ -321,9 +322,10 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .dv2-kpi .dv2-note,.dash-v2 .dv2-kpi .dv2-delta.none{color:var(--ui-muted-strong)}
 .dash-v2 .dv2-kpi-top{display:flex;align-items:center;gap:6px;padding-right:30px;min-height:24px}
 .dash-v2 .dv2-kpi-icon{width:24px;height:24px;flex:none;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--ui-bg);color:var(--ui-accent-text)}
-.dash-v2 .dv2-kpi-label{font-size:12px;font-weight:700;color:var(--ui-muted-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-v2 .dv2-kpi-label{font-size:12px;font-weight:700;color:var(--ui-muted-strong);line-height:1.25;overflow-wrap:anywhere}
 .dash-v2 .dv2-info{position:absolute;top:2px;right:2px;width:44px;height:44px;border:0;background:none;color:var(--ui-muted-strong);font-size:15px;cursor:pointer}
-.dash-v2 .dv2-kpi-val{font-size:22px;margin:6px 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-v2 .dv2-kpi-val{font-size:22px;line-height:1.2;margin:6px 0 2px;white-space:normal;overflow-wrap:anywhere}
+.dash-v2 .dv2-kpi-val.fit-1{font-size:20px}.dash-v2 .dv2-kpi-val.fit-2{font-size:18px}.dash-v2 .dv2-kpi-val.fit-3{font-size:16px}
 .dash-v2 .dv2-kpi-val.is-null{font-size:14px;color:var(--ui-muted-strong)}
 .dash-v2 .dv2-kpi-sub{min-height:18px}
 .dash-v2 .dv2-kpi-big2{display:flex;align-items:baseline;gap:6px;margin-bottom:2px}
@@ -340,7 +342,7 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .dv2-ring-label.good{color:var(--ui-good-text)}.dash-v2 .dv2-ring-label.caution{color:var(--ui-caution-text)}
 .dash-v2 .dv2-ring-label.warn{color:var(--ui-warn-text)}.dash-v2 .dv2-ring-label.none{color:var(--ui-muted-strong)}
 .dash-v2 .kpi-rate .dv2-kpi-sub{text-align:center}
-.dash-v2 .kpi-cash .dv2-kpi-val{font-size:24px}
+.dash-v2 .kpi-cash .dv2-kpi-val:not([class*="fit-"]){font-size:24px}
 .dash-v2 .dv2-kpi-foot{display:flex;align-items:center;gap:8px;margin-top:6px}
 .dash-v2 .dv2-status{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;flex:none}
 .dash-v2 .dv2-status.good{background:var(--ui-good-soft);color:var(--ui-good-text)}.dash-v2 .dv2-status.caution{background:var(--ui-caution-soft);color:var(--ui-caution-text)}
@@ -357,7 +359,8 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .dv2-act-dot{width:24px;height:24px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff}
 .dash-v2 .sev-red .dv2-act-dot{background:var(--ui-warn-text)}.dash-v2 .sev-orange .dv2-act-dot{background:var(--ui-caution-text)}.dash-v2 .sev-green .dv2-act-dot{background:var(--ui-good-text)}
 .dash-v2 .dv2-act-body{flex:1;min-width:0;display:flex;flex-direction:column}
-.dash-v2 .dv2-act-title{font-weight:700;font-size:13px}
+.dash-v2 .dv2-act-title{font-weight:700;font-size:13px;overflow-wrap:anywhere}
+.dash-v2 .dv2-act-body .dv2-note,.dash-v2 .dv2-m-title,.dash-v2 .dv2-hl-list li,.dash-v2 .dv2-cond-title,.dash-v2 .dv2-landing .dv2-chip{overflow-wrap:anywhere;white-space:normal}
 .dash-v2 .dv2-act-btn{flex:none;min-height:44px;padding:0 12px;border-radius:999px;border:1px solid var(--ui-accent);background:var(--ui-bg);color:var(--ui-accent-text);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
 .dash-v2 .dv2-act-top{padding:14px;border-width:2px;background:var(--ui-bg)}
 .dash-v2 .dv2-act-top.sev-red{border-color:var(--ui-warn-soft);box-shadow:inset 4px 0 0 var(--ui-warn-text)}
@@ -454,6 +457,8 @@ body.dv2-on .tb-menu{display:none!important}
   .dash-v2 .dv2-hero-nums{gap:2px 12px}
   .dash-v2 .dv2-hero-nums .dv2-hn-main b{font-size:15px}.dash-v2 .dv2-hero-nums b{font-size:13px}
   .dash-v2 .dv2-kpi-val{font-size:18px}
+  .dash-v2 .dv2-kpi-val.fit-1{font-size:17px}.dash-v2 .dv2-kpi-val.fit-2,.dash-v2 .dv2-kpi-val.fit-3{font-size:16px}
+  .dash-v2 .kpi-cash .dv2-kpi-val:not([class*="fit-"]){font-size:20px}
 }
 @media (prefers-reduced-motion:reduce){
   .dash-v2 *,.dash-v2 *::before,.dash-v2 *::after{animation:none!important;transition:none!important}
@@ -13250,6 +13255,11 @@ document.addEventListener('click',e=>{
   if(m&&!m.hidden&&!e.target.closest('#dv2-menu,#dv2-avatar'))dv2Menu(false);
 });
 
+// 金額の表示の長さから文字の大きさの段階（fit-1〜3）を決める。長い金額・マイナス・「未設定」などを切らないため
+function dv2FitClass(text){
+  const n=Array.from(String(text||'')).length;
+  return n>=14?'fit-3':n>=12?'fit-2':n>=10?'fit-1':'';
+}
 function dv2Yen(n){return(n<0?'−':'')+'¥'+Math.abs(Math.round(n||0)).toLocaleString('ja-JP')}
 function dv2YmLabel(abs){return`${Math.floor(abs/12)}年${abs%12+1}月`}
 function dv2AxisLabel(v,step){
@@ -13616,7 +13626,7 @@ function renderDv2Kpis(D){
   ];
   el.innerHTML=cards.map((c,i)=>{
     const val=c.value===null?(c.nullText||'未設定'):c.fmt==='pct'?c.value.toFixed(1)+'%':dv2Yen(c.value);
-    const valEl=`<div class="dv2-num dv2-kpi-val ${c.value===null?'is-null':''}" ${c.value===null?'':`data-count="${c.value}" data-fmt="${c.fmt}" data-key="kpi-${c.key}"`}>${val}</div>`;
+    const valEl=`<div class="dv2-num dv2-kpi-val ${c.value===null?'is-null':dv2FitClass(val)}" ${c.value===null?'':`data-count="${c.value}" data-fmt="${c.fmt}" data-key="kpi-${c.key}"`}>${val}</div>`;
     return`<article class="dv2-card dv2-kpi kpi-${c.key} ${i%2?'tint-purple':'tint-blue'}" role="link" tabindex="0" onclick="${c.go}" onkeydown="if(event.key==='Enter')${c.go}">
       <div class="dv2-kpi-top"><span class="dv2-kpi-icon" aria-hidden="true">${c.icon}</span><span class="dv2-kpi-label">${c.label}</span>
         <button class="dv2-info" aria-label="${c.label}の計算根拠" aria-expanded="${!!dv2Open['kpi-'+c.key]}" onclick="event.stopPropagation();dv2Toggle('kpi-${c.key}')">ⓘ</button></div>

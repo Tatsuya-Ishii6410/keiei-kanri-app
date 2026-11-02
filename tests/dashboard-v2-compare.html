@@ -52,6 +52,13 @@ function run(){
       {id:4,date:ym(0,-1)+'-20',expectedDate:ym(0,-1)+'-20',type:'売上',desc:'株式会社A 入金予定',amount:330000,status:'planned_in',projectId:1,billingMonth:ym(0,-2)},
       {id:5,date:ym(0,-3)+'-15',type:'その他経費',desc:'機器購入',amount:900000,status:'actual'}];   // 営業利益がマイナスの月（縦軸の0より下）
     S.bankBalance=1234567;S.nextLedgerId=6;
+    // ?big：長い金額・マイナスの金額で、欠け・はみ出しを確かめる（数字の突き合わせはそのまま行う）
+    if(location.search.indexOf('big')>=0){
+      S.projects[0].amount=123456789;S.projects[1].amount=98765432;
+      S.fiscalYears[0].salesTarget=9999999999;
+      S.ledger.push({id:6,date:ym(0,0)+'-12',type:'その他経費',desc:'大きな支出',amount:987654321,status:'actual'});
+      S.bankBalance=1234567890;S.nextLedgerId=7;
+    }
     w.renderFiscalSelects();
     d.getElementById('fiscal-select').value='1';
     d.getElementById('month-select').value=String(now.getMonth());
@@ -122,6 +129,14 @@ function run(){
       check('状態の行6つがアクションセンターの「状態の詳細」にある',d.querySelectorAll('#dv2-slot-status #dv-status > div[id^="d-"]').length,6);
       check('メトリクス7枚が詳細データにある',d.querySelectorAll('#dv2-slot-metrics .metric-card').length,7);
       check('横スクロールが出ない',d.documentElement.scrollWidth<=w.innerWidth,true);
+      // 新画面の文字が切れていない・はみ出していない（「…」で省略しない。画面の右端を越えない）
+      const bad=[...d.querySelectorAll('#dash-v2 .dv2-layout *, #dash-v2 .dv2-head *')].filter(e=>{
+        if(e.closest('svg')||!e.getClientRects().length)return false;
+        const cs=w.getComputedStyle(e),r=e.getBoundingClientRect();
+        if(r.right>w.innerWidth+0.5)return true;
+        return cs.textOverflow==='ellipsis'&&e.scrollWidth>e.clientWidth+1&&e.id!=='dv2-hello';
+      }).map(e=>(e.id||e.className||e.tagName)+':'+e.textContent.slice(0,20));
+      check('文字の欠け・はみ出しが無い（KPI・山・アクションセンターほか）',bad.join(' | '),'');
       // 旧に切り替えると元の場所に戻る
       w.setDashVersion(1,true);
       check('旧に切り替え：メトリクスが元の場所',d.querySelectorAll('#dvh-metrics .metric-card').length,7);
