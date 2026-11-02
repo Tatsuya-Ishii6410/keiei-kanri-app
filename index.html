@@ -85,6 +85,12 @@ tbody tr[style*="font-weight:bold"] td,td[style*="font-weight:bold"],td[style*="
 .lt-menu [role=menuitem]{min-height:44px;padding:0 12px;border:0;border-radius:8px;background:none;text-align:left;font:inherit;font-size:14px;color:var(--text-primary);cursor:pointer;white-space:nowrap}
 .lt-menu [role=menuitem]:hover,.lt-menu [role=menuitem]:focus{background:var(--bg-secondary)}
 .lt-menu [role=menuitem]:focus-visible,.list-toolbar .lt-menu-btn:focus-visible,.list-toolbar select:focus-visible,.list-toolbar .lt-primary:focus-visible{outline:2px solid #3976F6;outline-offset:2px}
+.lt-menu [role=menuitem][hidden]{display:none}
+/* スマホで隠す絵文字。PCは display:contents でボタンの文字とひと続きにする（flex の gap が入らないように） */
+.lt-emoji{display:contents}
+.lt-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;margin-left:6px;padding:0 6px;border-radius:999px;
+  background:var(--amber-bg);color:var(--amber);font-size:11px;font-weight:700;line-height:1}
+.lt-count[hidden]{display:none}
 @media(max-width:768px){.section-title.title-dup{display:none}}
 .section-title{font-size:17px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:8px}
 .card{background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;padding:22px 24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(16,24,40,0.05)}
@@ -867,6 +873,16 @@ body.dv2-on .tb-menu{display:none!important}
   .list-toolbar .lt-primary,.list-toolbar .lt-menu-btn{width:100%;height:44px;min-height:44px;justify-content:center;border-radius:12px}
   .list-toolbar .lt-menu-wrap{display:block;position:relative}
   .list-toolbar .lt-menu-btn{background:#fff;border:1px solid var(--border);color:var(--text-primary)}
+  /* .lt-flat：中の枠をほどいて1つの2列グリッドに並べる（行の順は .lt-o1〜 で決める。DOMの順はPCのまま） */
+  .list-toolbar.lt-flat{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px!important;align-items:stretch;justify-content:stretch}
+  .list-toolbar.lt-flat>div:not(.lt-menu-wrap){display:contents!important}
+  .list-toolbar.lt-flat>*,.list-toolbar.lt-flat>div>*{width:auto;min-width:0;margin:0}
+  .list-toolbar.lt-flat .btn{width:100%;height:44px;min-height:44px;justify-content:center;border-radius:12px;white-space:nowrap}
+  .list-toolbar .lt-o1{order:1}.list-toolbar .lt-o2{order:2}.list-toolbar .lt-o3{order:3}.list-toolbar .lt-o4{order:4}
+  .list-toolbar .lt-o5{order:5}.list-toolbar .lt-o6{order:6}
+  .list-toolbar .lt-o9{order:9;grid-column:1/-1}.list-toolbar .lt-o9:empty{display:none}
+  .lt-emoji{display:none}
+  .lt-menu.lt-menu-left{right:auto;left:0}
   .actions-row{flex-direction:column-reverse;align-items:stretch}
   .actions-row .btn{width:100%;justify-content:center}
 
@@ -1206,29 +1222,38 @@ body.dv2-on .tb-menu{display:none!important}
 <!-- LEDGER -->
 <div id="page-ledger" class="page">
   <div class="section-header">
-    <h1 class="section-title">キャッシュフロー管理</h1>
+    <h1 class="section-title title-dup">キャッシュフロー管理</h1>
   </div>
   <div class="tab-group">
-    <button class="tab active" onclick="switchCfTab('cf',this)">💰 キャッシュフロー</button>
-    <button class="tab" onclick="switchCfTab('travel',this)">🚃 交通費台帳</button>
+    <button class="tab active" onclick="switchCfTab('cf',this)"><span class="lt-emoji" aria-hidden="true">💰 </span>キャッシュフロー</button>
+    <button class="tab" onclick="switchCfTab('travel',this)"><span class="lt-emoji" aria-hidden="true">🚃 </span>交通費台帳</button>
   </div>
   <div id="cf-pane-main">
-  <div class="section-header" style="flex-wrap:wrap;gap:10px">
+  <div class="section-header list-toolbar lt-flat" style="flex-wrap:wrap;gap:10px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <select id="ledger-month" onchange="renderLedger()" style="width:auto;font-size:13px">
+      <span class="lt-select lt-o1"><select id="ledger-month" onchange="renderLedger()" style="width:auto;font-size:13px" aria-label="月で絞り込む">
         <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
-      </select>
-      <span id="ledger-summary" style="font-size:12px;color:var(--text-secondary);white-space:nowrap"></span>
+      </select><svg class="lt-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+      <span id="ledger-summary" class="lt-o9" style="font-size:12px;color:var(--text-secondary);white-space:nowrap"></span>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn" onclick="openDriveImportModal()">☁️ ドライブから取込</button>
-      <button class="btn" onclick="startReceiptImport()">📷 領収書から登録</button>
-      <button class="btn" onclick="openInboxList()">📥 取込待ち</button>
-      <button class="btn" onclick="openDebitImportModal()">📧 デビット通知から取込</button>
-      <button class="btn" onclick="openFixedCostsModal()">🔁 固定費管理</button>
-      <button class="btn primary" onclick="openLedgerModal(null,'actual')">+ 実績入力</button>
-      <button class="btn" onclick="openLedgerModal(null,'planned_in')">+ 入金予定</button>
-      <button class="btn" onclick="openLedgerModal(null,'planned_out')">+ 出金予定</button>
+      <button class="btn lt-wide" onclick="openDriveImportModal()">☁️ ドライブから取込</button>
+      <button class="btn lt-o5" onclick="startReceiptImport()"><span class="lt-emoji" aria-hidden="true">📷 </span>領収書から登録</button>
+      <button class="btn lt-wide" onclick="openInboxList()">📥 取込待ち</button>
+      <button class="btn lt-wide" onclick="openDebitImportModal()">📧 デビット通知から取込</button>
+      <button class="btn lt-wide" onclick="openFixedCostsModal()">🔁 固定費管理</button>
+      <button class="btn primary lt-primary lt-o2" onclick="openLedgerModal(null,'actual')">+ 実績入力</button>
+      <button class="btn lt-o3" onclick="openLedgerModal(null,'planned_in')">+ 入金予定</button>
+      <button class="btn lt-o4" onclick="openLedgerModal(null,'planned_out')">+ 出金予定</button>
+      <div class="lt-menu-wrap lt-o6">
+        <button class="btn lt-menu-btn" id="cf-more-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="cf-more-menu" onclick="ltMenu(this)">その他 ▾<span class="lt-count" data-inbox-count hidden></span></button>
+        <div class="lt-menu" id="cf-more-menu" role="menu" aria-labelledby="cf-more-btn" hidden>
+          <button role="menuitem" tabindex="-1" onclick="ltMenu(null);openDriveImportModal()">ドライブから取込</button>
+          <button role="menuitem" tabindex="-1" onclick="ltMenu(null);openInboxList()">取込待ち<span class="lt-count" data-inbox-count data-suffix="件" hidden></span></button>
+          <button role="menuitem" tabindex="-1" onclick="ltMenu(null);openDebitImportModal()">デビット通知から取込</button>
+          <button role="menuitem" tabindex="-1" onclick="ltMenu(null);openFixedCostsModal()">固定費管理</button>
+        </div>
+      </div>
     </div>
   </div>
   <div id="cf-settle-notice"></div>
@@ -1276,17 +1301,25 @@ body.dv2-on .tb-menu{display:none!important}
   </div>
 
   <div id="cf-pane-travel" style="display:none">
-    <div class="section-header" style="flex-wrap:wrap;gap:10px">
-      <select id="tl-month" onchange="renderTravelLedger()" style="width:auto;font-size:13px">
+    <div class="section-header list-toolbar lt-flat" style="flex-wrap:wrap;gap:10px">
+      <span class="lt-select lt-o1"><select id="tl-month" onchange="renderTravelLedger()" style="width:auto;font-size:13px" aria-label="月で絞り込む">
         <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
-      </select>
+      </select><svg class="lt-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn primary" onclick="openTravelEntry()">+ 交通費を追加</button>
-        <button class="btn" onclick="openCalendarImport()">📅 カレンダーから作成</button>
-        <button class="btn" onclick="openSettleModal()">🚃 交通費精算を追加</button>
-        <button class="btn" onclick="openLegacyModeModal()">🔀 旧「電車・バス」の手段を整理</button>
-        <button class="btn" onclick="exportTravelCsv()">📥 CSV出力</button>
-        <button class="btn" onclick="printTravelLedger()">🖨️ PDF出力</button>
+        <button class="btn primary lt-primary lt-o2" onclick="openTravelEntry()">+ 交通費を追加</button>
+        <button class="btn lt-o3" onclick="openCalendarImport()"><span class="lt-emoji" aria-hidden="true">📅 </span>カレンダーから作成</button>
+        <button class="btn lt-o4" onclick="openSettleModal()"><span class="lt-emoji" aria-hidden="true">🚃 </span>交通費精算を追加</button>
+        <button class="btn lt-wide" onclick="openLegacyModeModal()">🔀 旧「電車・バス」の手段を整理</button>
+        <button class="btn lt-wide" onclick="exportTravelCsv()">📥 CSV出力</button>
+        <button class="btn lt-wide" onclick="printTravelLedger()">🖨️ PDF出力</button>
+        <div class="lt-menu-wrap lt-o5">
+          <button class="btn lt-menu-btn" id="tl-more-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="tl-more-menu" onclick="ltMenu(this)">その他 ▾</button>
+          <div class="lt-menu lt-menu-left" id="tl-more-menu" role="menu" aria-labelledby="tl-more-btn" hidden>
+            <button role="menuitem" tabindex="-1" onclick="ltMenu(null);exportTravelCsv()">CSV出力</button>
+            <button role="menuitem" tabindex="-1" onclick="ltMenu(null);printTravelLedger()">PDF出力</button>
+            <button role="menuitem" tabindex="-1" onclick="ltMenu(null);openLegacyModeModal()">旧「電車・バス」の手段を整理</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="card"><div id="tl-summary"></div></div>
@@ -1441,23 +1474,30 @@ body.dv2-on .tb-menu{display:none!important}
 <!-- MONTHLY REPORT -->
 <div id="page-report" class="page">
   <div class="section-header">
-    <h1 class="section-title">レポート</h1>
+    <h1 class="section-title title-dup">レポート</h1>
   </div>
   <!-- 印刷時だけ出力の先頭に出る見出し（中身は setPrintHeader() が入れる） -->
   <div class="print-header" id="print-header"></div>
   <div class="tab-group no-print">
-    <button class="tab active" onclick="switchReportTab('monthly',this)">📊 月次レポート</button>
-    <button class="tab" onclick="switchReportTab('loan',this)">💰 融資力診断</button>
-    <button class="tab" onclick="switchReportTab('forecast',this)">📋 案件予実</button>
+    <button class="tab active" onclick="switchReportTab('monthly',this)"><span class="lt-emoji" aria-hidden="true">📊 </span>月次レポート</button>
+    <button class="tab" onclick="switchReportTab('loan',this)"><span class="lt-emoji" aria-hidden="true">💰 </span>融資力診断</button>
+    <button class="tab" onclick="switchReportTab('forecast',this)"><span class="lt-emoji" aria-hidden="true">📋 </span>案件予実</button>
   </div>
   <div id="report-pane-monthly">
-    <div class="report-actions" style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-bottom:16px">
-      <select id="report-month" onchange="onReportMonthChange()" style="width:auto;font-size:13px"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option><option value="all">通年（期全体）</option></select>
-      <span id="report-mode-note" style="display:none;font-size:11px;color:var(--text-muted)">期全体を実績＋予定で集計します</span>
-      <button class="btn primary" onclick="generateReport()">レポートを生成</button>
-      <button class="btn" onclick="printReport()">🖨️ 印刷する</button>
-      <button class="btn" id="pl-download-btn" onclick="downloadMonthlyPL()">📥 月次PL（Excel）をダウンロード</button>
-      <button class="btn" onclick="openTaxEstimate()">🧮 税金を試算する</button>
+    <div class="report-actions list-toolbar lt-flat" style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-bottom:16px">
+      <span class="lt-select lt-o1"><select id="report-month" onchange="onReportMonthChange()" style="width:auto;font-size:13px" aria-label="対象月"><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option><option value="all">通年（期全体）</option></select><svg class="lt-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+      <span id="report-mode-note" class="lt-o9" style="display:none;font-size:11px;color:var(--text-muted)">期全体を実績＋予定で集計します</span>
+      <button class="btn primary lt-primary lt-o2" onclick="generateReport()">レポートを生成</button>
+      <button class="btn lt-wide" onclick="printReport()">🖨️ 印刷する</button>
+      <button class="btn lt-wide" id="pl-download-btn" onclick="downloadMonthlyPL()">📥 月次PL（Excel）をダウンロード</button>
+      <div class="lt-menu-wrap lt-o3">
+        <button class="btn lt-menu-btn" id="rp-out-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="rp-out-menu" onclick="ltMenu(this)">出力 ▾</button>
+        <div class="lt-menu lt-menu-left" id="rp-out-menu" role="menu" aria-labelledby="rp-out-btn" hidden>
+          <button role="menuitem" tabindex="-1" onclick="ltMenu(null);printReport()">印刷する</button>
+          <button role="menuitem" tabindex="-1" id="pl-download-mi" onclick="ltMenu(null);downloadMonthlyPL()">月次PL（Excel）をダウンロード</button>
+        </div>
+      </div>
+      <button class="btn lt-o4" onclick="openTaxEstimate()"><span class="lt-emoji" aria-hidden="true">🧮 </span>税金を試算する</button>
     </div>
     <div class="report-sheet"><div id="report-body"></div></div>
   </div>
@@ -5182,6 +5222,8 @@ const INBOX_STATE_LABEL={ready:'読み取り済み',failed:'読み取り失敗',
 
 // ダッシュボードの「📥 取込待ち ○件」
 function renderInboxStatus(){
+  // CF管理の「その他 ▾」とメニューの「取込待ち」の件数
+  document.querySelectorAll('[data-inbox-count]').forEach(b=>{const n=inboxItems.length;b.hidden=!n;b.textContent=n?n+(b.dataset.suffix||''):'';});
   const el=document.getElementById('d-inbox-status');
   if(!el)return;
   const c=S.inboxFolders||{};
@@ -11072,6 +11114,7 @@ function onReportMonthChange(){
   const btn=document.getElementById('pl-download-btn');
   const note=document.getElementById('report-mode-note');
   if(btn)btn.style.display=annual?'none':'';
+  const mi=document.getElementById('pl-download-mi');if(mi)mi.hidden=annual;
   if(note)note.style.display=annual?'':'none';
 }
 
