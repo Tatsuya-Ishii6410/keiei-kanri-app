@@ -184,7 +184,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .sc-chip:hover{color:var(--ui-accent);border-color:var(--ui-accent)}
 .te-home-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 /* 部品：選択チップ（横並び・1つだけ選ぶ。もう一度押すと外れる） */
-.ui-chips{display:flex;gap:var(--ui-space-1);flex-wrap:nowrap}
+.ui-chips{display:flex;gap:var(--ui-space-1);flex-wrap:wrap}
 .ui-chip{flex:1 1 auto;min-height:44px;padding:0 var(--ui-space-2);border:1px solid var(--ui-border);border-radius:var(--ui-radius-item);
   background:var(--ui-bg);color:var(--ui-text);font-family:inherit;font-size:13px;font-weight:400;white-space:nowrap;cursor:pointer;
   transition:background-color var(--ui-motion) ease,color var(--ui-motion) ease,border-color var(--ui-motion) ease}
@@ -1618,7 +1618,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
     <div class="form-group"><label class="form-label">到着地</label><input id="te-to" type="text" placeholder="大阪" onchange="travelStationChanged()"></div>
   </div>
   <div class="form-row single">
-    <div class="form-group"><label class="form-label">訪問先（任意）</label><input id="te-visit" type="text" placeholder="株式会社〇〇" autocomplete="off" onchange="renderPurposeHint()"></div>
+    <div class="form-group"><label class="form-label">訪問先（任意）</label><input id="te-visit" type="text" placeholder="株式会社〇〇" autocomplete="off" onchange="renderPurposeHint()" oninput="travelAuto.visit=false"></div>
   </div>
   <div class="form-row single">
     <div class="form-group"><label class="form-label" id="te-purpose-label">用件（任意）</label>
@@ -5655,7 +5655,7 @@ function buildVisitIndex(ledger,partsOf){
   (ledger||[]).forEach(l=>{
     if(!l||l.type!=='交通費'||(l.status||'actual')!=='actual')return;
     const visit=String(l.visit||'').trim();
-    if(!visit||visit===TRAVEL_BLANK_DESC||l.desc===TRAVEL_BLANK_DESC)return;
+    if(!visit||visit===TRAVEL_BLANK_DESC||l.desc===TRAVEL_BLANK_DESC||isHomeVisit(visit))return;
     const key=normVisit(visit);
     if(!key)return;
     const date=String(l.date||'');
@@ -5698,7 +5698,7 @@ function clientSuggestions(projects,exclude,limit){
   (projects||[]).slice().sort((a,b)=>(b.id||0)-(a.id||0)).forEach(p=>{
     const c=String((p&&p.client)||'').trim();
     const k=normVisit(c);
-    if(!c||!k||seen[k]||out.length>=(limit||5))return;
+    if(!c||!k||seen[k]||isHomeVisit(c)||out.length>=(limit||5))return;
     seen[k]=true;
     out.push(c);
   });
@@ -5715,7 +5715,10 @@ function lastPurposeFor(index,visit){
    選択肢は TRAVEL_PURPOSES と「その他」。purpose 列には文字列のまま入れる（列は増やさない）
      打ち合わせ／商談／現地作業 → その文字列、その他 → 「その他：○○」、未選択 → ''
    ★ 経費（交際費など）の用件は自由入力のまま。ここは交通費の入力モーダルだけ */
-const TRAVEL_PURPOSES=['打ち合わせ','商談','現地作業'];
+const TRAVEL_PURPOSES=['打ち合わせ','商談','現地作業','帰宅'];
+// 帰りの行（到着が自宅駅）の自動入力の値
+const PURPOSE_HOME='帰宅';
+const VISIT_HOME='自宅';
 const PURPOSE_OTHER='その他';
 const PURPOSE_OTHER_PREFIX='その他：';
 
@@ -5741,10 +5744,35 @@ function purposeToState(value){
 }
 
 // 提案（前回の用件）：その訪問先の最後の用件が選択肢（打ち合わせ・商談・現地作業）と一致するときだけ
+// 「帰宅」は提案しない（帰りの行は自動入力で入るため）
 function travelPurposeHintFor(index,visit){
   const last=lastPurposeFor(index,visit);
-  return TRAVEL_PURPOSES.indexOf(last)>=0?last:'';
+  return TRAVEL_PURPOSES.indexOf(last)>=0&&last!==PURPOSE_HOME?last:'';
 }
+
+// 帰りの行：到着が自宅駅で、出発が自宅駅でない（出発が空なら帰りの行とはみなさない）
+function isReturnTrip(from,to){
+  return isHomeStation(to)&&!!normStation(from)&&!isHomeStation(from);
+}
+
+/* 帰りの行の自動入力（訪問先＝自宅、用件＝帰宅）。2つの欄は別々に判定する
+   st={visit, choice, autoVisit, autoPurpose}（autoX＝その欄がまだ自動入力のまま。モーダルの中だけで持ち、保存しない）
+   帰りの行：空の訪問先に「自宅」、未選択の用件に「帰宅」を入れる（入っている欄は上書きしない）
+   帰りの行でなくなった：自動入力のままの欄だけ空に戻す（手で触った欄は消さない）
+   返り値は新しい st */
+function applyReturnAutofill(st,from,to){
+  const o=Object.assign({visit:'',choice:'',autoVisit:false,autoPurpose:false},st);
+  if(isReturnTrip(from,to)){
+    if(!String(o.visit||'').trim()){o.visit=VISIT_HOME;o.autoVisit=true;}
+    if(!o.choice){o.choice=PURPOSE_HOME;o.autoPurpose=true;}
+  }else{
+    if(o.autoVisit&&o.visit===VISIT_HOME){o.visit='';}
+    if(o.autoPurpose&&o.choice===PURPOSE_HOME){o.choice='';}
+    o.autoVisit=false;o.autoPurpose=false;
+  }
+  return o;
+}
+const isHomeVisit=v=>!!normVisit(v)&&normVisit(v)===normVisit(VISIT_HOME);
 // ===== @travel-rules-end
 let editTravelId=null;
 let editTravelRound=false;
@@ -6105,14 +6133,31 @@ function initVisitCombo(){
   if(visitCombo)return visitCombo;
   visitCombo=suggestCombo(document.getElementById('te-visit'),{
     sections:travelVisitSections,
-    onPick:()=>renderPurposeHint()
+    onPick:()=>{travelAuto.visit=false;renderPurposeHint();}
   });
   return visitCombo;
 }
 
 // 出発地・到着地を入れたら候補を開く（候補が無ければ何も出さない）
+// 自動入力の状態（モーダルの中だけ。保存しない）
+let travelAuto={visit:false,purpose:false};
+
+// 出発地・到着地が変わったとき：帰りの行なら「自宅」「帰宅」を自動で入れ、そうでなければ候補を開く
+// （帰りの行では候補を自動で開かない。欄をタップすれば出発駅から候補を引く）
 function travelStationChanged(){
-  if(visitCombo&&document.getElementById('modal-travel-entry').classList.contains('open'))visitCombo.open();
+  if(!document.getElementById('modal-travel-entry').classList.contains('open'))return;
+  const from=document.getElementById('te-from').value,to=document.getElementById('te-to').value;
+  const visitEl=document.getElementById('te-visit');
+  const next=applyReturnAutofill({visit:visitEl.value,choice:travelPurposeChoice,
+    autoVisit:travelAuto.visit,autoPurpose:travelAuto.purpose},from,to);
+  visitEl.value=next.visit;
+  travelAuto={visit:next.autoVisit,purpose:next.autoPurpose};
+  if(next.choice!==travelPurposeChoice){travelPurposeChoice=next.choice;renderPurposeChips();}
+  else renderPurposeHint();
+  if(!visitCombo)return;
+  // 出発地を先に入れたときに開いた候補も、帰りの行になったら閉じる
+  if(isReturnTrip(from,to))visitCombo.close();
+  else visitCombo.open();
 }
 
 function setTravelFrom(st){
@@ -6137,6 +6182,7 @@ function renderPurposeChips(){
 // もう一度同じボタンを押すと選択を外す
 function pickTravelPurpose(c){
   travelPurposeChoice=travelPurposeChoice===c?'':c;
+  travelAuto.purpose=false;   // 手で選んだ（外した）欄は自動入力として扱わない
   renderPurposeChips();
   if(travelPurposeChoice===PURPOSE_OTHER)document.getElementById('te-purpose-other').focus();
 }
@@ -6241,6 +6287,7 @@ function openTravelEntry(id){
   document.getElementById('te-visit').value=l?(l.visit||''):'';
   const ps=purposeToState(l?l.purpose:'');
   travelPurposeChoice=ps.choice;
+  travelAuto={visit:false,purpose:false};   // 開いたときは自動入力しない（過去の行は書き換えない）
   document.getElementById('te-purpose-other').value=ps.text;
   document.getElementById('te-amount').value=l&&l.amount?l.amount:'';
   document.getElementById('te-memo').value=l?(l.memo||''):'';

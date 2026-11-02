@@ -18,7 +18,7 @@ vm.createContext(app);
 vm.runInContext(html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + `
 globalThis.exported = { HOME_STATIONS, TRAVEL_BLANK_DESC, normStation, isHomeStation, normVisit, visitSideStation,
   buildVisitIndex, visitSuggestions, clientSuggestions, lastPurposeFor,
-  TRAVEL_PURPOSES, purposeFromState, purposeToState, travelPurposeHintFor };`, app);
+  TRAVEL_PURPOSES, purposeFromState, purposeToState, travelPurposeHintFor, isReturnTrip, applyReturnAutofill };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -171,7 +171,7 @@ test('3つの選択肢：保存はその文字列、復元はそのボタン', (
     assert.deepStrictEqual(plain(r), { ok: true, value: c });
     assert.deepStrictEqual(plain(A.purposeToState(r.value)), { choice: c, text: '' });
   });
-  assert.deepStrictEqual(plain(A.TRAVEL_PURPOSES), ['打ち合わせ', '商談', '現地作業']);
+  assert.deepStrictEqual(plain(A.TRAVEL_PURPOSES), ['打ち合わせ', '商談', '現地作業', '帰宅']);
 });
 
 test('「その他：○○」の保存と復元（テキストに「：」があっても崩れない）', () => {
@@ -215,7 +215,7 @@ test('未選択なら空で保存できる', () => {
   assert.deepStrictEqual(plain(A.purposeToState(undefined)), { choice: '', text: '' });
 });
 
-test('前回の用件の提案は、選択肢（打ち合わせ・商談・現地作業）と一致するときだけ', () => {
+test('前回の用件の提案は、選択肢（打ち合わせ・商談・現地作業。帰宅は除く）と一致するときだけ', () => {
   seq = 0;
   const idx = A.buildVisitIndex([
     tr('2026-09-01', '青野ヶ原駅', '鷹取', 'くらし工房', '打ち合わせ'),
@@ -230,6 +230,84 @@ test('前回の用件の提案は、選択肢（打ち合わせ・商談・現�
   assert.strictEqual(A.travelPurposeHintFor(idx, '須磨商店'), '');
   assert.strictEqual(A.travelPurposeHintFor(idx, '用件なし'), '');
   assert.strictEqual(A.travelPurposeHintFor(idx, 'はじめての会社'), '');
+});
+
+console.log('帰りの行の自動入力（訪問先＝自宅、用件＝帰宅）');
+
+const empty = { visit: '', choice: '', autoVisit: false, autoPurpose: false };
+
+test('用件の選択肢は 打ち合わせ／商談／現地作業／帰宅（＋その他）。「帰宅」はそのまま保存・復元', () => {
+  assert.deepStrictEqual(plain(A.TRAVEL_PURPOSES), ['打ち合わせ', '商談', '現地作業', '帰宅']);
+  assert.deepStrictEqual(plain(A.purposeFromState('帰宅', '')), { ok: true, value: '帰宅' });
+  assert.deepStrictEqual(plain(A.purposeToState('帰宅')), { choice: '帰宅', text: '' });
+  // 既存の「その他：…」の復元は壊れない
+  assert.deepStrictEqual(plain(A.purposeToState('その他：帰宅前に買い出し')), { choice: 'その他', text: '帰宅前に買い出し' });
+  assert.deepStrictEqual(plain(A.purposeToState('その他：研修')), { choice: 'その他', text: '研修' });
+});
+
+test('帰りの行（到着が自宅駅・出発が自宅駅でない）で「自宅」「帰宅」が自動で入る（両方の自宅駅）', () => {
+  [['鷹取', '青野ヶ原駅'], ['鷹取駅', '青野ヶ原'], ['梅田', '天神橋筋六丁目'], ['梅田駅', '天神橋筋六丁目駅']].forEach(([f, t]) => {
+    const r = A.applyReturnAutofill(empty, f, t);
+    assert.deepStrictEqual(plain(r), { visit: '自宅', choice: '帰宅', autoVisit: true, autoPurpose: true }, f + '→' + t);
+  });
+  assert(A.isReturnTrip('鷹取', '天神橋筋六丁目駅'));
+});
+
+test('片方だけ入っている行では、入っている欄を上書きしない（2つの欄は別々）', () => {
+  const r1 = A.applyReturnAutofill({ visit: 'くらし工房', choice: '' }, '鷹取', '青野ヶ原駅');
+  assert.deepStrictEqual(plain(r1), { visit: 'くらし工房', choice: '帰宅', autoVisit: false, autoPurpose: true });
+  const r2 = A.applyReturnAutofill({ visit: '', choice: '商談' }, '鷹取', '青野ヶ原駅');
+  assert.deepStrictEqual(plain(r2), { visit: '自宅', choice: '商談', autoVisit: true, autoPurpose: false });
+});
+
+test('自宅駅どうし・行きの行・出発が空では入らない', () => {
+  [['青野ヶ原駅', '天神橋筋六丁目駅'], ['天神橋筋六丁目', '青野ヶ原'], ['青野ヶ原駅', '鷹取'], ['三宮', '鷹取'], ['', '青野ヶ原駅']].forEach(([f, t]) => {
+    assert.deepStrictEqual(plain(A.applyReturnAutofill(empty, f, t)), empty, f + '→' + t);
+  });
+});
+
+test('到着を自宅駅から別の駅に変えると、自動入力のままの値だけが消え、手入力の値は消えない', () => {
+  // 両方とも自動入力のまま → 両方消える
+  let st = A.applyReturnAutofill(empty, '鷹取', '青野ヶ原駅');
+  assert.deepStrictEqual(plain(A.applyReturnAutofill(st, '鷹取', '三宮')), empty);
+  // 用件だけ手で選び直した（autoPurpose=false）→ 用件は残り、訪問先（自動のまま）だけ消える
+  st = A.applyReturnAutofill(empty, '鷹取', '青野ヶ原駅');
+  st = Object.assign({}, st, { choice: '商談', autoPurpose: false });
+  assert.deepStrictEqual(plain(A.applyReturnAutofill(st, '鷹取', '三宮')), { visit: '', choice: '商談', autoVisit: false, autoPurpose: false });
+  // 訪問先を手で書き換えた → 訪問先は残る
+  st = A.applyReturnAutofill(empty, '鷹取', '青野ヶ原駅');
+  st = Object.assign({}, st, { visit: '自宅（実家）', autoVisit: false });
+  assert.strictEqual(A.applyReturnAutofill(st, '鷹取', '三宮').visit, '自宅（実家）');
+  // 「自宅」を手で入れた（自動入力ではない）ものも消さない
+  assert.strictEqual(A.applyReturnAutofill({ visit: '自宅', choice: '帰宅' }, '鷹取', '三宮').visit, '自宅');
+  assert.strictEqual(A.applyReturnAutofill({ visit: '自宅', choice: '帰宅' }, '鷹取', '三宮').choice, '帰宅');
+  // 自宅駅どうしに変えたときも、自動入力は外れる
+  st = A.applyReturnAutofill(empty, '鷹取', '青野ヶ原駅');
+  assert.deepStrictEqual(plain(A.applyReturnAutofill(st, '天神橋筋六丁目', '青野ヶ原駅')), empty);
+});
+
+test('「自宅」は候補の集計にも取引先候補にも入らない。過去の帰りの行（訪問先が出発地の訪問先）は集計に入る', () => {
+  seq = 0;
+  const idx = A.buildVisitIndex([
+    tr('2026-10-01', '青野ヶ原駅', '鷹取', 'くらし工房', '商談'),
+    tr('2026-10-01', '鷹取', '青野ヶ原駅', 'くらし工房', '商談'),       // 過去の帰りの行
+    tr('2026-10-02', '鷹取', '青野ヶ原駅', '自宅', '帰宅'),
+    tr('2026-10-03', '梅田', '天神橋筋六丁目駅', ' 自宅 ', '帰宅')
+  ], partsOf);
+  assert.deepStrictEqual(plain(A.visitSuggestions(idx, '鷹取', 8)), [{ label: 'くらし工房', count: 2, last: '2026-10-01' }]);
+  assert.deepStrictEqual(plain(A.visitSuggestions(idx, '梅田', 8)), []);
+  assert.strictEqual(A.lastPurposeFor(idx, '自宅'), '');
+  assert.deepStrictEqual(plain(A.clientSuggestions([{ id: 1, client: '自宅' }, { id: 2, client: 'A社' }], [], 5)), ['A社']);
+});
+
+test('「帰宅」は前回の用件として提案しない', () => {
+  seq = 0;
+  const idx = A.buildVisitIndex([
+    tr('2026-10-01', '青野ヶ原駅', '鷹取', 'くらし工房', '商談'),
+    tr('2026-10-02', '鷹取', '青野ヶ原駅', 'くらし工房', '帰宅')        // 最後の用件が帰宅
+  ], partsOf);
+  assert.strictEqual(A.lastPurposeFor(idx, 'くらし工房'), '帰宅');
+  assert.strictEqual(A.travelPurposeHintFor(idx, 'くらし工房'), '');
 });
 
 console.log(`\n${passed}件 成功` + (process.exitCode ? '（失敗あり）' : ''));
