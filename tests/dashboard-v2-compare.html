@@ -80,6 +80,14 @@ function run(){
       check('着地見込み＝期間サマリーの達成率（予測込み）',num(fs[3].textContent),num(d.querySelector('#dv2-hero .dv2-landing .dv2-chip').textContent));
       check('確定＋予測（着地見込みの金額）＝期間サマリーの売上（同じ関数）',yen(fs[2].textContent),fcTotal);
       check('確定＋予測＝合計',fcConfirmed+fcPlanned,fcTotal);
+      // 1枚のカード：最初は未完了の上位3件。上位3件＝重要度順の先頭3件
+      const first=[...d.querySelectorAll('#dv2-actions-list .dv2-act')].map(x=>x.dataset.key);
+      check('アクションセンターは最初に上位3件まで',first.length<=3,true);
+      check('「今日の優先アクション」の別カードが無い',d.getElementById('dv2-today'),null);
+      // 「すべて表示」で同じカードの中に残りと完了済みを展開して、件数を突き合わせる
+      w.eval('dv2Open.actAll=true');w.renderDashV2();
+      const allKeys=[...d.querySelectorAll('#dv2-actions-list .dv2-act')].map(x=>x.dataset.key);
+      check('展開した先頭3件＝最初の3件（並び順が同じ）',allKeys.slice(0,3).join(','),first.join(','));
       // アクションセンターの件数＝状態の行（同じ集計）。完了は緑の小さな行（0件）
       const act=key=>{const el=d.querySelector(`#dv2-actions-list [data-key="${key}"]`);if(!el)return NaN;return el.classList.contains('dv2-done-chip')?0:parseInt(el.dataset.count||'0',10);};
       const od=(d.getElementById('d-overdue-status').textContent.match(/(\d+)件/)||[])[1];
@@ -88,16 +96,20 @@ function run(){
       check('月次締めの未解決（状態の行＝アクションセンター）',parseInt(cl||'0',10),act('close'));
       const inv=(d.getElementById('d-invoice-status').textContent.match(/未作成\s*(\d+)件/)||[])[1];
       check('未作成の請求書（状態の行＝アクションセンター）',parseInt(inv||'0',10),act('invoice'));
-      const clMis=d.querySelector('#dv2-missions [data-key="close"] .dv2-m-title');
-      check('月次締めの解決率（ミッション）は同じ未解決の件数から',/（\d+／\d+）/.test(clMis&&clMis.textContent)&&clMis.textContent.indexOf('／')>0,true);
-      // 経営コンディション：残高は出金予定より多い、入金遅延が1件 → 入金の確認
+      // 経営コンディション：残高は出金予定より多い、入金遅延が1件 → 入金の確認（件数はアクションセンターと同じ）
       check('経営コンディション（入金遅延あり）',d.getElementById('dv2-cond').dataset.key,'overdue');
-      // 今日の優先アクション＝アクションセンターの未完了の上位3件
-      const top=[...d.querySelectorAll('#dv2-today .dv2-act')].map(x=>x.dataset.key).join(',');
-      const todo=[...d.querySelectorAll('#dv2-actions-list .dv2-act')].map(x=>x.dataset.key).slice(0,3).join(',');
-      check('今日の優先アクション＝アクションセンターの上位3件',top,todo);
       check('通知の件数＝アクションセンターの未完了',parseInt(d.getElementById('dv2-bell-n').textContent||'0',10),d.querySelectorAll('#dv2-actions-list .dv2-act').length);
+      // ミッションの月次締めの解決率は、アクションセンターの未解決と同じ件数から
+      const mm=(d.querySelector('#dv2-missions [data-key="close"] .dv2-m-title').textContent.match(/（(\d+)／(\d+)）/)||[]);
+      check('月次締め：ミッションの未解決（全体−解決）＝アクションセンター',parseInt(mm[2],10)-parseInt(mm[1],10),act('close'));
+      check('月次締めのミッションに期限を出さない',/超過|期限/.test(d.querySelector('#dv2-missions [data-key="close"]').textContent),false);
+      // インサイトに運用タスク・次の行動を書かない
+      check('インサイトに運用タスクを書かない',/入金遅延|月次締め|バックアップ|請求書|銀行明細|取込待ち|次の行動/.test(d.getElementById('dv2-insights').textContent),false);
+      w.eval('dv2Open.actAll=false');w.renderDashV2();
       check('当月は営業利益に「月途中」の注記',!!d.querySelector('#dv2-kpis .dv2-mid'),true);
+      const pl=d.querySelector('#dv2-trend .dv2-line');
+      check('営業利益の折れ線が描かれている（座標が数字だけ）',!!pl&&/^[\d.\-]+,[\d.\-]+( [\d.\-]+,[\d.\-]+)+$/.test(pl.getAttribute('points')),true);
+      check('当月の営業利益の点は中抜き',d.querySelectorAll('#dv2-trend .dv2-dot.mid').length,1);
       check('縦軸に0の目盛り（マイナスの月があるとき）',[...d.querySelectorAll('#dv2-trend .dv2-axis')].some(t=>t.textContent==='0')&&[...d.querySelectorAll('#dv2-trend .dv2-axis')].some(t=>/^−/.test(t.textContent)),true);
       check('状態の行6つがアクションセンターの「状態の詳細」にある',d.querySelectorAll('#dv2-slot-status #dv-status > div[id^="d-"]').length,6);
       check('メトリクス7枚が詳細データにある',d.querySelectorAll('#dv2-slot-metrics .metric-card').length,7);
