@@ -48,6 +48,9 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - tests/dashboard-v2.test.js：新ダッシュボードの判定（達成率・コンディション・過去最高・大きな変化・アクション・ミッション・インサイト）と期のKPI目標の往復のテスト
 - tests/dashboard-v2-compare.html：新旧ダッシュボードの数字の突き合わせ（ブラウザで開く。手順は「新ダッシュボード」の節）
 - .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
+  ★ 手元では変更しない（pushの認証に workflow の権限が無く、GitHubに拒否される）。直すときは変更内容をユーザーに伝え、
+  ユーザーがGitHubの画面で直す。そのあとの push の前に git pull --rebase で取り込む
+  公開されるのは index.html（keiei-kanri.html のコピー）と images/ だけ。ほかの公開ファイル（新しいフォルダなど）を足すときは deploy.yml の変更が要る
 - netlify.toml：旧Netlify用の設定（移行後も念のため残している）
 
 ## データ保存
@@ -957,7 +960,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - <head> に rel=icon（32・48・192）と apple-touch-icon。参照URLに ?v=日付（差し替えたら日付を変える。古いアイコンのキャッシュ対策）
   manifest は持っていない（作っていない）。ホーム画面の名前は <title> と apple-mobile-web-app-title の「経営管理アプリ」
 - ヘッダーのアバター（#dv2-avatar）は avatar-112/224 の画像（40px）。画像が読めないときは従来の頭文字（#dv2-avatar-t）に戻る。メニューの動作は同じ
-- ★ GitHub Pages は deploy.yml が _site に入れたものだけを公開する。images/ を入れる変更（cp -r images _site/images）が必要
+- ★ GitHub Pages は deploy.yml が _site に入れたものだけを公開する。images/ は cp -r images _site/images で入れている（2026-11-03〜）
 
 ## 一覧の上の操作エリア（.list-toolbar。案件管理・CF管理・交通費台帳・月次レポート）
 - 構造：.section-header > h1.section-title.title-dup ＋ .list-toolbar > .lt-filters（.lt-select＝select＋シェブロン）＋ .lt-actions
