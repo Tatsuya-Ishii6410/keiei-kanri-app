@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light only">
 <title>経営管理アプリ</title>
+<!-- アプリのアイコン（朝日凛子）。画像は images/icons/。差し替えたら ?v= の日付を変える（古いアイコンのキャッシュ対策） -->
+<link rel="icon" type="image/png" sizes="32x32" href="images/icons/favicon-32.png?v=20261103">
+<link rel="icon" type="image/png" sizes="48x48" href="images/icons/favicon-48.png?v=20261103">
+<link rel="icon" type="image/png" sizes="192x192" href="images/icons/icon-192.png?v=20261103">
+<link rel="apple-touch-icon" sizes="180x180" href="images/icons/apple-touch-icon-180.png?v=20261103">
+<meta name="apple-mobile-web-app-title" content="経営管理アプリ">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
@@ -245,6 +251,8 @@ body.dv2-on .tb-menu{display:none!important}
 .tb-icon:focus-visible,.tb-chip:focus-visible,.dv2-menu button:focus-visible{outline:2px solid #3976F6;outline-offset:2px}
 .tb-badge{position:absolute;top:4px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#F43F5E;color:#fff;font-size:11px;font-weight:700;
   line-height:18px;text-align:center;font-family:'Inter',sans-serif}
+.dv2-avatar .dv2-avatar-img{display:block;width:40px;height:40px;border-radius:50%;object-fit:cover}
+.dv2-avatar .dv2-avatar-img+span{display:none}
 .dv2-avatar span{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;
   background:linear-gradient(135deg,#3976F6,#8758F5)}
 .tb-chip{align-items:center;gap:2px;height:32px;padding:0 8px 0 10px;border:0;border-radius:12px;background:#F1F5FB;color:#17233D;font-size:13px;font-weight:700;cursor:pointer;
@@ -279,7 +287,8 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .dv2-cond-title{font-size:16px;font-weight:700}
 /* 朝日凛子：44pxの円形アバター＋1行。フェードインだけ（動きを減らす設定ではなし） */
 .dash-v2 .rinko-av{position:relative;width:44px;height:44px;flex:none;border-radius:50%;background:var(--ui-tint-blue);overflow:visible}
-.dash-v2 .rinko-av img{display:block;width:44px;height:44px;border-radius:50%;object-fit:cover;animation:rinko-in 300ms ease-out 1 both}
+.dash-v2 .rinko-av img{display:block;width:44px;height:44px;border-radius:50%;object-fit:cover}
+.dash-v2 .rinko-av.is-fade img{animation:rinko-in 300ms ease-out 1 both}
 .dash-v2 .rinko-badge{position:absolute;right:-3px;bottom:-3px;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:10px;font-weight:700;color:#fff;background:var(--lv);box-shadow:0 0 0 2px var(--ui-surface,#fff)}
 .dash-v2 .rinko-line{margin:2px 0 0;font-size:13px;line-height:1.5;color:var(--ui-muted-strong);overflow-wrap:anywhere}
@@ -287,7 +296,7 @@ body.dv2-on .tb-menu{display:none!important}
 .dash-v2 .dv2-hl .rinko-av{background:rgba(255,255,255,.9)}
 .dash-v2 .dv2-hl .rinko-line{margin:0;color:#fff;font-weight:700}
 @keyframes rinko-in{from{opacity:0}to{opacity:1}}
-@media (prefers-reduced-motion:reduce){.dash-v2 .rinko-av img{animation:none}}
+@media (prefers-reduced-motion:reduce){.dash-v2 .rinko-av.is-fade img{animation:none}}
 .dash-v2 .dv2-kicker{font-size:11px;color:var(--ui-muted);font-weight:700}
 .dash-v2 .dv2-rules{margin:0 0 6px;padding-left:18px}.dash-v2 .dv2-rules li{margin-bottom:4px}
 .dash-v2 .dv2-rule-st{font-size:11px;font-weight:700;margin-left:6px}.dash-v2 .st-hit .dv2-rule-st{color:var(--ui-warn-text)}.dash-v2 .st-skip .dv2-rule-st,.dash-v2 .st-miss .dv2-rule-st{color:var(--ui-muted)}
@@ -912,7 +921,7 @@ body.dv2-on .tb-menu{display:none!important}
     <button class="tb-icon tb-v2" id="dv2-bell" onclick="dv2Scroll('dv2-actions')" aria-label="要対応"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="tb-badge" id="dv2-bell-n" style="display:none"></span></button>
     <button class="tb-icon tb-v2" id="tb-lock" onclick="logout()" aria-label="ロック解除中（押すとログアウトして画面をロックします）" title="ロック解除中（押すとログアウト）"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.75-1.4"/></svg></button>
     <span class="dv2-menu-wrap tb-v2">
-      <button class="tb-icon dv2-avatar" id="dv2-avatar" aria-haspopup="true" aria-expanded="false" aria-label="ユーザーメニュー" onclick="dv2Menu()"><span id="dv2-avatar-t">？</span></button>
+      <button class="tb-icon dv2-avatar" id="dv2-avatar" aria-haspopup="true" aria-expanded="false" aria-label="ユーザーメニュー" onclick="dv2Menu()"><img class="dv2-avatar-img" src="images/icons/avatar-112.webp?v=20261103" srcset="images/icons/avatar-112.webp?v=20261103 1x, images/icons/avatar-224.webp?v=20261103 2x" width="40" height="40" alt="" onerror="this.remove()"><span id="dv2-avatar-t">？</span></button>
       <div class="dv2-menu" id="dv2-menu" hidden>
         <button onclick="setDashVersion(1)">旧ダッシュボードに切り替え</button>
         <button onclick="dv2Menu(false);dv2GoFiscal()">期の設定（目標）</button>
@@ -13468,10 +13477,11 @@ function dv2Scroll(id){const el=document.getElementById(id);if(el)el.scrollIntoV
 const RINKO_LS_KEY='bizapp_rinko_v1';
 function rinkoOn(){let v=null;try{v=localStorage.getItem(RINKO_LS_KEY);}catch(e){}return rinkoEnabled(v);}
 function setRinkoOn(on){try{localStorage.setItem(RINKO_LS_KEY,on?'1':'0');}catch(e){}if(typeof renderDashV2==='function')try{renderDashV2();}catch(e){}}
-// 円形アバター（装飾なので alt は空。一言は普通の文字として読ませる）
+// 円形アバター（装飾なので alt は空。一言は普通の文字として読ませる）。フェードインは表情ごとに最初の1回だけ（描き直しでは再生しない）
+const rinkoFaded={};
 function rinkoAvatar(face,badge){
-  const a=rinkoAvatarSrc(face);
-  return`<span class="rinko-av" data-face="${face}"><img src="${a.src}" srcset="${a.srcset}" width="44" height="44" alt="" decoding="async">${badge?`<span class="rinko-badge" aria-hidden="true">${badge}</span>`:''}</span>`;
+  const a=rinkoAvatarSrc(face),fade=!rinkoFaded[face]&&!dv2ReducedMotion();rinkoFaded[face]=true;
+  return`<span class="rinko-av${fade?' is-fade':''}" data-face="${face}"><img src="${a.src}" srcset="${a.srcset}" width="44" height="44" alt="" decoding="async" onerror="this.style.visibility='hidden'">${badge?`<span class="rinko-badge" aria-hidden="true">${badge}</span>`:''}</span>`;
 }
 function dv2HasData(){return !!((S.projects&&S.projects.length)||(S.ledger&&S.ledger.length));}
 

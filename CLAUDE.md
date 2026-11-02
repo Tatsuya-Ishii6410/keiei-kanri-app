@@ -941,3 +941,13 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   オフでも経営コンディションの文字はそのまま
 - 画像は alt=""（装飾）。一言は普通の文字。フェードインは表情ごとに最初の1回だけ（rinkoFaded）、動きを減らす設定ではなし
 - 素材の作り方：rembg（u2netp）＋外枠につながる単色の背景の塗りつぶし＋ふちを1px削る＋いちばん大きい連結成分だけ残す（✦の透かしを除く）
+
+## アプリのアイコン（朝日凛子）
+- 原本は images/rinko/rinko-icon-original.png（加工しない）。加工後は images/icons/
+  favicon-32.png / favicon-48.png（顔のアップ・角を透明にした角丸）／apple-touch-icon-180.png（角まで青の正方形。透明なし）／
+  icon-192.png / icon-512.png（角まで青。顔・手は中央の80%）／avatar-112.webp / avatar-224.webp（顔の正円）
+- 作り方：外枠につながるクリーム色を背景とみなし、近くの青のぼかし平均で埋める（角まで青に）。青い四角の下端より下は、服の行をそのまま伸ばす
+- <head> に rel=icon（32・48・192）と apple-touch-icon。参照URLに ?v=日付（差し替えたら日付を変える。古いアイコンのキャッシュ対策）
+  manifest は持っていない（作っていない）。ホーム画面の名前は <title> と apple-mobile-web-app-title の「経営管理アプリ」
+- ヘッダーのアバター（#dv2-avatar）は avatar-112/224 の画像（40px）。画像が読めないときは従来の頭文字（#dv2-avatar-t）に戻る。メニューの動作は同じ
+- ★ GitHub Pages は deploy.yml が _site に入れたものだけを公開する。images/ を入れる変更（cp -r images _site/images）が必要
