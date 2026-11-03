@@ -1,0 +1,8 @@
+{
+  "name": "keiei-kanri-app",
+  "private": true,
+  "description": "アプリ本体は keiei-kanri.html 1枚（ビルド不要・依存なし）。ここはテストを動かすためだけのもの",
+  "scripts": {
+    "test": "node tests/run-all.js"
+  }
+}

@@ -28,13 +28,31 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   すべて同じ関数を使うので、同じ月なら数字が一致する
 
 ## 修正後の作業
-★ パッチで範囲（「/* ===== A」から「/* ===== B」まで など）をまるごと置き換えたら、前後の版で定義済みの関数・変数の名前を比べ、
-  意図したもの以外が消えていないか確かめる（2026-11-03、ドライブ取込の置き換えでデビット通知の取込と localYmd を消し、
-  請求書の発行・月次締めの完了が落ちていた。テストは @…-rules の範囲しか読まないので気づけない）
 コードを修正したら必ず以下を実行：
-1. git add .
-2. git commit -m "修正内容を簡潔に"
-3. git push origin main
+1. `npm test`（tests/*.test.js をすべて実行。下の静的チェックと画面の実行テストを含む）。1つでも失敗したら直してから進む
+2. `git diff --stat` で削除された行数を見る。★ 置き換えるつもりの範囲より削除が多いときは、止まって `git diff` で中身を確認する
+   （2026-11-03、ドライブ取込の範囲の置き換えで、すぐ下のデビット通知の取込と localYmd などまで消し、
+   公開版で請求書の発行・月次締めの完了・デビット通知の取込・銀行明細CSV・ダッシュボードの一部が止まった）
+3. `cp keiei-kanri.html index.html`
+4. git add . → git commit -m "修正内容を簡潔に"
+5. `git pull --rebase origin main`（GitHubの画面で直した deploy.yml などを取り込む）→ `npm test` が通ることを確かめて `git push origin main`
+
+### 自動のチェック（npm test）
+- ルートの package.json は `npm test`（node tests/run-all.js）のためだけ。アプリ本体には依存も、ビルドも無い
+- tests/no-undef.test.js：静的チェック。keiei-kanri.html のインラインのスクリプトと、HTMLの on○○="…" 属性
+  （JSのテンプレート文字列の中で作るものも。${…} は値に置き換えて読む）を ESLint の no-undef で調べ、未定義の関数・変数があれば失敗
+  ブラウザの標準の名前は globals.browser。それ以外で意図して使うグローバル（XLSX など）は ALLOWED_GLOBALS に足す
+  ESLint は tests/package.json の開発用の依存（tests/node_modules。.gitignore 済み）。無ければ run-all.js が最初に `npm ci` で入れる
+- tests/app-smoke.test.js：画面の実行テスト。ヘッドレスの Chrome を起動し（追加の依存なし。DevTools Protocol を Node の WebSocket で使う）、
+  fetch を差し替えて GAS の偽の応答を返す（シート・Drive・Gmail には触らない。Anthropic API を呼ぼうとしたら失敗）。外部のフォント・CDN は読まない
+  順に行う操作：ダッシュボード（新・旧、月・期の切替）／案件管理／請求書の下書き作成→発行（GASへの save まで）／見積・請求の一覧と表示／CF管理／
+  ドライブから取込（inboxScan まで）／デビット通知から取込（debitMails まで）／銀行明細CSVのプレビュー／交通費台帳（PDFの表示）／
+  月次締めの「確認を完了」／月次レポート（月・通年・案件予実・融資力診断）／設定
+  ページの例外・Promise の例外・console.error を、その時の段の名前つきで集め、1件でもあれば失敗。各段の最低限の結果（下書きができた・発行済みになった など）も確かめる
+  画面・操作を足したら SCENARIO に段を足す。偽の応答は PRELUDE の gasReply、初期データは SEED
+  Chrome の場所は CHROME_PATH で指定できる。どうしても無い環境だけ SKIP_BROWSER_TEST=1（飛ばしたことを表示する）
+  別の版のHTMLを調べるときは APP_FILE=パス（no-undef.test.js も同じ）
+- 確かめたこと：localToday を消すと両方が失敗する（静的チェックは呼び出し箇所を行番号つきで出す）。1f7d7a3 の版も両方が失敗する
 
 ## ファイル構成
 - keiei-kanri.html：アプリ本体（全機能がこの1ファイルに集約）。編集するのは常にこのファイル
@@ -50,6 +68,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - tests/travel-suggest.test.js：交通費の訪問先の候補（駅名・訪問先の正規化・自宅駅の除外・並び順）・用件の選択式・帰りの行の自動入力・同じ区間の過去の運賃のテスト
 - tests/dashboard-v2.test.js：新ダッシュボードの判定（達成率・コンディション・過去最高・大きな変化・アクション・ミッション・インサイト）と期のKPI目標の往復のテスト
 - tests/dashboard-v2-compare.html：新旧ダッシュボードの数字の突き合わせ（ブラウザで開く。手順は「新ダッシュボード」の節）
+- tests/no-undef.test.js：未定義の名前の静的チェック／tests/app-smoke.test.js：画面の実行テスト（ヘッドレスの Chrome）／
+  tests/run-all.js：npm test の本体（「修正後の作業」の節）
 - .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
   ★ 手元では変更しない（pushの認証に workflow の権限が無く、GitHubに拒否される）。直すときは変更内容をユーザーに伝え、
   ユーザーがGitHubの画面で直す。そのあとの push の前に git pull --rebase で取り込む

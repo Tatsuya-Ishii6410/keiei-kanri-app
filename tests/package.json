@@ -1,0 +1,9 @@
+{
+  "name": "keiei-kanri-app-tests",
+  "private": true,
+  "description": "開発時だけ使うテスト用の依存（アプリ本体・公開物には含まれない）",
+  "devDependencies": {
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0"
+  }
+}
