@@ -19,3 +19,22 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
    テスト・コマンドの出力は末尾30行（tail -n 30）。git diff は --stat のみ。npm test（約1分）はバックグラウンドで実行し、要約だけ読む
 5. 区切りの提案：読んだファイルやツールの出力が増えて会話が長くなったら、自分から
    「ここまでを PROGRESS.md と CLAUDE.md に書いた。新しいセッションで続けてください」と区切りを提案する
+
+## ★ 必ず守る決まり（アプリ）
+- 編集するのは keiei-kanri.html。直したら `cp keiei-kanri.html index.html`。手順は npm test → git diff --stat（削除が多すぎないか）→ コミット → `git pull --rebase` → push
+- .github/workflows/deploy.yml は手元で変えない（ユーザーがGitHubの画面で直す）。gas-code.js を変えたら GAS の再デプロイが要る
+- 集計は年＋月（絶対月）。売上は案件ベース（発生ベース）、CF管理は口座ベース（ledger）。2系統を混ぜない。実績は isActual で絞る
+- APIキーは GAS のスクリプト プロパティだけ。カレンダー・Gmail は読み取りのみ。数字を作らない（データ不足は「データ不足」と出す）
+- 判定の範囲（@…-rules-begin〜end）はテストが Node で読む。DOM・S を触らない。body の状態クラスは bs- 接頭辞
+
+## 目次（作業に関係するファイルだけを読む）
+- [docs/dev.md](docs/dev.md)：修正後の作業・ファイル構成・テスト（npm test）・データ保存・デプロイ
+- [docs/aggregation.md](docs/aggregation.md)：売上・経費・営業利益の集計、収支の区分、期（会計年度）、CF管理は口座ベース
+- [docs/reports.md](docs/reports.md)：月次・通年レポート、印刷・PDF、案件予実、融資力診断、月次PL、税金・社会保険
+- [docs/projects-billing.md](docs/projects-billing.md)：案件管理の一覧・見込み、月次請求レコード、請求書の同期・下書き・訂正、入金の突合、書類の表示
+- [docs/cf-import.md](docs/cf-import.md)：CF管理、固定費、ドライブ・銀行CSV・デビット通知・領収書・受信箱の取込、経費の項目
+- [docs/travel.md](docs/travel.md)：交通費（計算・精算・台帳・カレンダー・訪問先の候補・運賃・手段・入力モーダル）
+- [docs/ops.md](docs/ops.md)：週次バックアップ、入金遅延、月次締め、ログイン
+- [docs/dashboard.md](docs/dashboard.md)：新ダッシュボード（第1〜4次）、朝日凛子、アプリのアイコン
+- [docs/ui.md](docs/ui.md)：レイアウト、レスポンシブ、フォント、共通ナビ、一覧の上の操作エリア、スマホの横長ルール
+- 進行中の作業：[PROGRESS.md](PROGRESS.md)
