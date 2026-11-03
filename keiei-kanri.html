@@ -595,6 +595,13 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .pj-marks .badge{white-space:normal;text-align:left}
 .pj-switch{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin:-8px 0 4px;font-size:13px;color:var(--text-secondary);cursor:pointer}
 .pj-switch input{width:18px;height:18px;margin:0;flex:none}
+.pj-tab-n{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:999px;background:var(--amber-bg);color:var(--amber-text);font-size:11px;font-weight:700;line-height:18px}
+.pj-tab-n:empty{display:none}
+.pj-pipe-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.pj-pipe-bar .pj-switch{margin:0}
+.pj-pipe-bar .btn{min-height:44px;border-radius:12px}
+.pj-pipe-sum{font-size:13px;margin:0 0 10px;color:var(--text-primary)}
+.pj-pipe-note{font-size:11px;color:var(--text-muted);margin-left:6px}
 .pj-out-note{font-size:12px;color:var(--text-secondary);margin:0 0 8px}
 
 /* ===== 書類の全画面表示（#doc-viewer）。上部の固定バー：56px＋セーフエリア・白・薄い境界線 ===== */
@@ -1228,7 +1235,7 @@ body.bs-docview{overflow:hidden}
 <div id="page-projects" class="page">
   <div class="section-header">
     <h1 class="section-title title-dup">案件管理</h1>
-    <div class="list-toolbar" style="display:flex;gap:8px;align-items:center">
+    <div class="list-toolbar" id="pj-toolbar" style="display:flex;gap:8px;align-items:center">
       <div class="lt-filters">
       <span class="lt-select"><select id="project-invoice-filter" onchange="renderProjects()" style="width:auto;font-size:13px" aria-label="入金ステータスで絞り込む">
         <option value="">入金: 全て</option>
@@ -1244,7 +1251,7 @@ body.bs-docview{overflow:hidden}
       <div class="lt-actions">
         <button class="btn lt-wide" onclick="openBulkInvoiceModal()">📄 一括請求書作成</button>
         <button class="btn lt-wide" onclick="openBulkStatusModal()">📋 一括ステータス変更</button>
-        <button class="btn primary lt-primary" onclick="openProjectModal()">+ 案件追加</button>
+        <button class="btn primary lt-primary" onclick="openProjectModal(null,'契約済')">+ 案件追加</button>
         <div class="lt-menu-wrap">
           <button class="btn lt-menu-btn" id="proj-bulk-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="proj-bulk-menu" onclick="ltMenu(this)">一括操作 ▾</button>
           <div class="lt-menu" id="proj-bulk-menu" role="menu" aria-labelledby="proj-bulk-btn" hidden>
@@ -1255,6 +1262,11 @@ body.bs-docview{overflow:hidden}
       </div>
     </div>
   </div>
+  <div class="tab-group" role="tablist">
+    <button class="tab active" role="tab" aria-selected="true" id="pj-tab-btn-list" onclick="switchProjectTab('list')">案件</button>
+    <button class="tab" role="tab" aria-selected="false" id="pj-tab-btn-pipe" onclick="switchProjectTab('pipe')">見込み<span class="pj-tab-n" id="pipe-tab-n"></span></button>
+  </div>
+  <div id="pj-tab-list">
   <label class="pj-switch"><input type="checkbox" id="project-show-ended" onchange="renderProjects()"> 終了した案件も表示</label>
   <div class="metric-grid" style="grid-template-columns:minmax(200px,300px)">
     <div class="metric-card">
@@ -1274,6 +1286,23 @@ body.bs-docview{overflow:hidden}
     </table></div>
     <div id="project-cards" class="mob-cards"></div>
     <div id="project-empty" class="empty-state" style="display:none">案件がありません。「案件追加」から登録してください。</div>
+  </div>
+  </div>
+  <!-- 見込み（状態＝商談中）。月の選択は出さない（全期間）。売上・CF・予測・請求の計算には入れない（billableProject のまま） -->
+  <div id="pj-tab-pipe" style="display:none">
+    <div class="pj-pipe-bar">
+      <label class="pj-switch"><input type="checkbox" id="pipe-show-lost" onchange="renderProjectPipeline()"> 失注を含める</label>
+      <button class="btn primary" onclick="openProjectModal(null,'商談中')">+ 見込みを追加</button>
+    </div>
+    <div class="pj-pipe-sum" id="pipe-summary"></div>
+    <div class="card">
+      <div class="table-wrap mob-table"><table>
+        <thead><tr><th>会社名</th><th>案件名</th><th>見込み金額</th><th>種別</th><th>想定開始</th><th>状態</th><th>操作</th></tr></thead>
+        <tbody id="pipe-list"></tbody>
+      </table></div>
+      <div id="pipe-cards" class="mob-cards"></div>
+      <div id="pipe-empty" class="empty-state" style="display:none"></div>
+    </div>
   </div>
 </div>
 
@@ -4437,6 +4466,7 @@ function currentProjectMonth(){
 
 function renderProjects(){
   syncMonthlyBillings();
+  renderProjectPipeline();
   const tb=document.getElementById('project-list');
   const mi=currentProjectMonth();
   const inv=currentInvoiceFilter();
@@ -4493,6 +4523,93 @@ function renderProjects(){
   </tr>`+billingRowsHtml(p,8)).join('');
   cards.innerHTML=list.map(p=>projectCardHtml(p,marks[p.id])).join('');
 }
+/* ===== 見込みタブ（状態＝商談中）=====
+   一覧・合計は表示だけ。操作は既存の案件の編集（openProjectModal → saveProject）をそのまま使う：
+   ・契約にする：状態を「契約済」にした編集画面を開く（開始日＝想定開始が空なら入力を求める）。保存すると従来の契約済みの案件と同じ処理（請求レコード・売上・予測）
+   ・失注にする：状態だけを「失注」にして同じ保存処理を通す。編集・見込みを追加（状態の初期値は商談中）も同じ画面 */
+let projectTab='list';
+let pipeContractId=null;   // 「契約にする」で開いた案件（保存して商談中でなくなったら案件タブへ）
+function switchProjectTab(t){
+  projectTab=t==='pipe'?'pipe':'list';
+  [['list','pj-tab-list','pj-tab-btn-list'],['pipe','pj-tab-pipe','pj-tab-btn-pipe']].forEach(([k,box,btn])=>{
+    const on=projectTab===k;
+    document.getElementById(box).style.display=on?'':'none';
+    const b=document.getElementById(btn);b.classList.toggle('active',on);b.setAttribute('aria-selected',String(on));
+  });
+  // 月・入金の絞り込みと一括操作は案件タブだけ（見込みは全期間）
+  document.getElementById('pj-toolbar').style.display=projectTab==='pipe'?'none':'flex';
+  renderProjects();
+}
+function pipelineList(withLost){
+  const key=p=>p.start||'9999-99-99';
+  return S.projects.filter(p=>p.status==='商談中'||(withLost&&p.status==='失注'))
+    .sort((a,b)=>key(a)<key(b)?-1:key(a)>key(b)?1:a.id-b.id);
+}
+function renderProjectPipeline(){
+  const tb=document.getElementById('pipe-list');
+  if(!tb)return;
+  const withLost=!!document.getElementById('pipe-show-lost').checked;
+  const list=pipelineList(withLost);
+  const open=S.projects.filter(p=>p.status==='商談中'),lost=list.filter(p=>p.status==='失注');
+  const n=document.getElementById('pipe-tab-n');n.textContent=open.length?String(open.length):'';
+  document.getElementById('pipe-summary').innerHTML=`<b>${open.length}件</b>・合計 <b>${fmt(open.reduce((a,p)=>a+(p.amount||0),0))}</b>`
+    +'<span class="pj-pipe-note">（見込み金額の合計。月次・年次は1か月・1年あたりの金額のまま'+(lost.length?`。失注 ${lost.length}件は含めない`:'')+'）</span>';
+  const kind=p=>CONTRACT_LABELS[p.contract]||p.contract||'';
+  const amt=p=>fmt(p.amount||0)+(p.contract==='monthly'?'/月':p.contract==='annual'?'/年':'');
+  const acts=p=>p.status==='商談中'
+    ?`<button class="btn sm primary" onclick="pipeContract(${p.id})">契約にする</button>
+      <button class="btn sm" onclick="openProjectModal(${p.id})">編集</button>
+      <button class="btn sm danger" onclick="pipeLost(${p.id})">失注にする</button>`
+    :`<button class="btn sm" onclick="openProjectModal(${p.id})">編集</button>`;
+  const empty=document.getElementById('pipe-empty');
+  if(!list.length){
+    tb.innerHTML='';document.getElementById('pipe-cards').innerHTML='';
+    empty.style.display='';empty.textContent='見込みの案件はありません。「見込みを追加」から登録してください。';
+  }else empty.style.display='none';
+  tb.innerHTML=list.map(p=>`<tr>
+    <td style="font-size:12px">${escAttr(p.client||'-')}</td><td style="font-weight:500">${escAttr(p.name)}</td>
+    <td style="white-space:nowrap">${amt(p)}</td><td><span class="badge badge-gray">${kind(p)}</span></td>
+    <td style="white-space:nowrap">${p.start?escAttr(p.start):'未設定'}</td><td>${statusBadge(p.status)}</td>
+    <td><div style="display:flex;gap:4px;flex-wrap:wrap">${acts(p)}</div></td></tr>`).join('');
+  document.getElementById('pipe-cards').innerHTML=list.map(p=>mobCard(
+    `<div class="mob-card-header"><span>${escAttr(p.name)}</span>${statusBadge(p.status)}</div>`
+    +`<div class="mob-sub">${escAttr(p.client||'-')}</div>`
+    +`<div class="mob-amount">${amt(p)}</div>`
+    +mobRow('想定開始',p.start?escAttr(p.start):'未設定')+mobRow('種別',kind(p))
+    +mobActions(acts(p)))).join('');
+  // 「契約にする」から保存して商談中でなくなったら、案件タブのその月へ
+  if(pipeContractId!==null){
+    const c=S.projects.find(x=>x.id===pipeContractId);
+    if(c&&c.status!=='商談中'){
+      pipeContractId=null;
+      const r=projectMonthRange(c);
+      if(r)document.getElementById('project-month').value=String(r[0]%12);
+      if(projectTab!=='list')setTimeout(()=>switchProjectTab('list'),0);
+    }
+  }
+}
+// 契約にする：状態を「契約済」にした編集画面（保存は従来の saveProject）。想定開始（開始日）が空なら入力を求める
+function pipeContract(id){
+  const p=S.projects.find(x=>x.id===id);if(!p)return;
+  openProjectModal(id);
+  pipeContractId=id;
+  document.getElementById('p-status').value='契約済';
+  document.getElementById('modal-project-title').textContent='契約にする（内容を確かめて保存）';
+  if(!p.start){
+    alert('開始日（想定開始）が空です。契約の開始日を入力してから保存してください。');
+    setTimeout(()=>document.getElementById('p-start').focus(),0);
+  }
+}
+// 失注にする：状態だけを変えて、従来の保存処理（saveProject）を通す。請求済みの案件は編集画面で確かめてもらう
+function pipeLost(id){
+  const p=S.projects.find(x=>x.id===id);if(!p)return;
+  if(!confirm(`「${p.name}」を失注にしますか？`))return;
+  openProjectModal(id);
+  document.getElementById('p-status').value='失注';
+  if(invoiceStatusOf(p)==='invoiced'){document.getElementById('modal-project-title').textContent='失注にする（内容を確かめて保存）';return;}
+  saveProject();
+}
+
 // 一覧の印（表示だけ）：繰越（前の月の請求済み・未入金）／終了（「終了した案件も表示」で出した案件）／終了日が未設定（売上は開始月のみ）
 function projectMarksHtml(st){
   if(!st)return'';
@@ -4504,13 +4621,15 @@ function projectMarksHtml(st){
 }
 
 // id を渡すと編集、省略すると新規追加モードでモーダルを開く
-function openProjectModal(id){
+// defStatus：新規のときの状態の初期値（案件タブ＝契約済、見込みタブ＝商談中。省略は従来どおり商談中）
+function openProjectModal(id,defStatus){
+  pipeContractId=null;
   const p=(id!==undefined&&id!==null)?S.projects.find(x=>x.id===id):null;
   editProjectId=p?p.id:null;
   document.getElementById('p-name').value=p?p.name:'';
   document.getElementById('p-client').value=p?(p.client||''):'';
   document.getElementById('p-amount').value=p?p.amount:'';
-  document.getElementById('p-status').value=p?p.status:'商談中';
+  document.getElementById('p-status').value=p?p.status:(defStatus||'商談中');
   document.getElementById('p-start').value=p?(p.start||''):'';
   document.getElementById('p-end').value=p?(p.end||''):'';
   document.getElementById('p-contract').value=p?p.contract:'single';

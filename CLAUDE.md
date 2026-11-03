@@ -1107,4 +1107,11 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 一括請求書作成（bulkInvoiceTargets。年は bulkInvoiceYm と同じ billingYear）・一括ステータス変更の「未請求→請求済」（bulkStatusTargets。年は billingYm と同じ今の期）の対象も、
   年＋月で契約期間に入る案件だけ（projectInMonth）。期間外の請求レコードがあっても対象にしない（以前はそれが入口になって、期間外の月に請求レコード・請求書・入金予定ができた）。
   以前の判定なら対象だった案件の数を「期間外の案件 N件は対象外」と一覧の上に小さく出す（bulkInvoiceExcluded／bulkStatusExcluded）
+- ★ 見込みタブ（第2のタブ［案件］［見込み］。switchProjectTab）：状態＝商談中の案件。案件のタブには出さない。月の選択・入金の絞り込み・一括操作は出さない（全期間）
+  一覧は会社名・案件名・見込み金額（月次は /月、年次は /年）・種別・想定開始（＝開始日。新しい項目は足していない）・状態。想定開始の昇順（未設定は最後）。
+  先頭に「N件・合計 ¥…」（商談中だけ。失注は含めない）。「失注を含める」（#pipe-show-lost。初期はオフ）。タブに商談中の件数
+  操作は既存の編集（openProjectModal → saveProject）をそのまま使う：「契約にする」（pipeContract：状態を契約済にした編集画面。開始日が空なら入力を求める。
+  保存すると従来の契約済みの案件と同じ＝請求レコード・売上・予測に入り、案件タブのその開始月へ）／「失注にする」（pipeLost：状態だけ変えて saveProject）／編集／
+  「見込みを追加」（openProjectModal(null,'商談中')）。案件タブの「案件追加」は状態の初期値を契約済にした（見込みは見込みタブで追加）
+  見込みは売上・CF・予測・請求の計算に入らない（billableProject のまま。変更なし）
 
