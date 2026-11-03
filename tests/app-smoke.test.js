@@ -590,6 +590,32 @@ const SCENARIO = String.raw`(async () => {
     switchReportTab('loan', document.querySelector('[onclick*="switchReportTab(\'loan\'"]'));
   });
   await step('設定', async () => { nav('settings'); ok(document.querySelector('#page-settings.active'), '設定が開かない'); });
+  // スマホの幅（375px）：行の操作ボタン・モーダルの✕・入力欄・選択欄が 44px 以上（後からの指定で上書きされたら気づく）
+  await step('スマホのタップ領域（44px以上）', async () => {
+    const vis = e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
+    const lowOf = els => els.filter(vis).filter(e => e.getBoundingClientRect().height < 44).map(e => (e.textContent || e.tagName).trim().slice(0, 10) + '(' + Math.round(e.getBoundingClientRect().height) + ')');
+    nav('ledger');
+    for (const tab of ['cf', 'travel']) {
+      switchCfTab(tab, document.querySelector('[onclick*="switchCfTab(\'' + tab + '\'"]')); await wait(200);
+      const rows = [...document.querySelectorAll('#page-ledger .uc-row')].filter(vis);
+      rows.forEach(r => { r.open = true; });
+      const btns = rows.flatMap(r => [...r.querySelectorAll('.uc-row-actions button')]);
+      ok(btns.length > 0, tab + '：行の操作ボタンがない');
+      const low = lowOf(btns);
+      ok(!low.length, tab + '：行の操作ボタンが44px未満：' + low.slice(0, 4).join(' '));
+      rows.forEach(r => { r.open = false; });
+    }
+    switchCfTab('cf', document.querySelector('[onclick*="switchCfTab(\'cf\'"]'));
+    const bad = [];
+    for (const o of document.querySelectorAll('.modal-overlay')) {
+      o.classList.add('open'); await wait(30);
+      const m = o.querySelector('.modal');
+      const low = lowOf([...m.querySelectorAll('.modal-header button, input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]), select')]);
+      if (low.length) bad.push(o.id + '：' + low.slice(0, 3).join(' '));
+      o.classList.remove('open');
+    }
+    ok(!bad.length, 'モーダルの✕・入力欄が44px未満：' + bad.slice(0, 4).join(' ／ '));
+  });
   window.__step = '終了';
   await wait(800);
   return { checks, gas: window.__gas, alerts: window.__alerts, errs: window.__errs, settle: window.__settleNumbers };

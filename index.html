@@ -1217,6 +1217,14 @@ body.bs-docview{overflow:hidden}
 @media(max-width:768px){
   .col-grid{grid-template-columns:1fr}
 }
+
+/* タップ領域 44px（スマホ）。.btn.sm{min-height:36px} などの後からの指定に負けないよう、
+   スタイルの最後に、より詳しい指定で置く（画面の実行テストが 44px 未満を検知する） */
+@media(max-width:768px){
+  .uc-row-actions .btn,.uc-row-actions .btn.sm{min-height:44px}
+  .modal .modal-header button{min-height:44px;min-width:44px}
+  .modal input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]),.modal select{min-height:44px}
+}
 </style>
 </head>
 <body>
