@@ -298,7 +298,7 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 .dv2-layout{display:flex;flex-direction:column;gap:12px}
 .dash-v2 .dv2-left,.dash-v2 .dv2-right{display:contents}
 .dash-v2 #dv2-actions{order:1}.dash-v2 #dv2-hero{order:2}.dash-v2 #dv2-kpis{order:3}
-.dash-v2 #dv2-hl{order:5}.dash-v2 #dv2-trend{order:6}.dash-v2 #dv2-missions{order:7}.dash-v2 #dv2-insights{order:8}
+.dash-v2 #dv2-trend{order:4}.dash-v2 #dv2-hl{order:5}.dash-v2 #dv2-missions{order:7}.dash-v2 #dv2-insights{order:8}
 .dash-v2 [hidden]{display:none!important}
 @media (min-width:1024px){
   .dash-v2 .dv2-layout{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;align-items:start}
@@ -334,10 +334,23 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 .dv2-cond.has-rinko .rinko-line{grid-column:2/4}
 .dash-v2 .rinko-line{margin:0;font-size:13px;line-height:18px;color:var(--ui-muted-strong);overflow-wrap:anywhere}
 .dash-v2 .rinko-line .rk-l{display:block}
-.dash-v2 .dv2-hl .dv2-hl-title{display:flex;align-items:center;gap:8px;min-width:0}
+/* ハイライト：1行のカード（押すと残りと凛子の一言） */
+.dash-v2 .dv2-card.dv2-hl{padding:8px 12px}
+.dash-v2 .dv2-hl-row{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:0;border:0;background:none;color:#fff;font:inherit;text-align:left;cursor:pointer;-webkit-appearance:none}
+.dash-v2 .dv2-hl-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.dash-v2 .dv2-hl-k{font-size:11px;font-weight:700;opacity:.92;display:flex;align-items:center;gap:6px}
+.dash-v2 .dv2-hl-tag{font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;background:rgba(255,255,255,.2);white-space:nowrap;flex:none}
+.dash-v2 .dv2-hl-top{font-size:14px;font-weight:700;line-height:1.4;overflow-wrap:anywhere}
+.dash-v2 .dv2-hl-top.is-new{animation:dv2-in 400ms ease-out 1 both}
+.dash-v2 .dv2-hl-n{font-size:11px;white-space:nowrap;opacity:.92}
+.dash-v2 .dv2-hl .dv2-fold-chev{color:#fff;flex:none;transition:transform 250ms ease}
+.dash-v2 .dv2-hl-row[aria-expanded="true"] .dv2-fold-chev{transform:rotate(180deg)}
+.dash-v2 .dv2-hl-more{padding:8px 0 4px}
+.dash-v2 .dv2-hl-more.is-opening{animation:dv2-fade 250ms ease-out 1}
+.dash-v2 .dv2-hl-more .dv2-hl-list{margin:6px 0}
 .dash-v2 .dv2-hl .rinko-av,.dash-v2 .dv2-hl .rinko-av img{width:32px;height:32px}
 .dash-v2 .dv2-hl .rinko-av{background:rgba(255,255,255,.9)}
-.dash-v2 .dv2-hl .rinko-line{margin:-2px 0 8px;color:#fff;font-weight:700}
+.dash-v2 .dv2-hl .rinko-line{margin:0 0 4px;color:#fff;font-weight:700}
 @keyframes rinko-in{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.dash-v2 .rinko-av.is-fade img{animation:none}}
 .dash-v2 .dv2-kicker{font-size:11px;color:var(--ui-muted);font-weight:700}
@@ -13521,15 +13534,14 @@ function initDashVersion(){
   dv2Arrange();
   if(window.matchMedia){const mq=window.matchMedia('(min-width:1024px)');(mq.addEventListener?mq.addEventListener('change',dv2Arrange):mq.addListener(dv2Arrange));}
 }
-/* スマホ（1列）では、ハイライトを KPI のすぐ後ろに置く（DOMの順＝見た目の順＝Tab の順）。PCは右の列へ戻す。
-   アクションセンターは経営コンディションと1枚（統合カード #dv2-actions）にしたので動かさない */
+/* ハイライトは右の列の先頭（PC）。スマホ（1列）は左の列（統合カード・山・KPI・推移）のあとに右の列が続くので、
+   DOMの順＝見た目の順＝Tab の順のまま（推移→ハイライト→折りたたみの行）。アクションセンターは統合カード #dv2-actions の中 */
 function dv2Arrange(){
   const wide=!!(window.matchMedia&&window.matchMedia('(min-width:1024px)').matches);
   const left=document.querySelector('#dash-v2 .dv2-left'),right=document.querySelector('#dash-v2 .dv2-right');
   const hl=document.getElementById('dv2-hl'),kpis=document.getElementById('dv2-kpis');
   if(!left||!right||!hl||!kpis)return;
-  if(wide)right.insertBefore(hl,right.firstChild);
-  else kpis.after(hl);
+  if(hl.parentNode!==right||right.firstElementChild!==hl)right.insertBefore(hl,right.firstChild);
 }
 // Esc でアバターのメニューを閉じる
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){const m=document.getElementById('dv2-menu');if(m&&!m.hidden){dv2Menu(false);const a=document.getElementById('dv2-avatar');if(a)a.focus();}}});
@@ -13732,7 +13744,7 @@ function dv2Toggle(k){dv2Open[k]=!dv2Open[k];renderDashV2();}
 let dv2FoldJust='';
 const DV2_CHEV='<svg class="dv2-fold-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 function dv2Fold(k){dv2Open['f-'+k]=!dv2Open['f-'+k];dv2FoldJust=dv2Open['f-'+k]?k:'';renderDashV2();dv2FoldJust='';
-  const b=document.querySelector('#dv2-'+k+' .dv2-fold-head');if(b)b.focus({preventScroll:true});}
+  const b=document.querySelector('[aria-controls="dv2-'+k+'-body"]');if(b)b.focus({preventScroll:true});}
 function dv2FoldHead(k,title,sum){
   const open=!!dv2Open['f-'+k];
   return`<button type="button" class="dv2-fold-head" aria-expanded="${open}" aria-controls="dv2-${k}-body" onclick="dv2Fold('${k}')">
@@ -14081,7 +14093,16 @@ function renderDv2Actions(D){
       件数は従来の状態の行と同じ集計です（入金遅延・月次締め・請求書・取込待ち・バックアップ（10日以内）・銀行明細（7日以内））。</div>`:'');
 }
 
-/* 今月のハイライト（ポジティブな実績だけ。判定は dashHighlights。該当が無ければカードごと出さない）
+/* ハイライトの対象期間の印（判定の key から）。達成日が分からない項目に日付は付けない
+   record・margin＝完了した月／new＝選んでいる月／ms・pace＝期の累計／od0＝直近7日（0件になった日から7日間） */
+function dv2HlPeriod(key){
+  const [k,v]=String(key).split(':');
+  if(k==='record'||k==='margin'||k==='new')return`${(+v)%12+1}月`;
+  if(k==='ms'||k==='pace')return'期の累計';
+  if(k==='od0')return'直近7日';
+  return'';
+}
+/* ハイライト（ポジティブな実績だけ。判定は dashHighlights。該当が無ければカードごと出さない）
    初めて表示する項目だけ短い登場アニメーション（表示済みの記録は localStorage。使えなければアニメーションなし） */
 function renderDv2Highlights(D){
   const el=document.getElementById('dv2-hl');
@@ -14098,9 +14119,17 @@ function renderDv2Highlights(D){
   if(Array.isArray(seen)&&fresh.length)dv2LS(ls=>ls.setItem('bizapp_dash_hl_seen_v3',JSON.stringify(seen.concat(fresh).slice(-60))));
   const rk=rinkoOn()?rinkoForHighlights(list.length):null;
   el.dataset.rinko=rk?rk.face:'';
-  el.innerHTML=`<div class="dv2-card-head"><div class="dv2-hl-title">${rk?rinkoAvatar(rk.face):''}<h3 class="dv2-h3">今月のハイライト</h3></div><span class="dv2-hl-note">自動判定（AI分析ではありません）</span></div>
-    ${rk?rinkoLine(rk.phrase,{件数:list.length}):''}
-    <ul class="dv2-hl-list">${list.map(h=>`<li class="${fresh.indexOf(h.key)>=0?'is-new':''}" data-key="${escAttr(h.key)}"><span class="dv2-hl-icon" aria-hidden="true">${h.icon}</span>${escAttr(h.text)}</li>`).join('')}</ul>`;
+  // 1行のカード：凛子の小さなアバター＋最重要の成果1件＋対象期間の印。押すと残り（最大3件）と凛子の一言
+  const top=list[0],open=!!dv2Open['f-hl'];
+  el.innerHTML=`<button type="button" class="dv2-hl-row" aria-expanded="${open}" aria-controls="dv2-hl-body" onclick="dv2Fold('hl')">
+      ${rk?rinkoAvatar(rk.face):''}<span class="dv2-hl-main"><span class="dv2-hl-k">ハイライト<span class="dv2-hl-tag">${escAttr(dv2HlPeriod(top.key))}</span></span>
+      <span class="dv2-hl-top${fresh.indexOf(top.key)>=0?' is-new':''}" data-key="${escAttr(top.key)}">${escAttr(top.text)}</span></span>
+      ${list.length>1?`<span class="dv2-hl-n">ほか${list.length-1}件</span>`:''}${DV2_CHEV}</button>
+    <div class="dv2-hl-more${dv2FoldJust==='hl'?' is-opening':''}" id="dv2-hl-body"${open?'':' hidden'}>
+      ${rk?rinkoLine(rk.phrase,{件数:list.length}):''}
+      <ul class="dv2-hl-list">${list.slice(1).map(h=>`<li class="${fresh.indexOf(h.key)>=0?'is-new':''}" data-key="${escAttr(h.key)}"><span class="dv2-hl-icon" aria-hidden="true">${h.icon}</span>
+        <span>${escAttr(h.text)}</span><span class="dv2-hl-tag">${escAttr(dv2HlPeriod(h.key))}</span></li>`).join('')}</ul>
+      <div class="dv2-hl-note">自動判定（AI分析ではありません）</div></div>`;
 }
 
 // 気をつけたい変化（数字の変化だけ。該当が無ければカードごと出さない）
