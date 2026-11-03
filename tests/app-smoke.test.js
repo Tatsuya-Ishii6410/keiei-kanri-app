@@ -239,6 +239,32 @@ const SCENARIO = String.raw`(async () => {
     [...r.querySelectorAll('.uc-row-body button')].find(b => /削除/.test(b.textContent)).click(); window.confirm = conf;
     ok(asked && S.quotes.length === n0, '見積の削除に確認が出ない');
   });
+  await step('見積・請求：行の「その他 ▾」から 訂正・取消、下書きは 発行（主のボタン）と 編集・削除。PCの操作エリアの「その他 ▾」に 同期・一括作成', async () => {
+    const keepQ = S.quotes.slice(), d0 = localToday();
+    S.quotes.push({ id: 'INV-SMK-1', type: '請求書', status: 'issued', client: 'A社', subject: '発行済', date: d0, due: d0, amount: 11000, items: [] },
+      { id: 'DRAFT-SMK-1', type: '請求書', status: 'draft', client: 'B社', subject: '下書き', date: d0, due: d0, amount: 22000, items: [] });
+    try {
+      change('quote-month', ''); renderQuotes();
+      const row = id => document.querySelector('#invoice-cards .uc-row[data-quote-id="' + id + '"]');
+      const menuOf = r => [...r.querySelectorAll('.uc-row-body .lt-menu [role=menuitem]')];
+      const iss = row('INV-SMK-1'), dr = row('DRAFT-SMK-1');
+      ok(iss && dr, '請求書の行がない'); if (!iss || !dr) return;
+      const im = menuOf(iss);
+      ok(iss.querySelector('.uc-row-body .lt-menu-btn') && ['訂正', '取消'].every(t => im.some(b => b.textContent.trim() === t)), '発行済の「その他 ▾」に 訂正・取消 がない：' + im.map(b => b.textContent.trim()));
+      im.find(b => b.textContent.trim() === '取消').click();
+      ok(document.getElementById('modal-invoice-cancel').classList.contains('open'), '「その他 ▾」の取消で取消の画面が開かない');
+      closeModal('modal-invoice-cancel');
+      im.find(b => b.textContent.trim() === '訂正').click();
+      ok(document.getElementById('modal-create-quote').classList.contains('open'), '「その他 ▾」の訂正で訂正の画面が開かない');
+      closeModal('modal-create-quote');
+      const main = dr.querySelector('.uc-row-body .mob-card-actions > .btn');
+      ok(main && main.textContent.trim() === '発行' && /issueDraftInvoice/.test(main.getAttribute('onclick')), '下書きの主のボタンが「発行」でない');
+      const dm = menuOf(dr).map(b => b.textContent.trim());
+      ok(['表示', '編集', '削除'].every(t => dm.includes(t)), '下書きの「その他 ▾」に 表示・編集・削除 がない：' + dm);
+      const tm = [...document.querySelectorAll('#inv-more-menu [role=menuitem]')].map(b => b.getAttribute('onclick'));
+      ok(tm.some(o => /openInvoiceSyncModal/.test(o)) && tm.some(o => /openBulkInvoiceModal/.test(o)), '請求書の「その他 ▾」に 同期・一括請求書作成 がない');
+    } finally { S.quotes = keepQ; renderQuotes(); }
+  });
   // ドライブの請求書同期：候補1件は自動、0件・2件以上は保留（請求書・請求レコード・入金予定を作らない）、保留から選ぶと自動と同じ結果
   await step('ドライブの請求書同期（保留・確定）', async () => {
     const pad = n => String(n).padStart(2, '0'), now = new Date(), mi = now.getMonth(), ym = monthYear(mi) + '-' + pad(mi + 1);

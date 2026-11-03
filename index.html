@@ -650,7 +650,20 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
   #tl-summary>.uc-hero-value{grid-column:1;grid-row:2;margin:0}
   #tl-summary>.uc-hero-sub{grid-column:1;grid-row:3}
   #tl-hero .uc-kpis{grid-column:2;grid-row:1/span 3;margin:0}
+  /* 見積・請求：要約カードの代わりに、一覧の見出しの行に同じ数字を出す */
+  #page-quotes .q-hero{display:none}
+  #page-quotes .q-title-mob{display:none}
+  #page-quotes .q-title-pc{display:inline-flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px}
+  /* 請求書の操作エリア：同期・一括請求書作成は「その他 ▾」に（スマホと同じ。見出しの行に要約を置く幅を作る） */
+  #q-invoice .list-toolbar .lt-wide{display:none}
+  #q-invoice .list-toolbar .lt-menu-wrap{display:block;position:relative}
+  #q-invoice .lt-card-head{flex-wrap:nowrap;gap:16px;margin-bottom:12px}
+  #q-invoice .lt-card-head .card-title{flex:1 1 auto;min-width:0}
+  #q-invoice .lt-card-head .list-toolbar{flex:none;flex-wrap:nowrap!important;align-items:center}
 }
+.q-title-pc{display:none}
+.q-title-val{font-size:20px;line-height:1.1;font-weight:800;font-variant-numeric:tabular-nums}
+.q-title-sub{font-size:12px;font-weight:500;color:var(--text-secondary)}
 .uc-kpi{background:#FFFFFF;border:1px solid var(--uc-line);border-radius:16px;padding:12px 14px;min-width:0;color:var(--uc-text);box-shadow:0 1px 3px rgba(23,35,61,.05)}
 .uc-kpi-label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--uc-muted);font-weight:600}
 .uc-kpi-label svg{flex:none;color:var(--uc-accent)}
@@ -5145,7 +5158,13 @@ function renderQuoteTable(type,prefix){
       +(overdueN?`<div class="q-hero-alert">${ucBadge('支払期限を過ぎた請求書 '+overdueN+'件','alert')}</div>`:'');
     ucCountUp(hero.querySelector('.uc-hero-value'),total,prev?prev.dataset.ucV:null);
   }
-  document.getElementById(prefix+'-summary').textContent=(isInvoice?'請求書':'見積書')+'の一覧（'+list.length+'件）';
+  // 一覧の見出し。PC（1024px以上）は要約カードを出さず、同じ数字をこの見出しの行に横並びで出す（改修前と同じ高さ）
+  const heroLabel=(mi===null?'全期間':(mi+1)+'月')+(isInvoice?'の請求額（発行済・税込）':'の見積額（税込）');
+  document.getElementById(prefix+'-summary').innerHTML=
+    `<span class="q-title-mob">${isInvoice?'請求書':'見積書'}の一覧（${list.length}件）</span>`
+    +`<span class="q-title-pc">${heroLabel} <b class="q-title-val">${fmt(total)}</b>`
+    +` <span class="q-title-sub">${list.length}件${isInvoice&&(drafts||cancelled)?`（下書き ${drafts}・取消 ${cancelled}件は含めない）`:''}</span>`
+    +(overdueN?ucBadge('期限超過 '+overdueN+'件','alert'):'')+`</span>`;
 
   const tb=document.getElementById(prefix+'-list');
   const cards=document.getElementById(prefix+'-cards');
