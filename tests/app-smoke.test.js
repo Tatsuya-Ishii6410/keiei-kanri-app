@@ -303,6 +303,48 @@ const SCENARIO = String.raw`(async () => {
     window.confirm = conf;
     ok(asked && S.ledger.length === n0, '削除の確認が出ない、または確認で取り消しても消えた');
   });
+  await step('CF管理：予定を実績に変換（出金予定・入金予定。スマホの行から。二重にならない）', async () => {
+    const keep = JSON.parse(JSON.stringify(S.ledger)), keepProj = JSON.parse(JSON.stringify(S.projects));
+    const pad = n => String(n).padStart(2, '0'), now = new Date();
+    const ymOf = d => d.getFullYear() + '-' + pad(d.getMonth() + 1);
+    const addM = k => new Date(now.getFullYear(), now.getMonth() + k, 1), prevYm = ymOf(addM(-1));
+    try {
+      // 交通費精算の出金予定は変換の対象外（二重計上を防ぐ。銀行明細の突合と同じ）
+      S.ledger.push({ id: 990, date: ymOf(addM(1)) + '-25', expectedDate: ymOf(addM(1)) + '-25', type: '交通費', desc: '交通費精算', amount: 3000, status: 'planned_out', settlementMonth: ymOf(now) });
+      const conv = (id, mi, date, amount) => {
+        change('ledger-month', String(mi));
+        const fc0 = Number(document.querySelector('#cf-forecast .uc-hero-value').dataset.ucV), n0 = S.ledger.length;
+        const r = document.querySelector('#ledger-cards .uc-row[data-ledger-id="' + id + '"]');
+        const b = r && [...r.querySelectorAll('.uc-row-actions button')].find(x => x.textContent.trim() === '実績に変換');
+        ok(b, id + '：スマホの行に「実績に変換」がない'); if (!b) return null;
+        b.click();
+        ok(document.getElementById('modal-plan-confirm').classList.contains('open'), id + '：変換の画面が開かない');
+        document.getElementById('pc-date').value = date; document.getElementById('pc-amount').value = String(amount);
+        confirmPlanned();
+        const l = S.ledger.find(x => x.id === id);
+        ok(l.status === 'actual' && l.date === date && l.amount === amount, id + '：状態・日付・金額が正しく変わらない');
+        ok(S.ledger.length === n0 && S.ledger.filter(x => x.id === id).length === 1, id + '：予定と実績が二重に残る');
+        const fc1 = Number(document.querySelector('#cf-forecast .uc-hero-value').dataset.ucV);
+        ok(fc1 === fc0, id + '：同じ月・同じ金額の変換で月末予測が変わった（二重計上）：' + fc0 + '→' + fc1);
+        return l;
+      };
+      const nx = addM(1), pv = addM(-1);
+      const o = conv(105, nx.getMonth(), ymOf(nx) + '-26', 50000);
+      ok(document.getElementById('pc-title').textContent === '出金を実績にする', '出金予定の画面の見出しが違う');
+      ok(o && isActual(o) && !isInflow(o), '出金予定が出金の実績にならない');
+      // 受取請求書（取込待ち）から作った出金予定（取込の識別子 calId・receiptId つき）も同じく変換でき、識別子は残る（再取込で重複しない）
+      S.ledger.push({ id: 991, date: ymOf(nx) + '-05', expectedDate: ymOf(nx) + '-20', type: '外注費', desc: '受取請求書', amount: 22000, status: 'planned_out', projectId: null, calId: 'rcpt:f9', receiptId: 'f9' });
+      const iv = conv(991, nx.getMonth(), ymOf(nx) + '-19', 22000);
+      ok(iv && iv.calId === 'rcpt:f9' && iv.receiptId === 'f9', '取込の識別子が変換で消えた');
+      conv(106, pv.getMonth(), prevYm + '-21', 110000);
+      change('ledger-month', String(nx.getMonth()));
+      const s = document.querySelector('#ledger-cards .uc-row[data-ledger-id="990"]');
+      ok(s && ![...s.querySelectorAll('button')].some(x => x.textContent.trim() === '実績に変換'), '交通費精算に「実績に変換」が出る');
+    } finally {
+      closeModal('modal-plan-confirm');
+      S.ledger = keep; S.projects = keepProj; change('ledger-month', ''); refreshAll();
+    }
+  });
   await step('CF管理：口座残高の桁区切り（保存する値は数字のまま）', async () => {
     const b0 = S.bankBalance, el = document.getElementById('cf-balance');
     ok(el.value === Number(b0).toLocaleString('ja-JP'), '残高が桁区切りで出ない：' + el.value);

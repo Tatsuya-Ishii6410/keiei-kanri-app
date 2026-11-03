@@ -2562,16 +2562,16 @@ body.bs-docview{overflow:hidden}
 
 <div class="modal-overlay" id="modal-plan-confirm">
 <div class="modal">
-  <div class="modal-header"><span class="modal-title">入金を実績にする</span><button class="btn sm" onclick="closeModal('modal-plan-confirm')">✕</button></div>
+  <div class="modal-header"><span class="modal-title" id="pc-title">入金を実績にする</span><button class="btn sm" onclick="closeModal('modal-plan-confirm')">✕</button></div>
   <div id="pc-info" style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:14px"></div>
   <div class="form-row">
-    <div class="form-group"><label class="form-label">入金日</label><input id="pc-date" type="date"></div>
-    <div class="form-group"><label class="form-label">入金金額</label><input id="pc-amount" type="number"></div>
+    <div class="form-group"><label class="form-label" for="pc-date"><span class="pc-dir">入金</span>日</label><input id="pc-date" type="date"></div>
+    <div class="form-group"><label class="form-label" for="pc-amount"><span class="pc-dir">入金</span>金額</label><input id="pc-amount" type="number"></div>
   </div>
-  <div style="font-size:12px;color:var(--text-muted)">案件に紐づいている場合は、その案件も「入金済」になります。</div>
+  <div style="font-size:12px;color:var(--text-muted)" id="pc-note">案件に紐づいている場合は、その案件も「入金済」になります。</div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-plan-confirm')">キャンセル</button>
-    <button class="btn success" onclick="confirmPlanned()">✓ 実績に変換</button>
+    <button class="btn success" onclick="confirmPlanned()">実績に変換</button>
   </div>
 </div>
 </div>
@@ -6588,7 +6588,7 @@ function renderLedger(){
       <td style="text-align:right;font-weight:500;color:${inflow?'var(--text-muted)':'var(--red)'}">${inflow?'-':fmt(l.amount)}</td>
       <td><span class="badge ${LEDGER_STATES[st].cls}">${LEDGER_STATES[st].label.replace(/^📅\s*/,'')}</span></td>
       <td><div style="display:flex;gap:4px;flex-wrap:wrap">
-        ${st==='planned_in'?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">実績に変換</button>`:''}
+        ${canConvertPlan(l)?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">実績に変換</button>`:''}
         <button class="btn sm" onclick="openLedgerModal(${l.id})">編集</button>
         <button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button>
       </div></td>
@@ -6678,7 +6678,18 @@ function openPlanConfirm(id){
     +`<div style="font-size:12px;color:var(--text-secondary);margin-top:2px">予定日 ${ledgerDateOf(l)}　${fmt(l.amount)}</div>`;
   document.getElementById('pc-date').value=ledgerDateOf(l)||today();
   document.getElementById('pc-amount').value=l.amount;
+  // 入金予定・出金予定で文言だけ変える（変換の処理は同じ：同じ行の状態を実績にする＝予定と実績が二重に残らない）
+  const out=ledgerStatusOf(l)==='planned_out';
+  document.getElementById('pc-title').textContent=out?'出金を実績にする':'入金を実績にする';
+  document.querySelectorAll('#modal-plan-confirm .pc-dir').forEach(e=>e.textContent=out?'出金':'入金');
+  document.getElementById('pc-note').style.display=out?'none':'';
   openModal('modal-plan-confirm');
+}
+// 実績に変換できる予定：入金予定と出金予定。交通費精算の出金予定（settlementMonth）は除く
+// （交通費は日々の実績で経費にしているので、精算を実績にすると二重計上になる。銀行明細の突合 matchPlannedOut と同じ扱い）
+function canConvertPlan(l){
+  const st=ledgerStatusOf(l);
+  return st==='planned_in'||(st==='planned_out'&&!l.settlementMonth);
 }
 
 function confirmPlanned(){
@@ -6686,14 +6697,15 @@ function confirmPlanned(){
   if(!l){alert('対象が見つかりませんでした');return;}
   const date=document.getElementById('pc-date').value;
   const amount=parseInt(document.getElementById('pc-amount').value)||0;
-  if(!date||!amount){alert('入金日と金額を入力してください');return;}
+  const wasIn=ledgerStatusOf(l)==='planned_in';
+  if(!date||!amount){alert((wasIn?'入金日':'出金日')+'と金額を入力してください');return;}
 
   l.status='actual';
   l.date=date;
   l.expectedDate='';
   l.amount=amount;
   // 案件に紐づいていれば入金済みにする
-  if(l.projectId){
+  if(wasIn&&l.projectId){
     const p=S.projects.find(x=>x.id===l.projectId);
     if(p)markProjectPaid(p,date,amount);
   }
@@ -11677,7 +11689,7 @@ function cfRowHtml(l){
       +`<div style="word-break:break-word">${escAttr(l.desc)}${receiptLinkHtml(l)}</div>`
       +(extra?`<div>${escAttr(extra)}</div>`:'')
       +(l.memo?`<div>${escAttr(l.memo)}</div>`:''),
-    actionsHtml:`${st==='planned_in'?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">実績に変換</button>`:''}`
+    actionsHtml:`${canConvertPlan(l)?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">実績に変換</button>`:''}`
       +`<button class="btn sm" onclick="openLedgerModal(${l.id})">編集</button>`
       +`<button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button>`
   });
