@@ -415,6 +415,7 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 .dv2-kpi-icon{width:24px;height:24px;flex:none;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--ui-bg);color:var(--ui-accent-text)}
 .dash-v2 .dv2-kpi-label{font-size:12px;font-weight:700;color:var(--ui-muted-strong);line-height:1.25;overflow-wrap:anywhere}
 .dash-v2 .dv2-info{position:absolute;top:2px;right:2px;width:44px;height:44px;border:0;background:none;color:var(--ui-muted-strong);font-size:15px;cursor:pointer}
+.dash-v2 .dv2-h3 .dv2-info{position:static;vertical-align:middle;width:36px;height:44px;margin:-12px 0}
 .dash-v2 .dv2-kpi-val{font-size:22px;line-height:1.2;margin:6px 0 2px;white-space:normal;overflow-wrap:anywhere}
 .dash-v2 .dv2-kpi-val.fit-1{font-size:20px}.dash-v2 .dv2-kpi-val.fit-2{font-size:18px}.dash-v2 .dv2-kpi-val.fit-3{font-size:16px}
 .dash-v2 .dv2-kpi-val.is-null{font-size:14px;color:var(--ui-muted-strong)}
@@ -13853,7 +13854,7 @@ let dv2TrendSwitched=false;
 function setDv2Trend(n){dv2TrendMonths=n;dv2TrendSwitched=true;renderDashV2();dv2TrendSwitched=false;}
 function renderDv2Trend(D){
   const el=document.getElementById('dv2-trend');
-  const len=dv2TrendMonths||(window.innerWidth<600?6:12);
+  const len=dv2TrendMonths||6;   // 初期表示は直近6か月（PC・スマホとも）。12か月は切替で
   const months=len===12&&D.fy?fiscalAbsMonths(D.fy).slice(0,12):[5,4,3,2,1,0].map(i=>D.abs-i);
   const rows=months.map(a=>{const n=dashMonthNumbers(a);return{a,sales:n.sales,profit:a<=D.curAbs?n.profit:null,plan:a>D.curAbs,prevYear:projectSalesAtAbsTotal(a-12)};});
   const hasPrev=rows.some(r=>r.prevYear>0);
@@ -13881,17 +13882,21 @@ function renderDv2Trend(D){
   const pts=rows.map((r,i)=>r.profit===null?null:[L+i*bw+bw/2,y(r.profit),r.a===D.curAbs]).filter(Boolean);
   rows.forEach((r,i)=>{r.prevSales=i>0?rows[i-1].sales:dashMonthNumbers(r.a-1).sales;r.big=big[r.a]&&!r.plan?big[r.a]:null;r.rec=rec===r.a&&!r.plan;});
   dv2TrendRows=rows;
-  el.innerHTML=`<div class="dv2-card-head"><h3 class="dv2-h3">売上・利益の推移</h3>
-      <div class="dv2-seg" role="group" aria-label="期間">${[12,6].map(k=>`<button class="${len===k?'on':''}" aria-pressed="${len===k}" onclick="setDv2Trend(${k})">${k}か月</button>`).join('')}</div></div>
-    <div class="dv2-legend"><span><i class="lg-bar"></i>売上（実績）</span><span><i class="lg-plan"></i>売上（予測・*）</span><span><i class="lg-line"></i>営業利益（実績・○は月途中）</span>
-      ${hasPrev?'<span><i class="lg-prev"></i>前年同月</span>':'<span>前年同月：データ不足</span>'}<span>★過去最高／▲▼前月比±30%以上</span></div>
+  // 凡例は3つ（売上実績・売上予測・営業利益）。★・▲▼・前年同月・* の説明はⓘの中
+  el.innerHTML=`<div class="dv2-card-head"><h3 class="dv2-h3">売上・利益の推移
+        <button class="dv2-info" aria-label="グラフの見方" aria-expanded="${!!dv2Open.trend}" onclick="dv2Toggle('trend')">ⓘ</button></h3>
+      <div class="dv2-seg" role="group" aria-label="期間">${[6,12].map(k=>`<button class="${len===k?'on':''}" aria-pressed="${len===k}" onclick="setDv2Trend(${k})">${k}か月</button>`).join('')}</div></div>
+    <div class="dv2-legend"><span><i class="lg-bar"></i>売上実績</span><span><i class="lg-plan"></i>売上予測</span><span><i class="lg-line"></i>営業利益</span></div>
+    ${dv2Open.trend?`<div class="dv2-basis">★＝過去最高の月（確定した月で売上のある月が3か月以上のとき）。▲▼＝前月比±30%以上かつ差10万円以上（確定した月どうし）。
+      * と破線の棒＝当月より後の月（契約の予定額＝予測）。営業利益は実績の月だけ（○は当月＝月途中）。
+      ${hasPrev?'薄い棒＝前年同月の売上。':'前年同月：データ不足。'}棒を押すとその月の売上・営業利益・前月比。</div>`:''}
     <div class="dv2-chart${dv2TrendSwitched?' is-switch':''}"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="月別の売上と営業利益">
       <defs><linearGradient id="dv2bar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3976F6"/><stop offset="1" stop-color="#7D6CF6"/></linearGradient></defs>
       ${ticks}${cols}
       ${pts.length>1?`<polyline points="${pts.map(p=>p[0]+','+p[1]).join(' ')}" class="dv2-line"/>`:''}
       ${pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" class="dv2-dot${p[2]?' mid':''}"><title>${p[2]?'当月（月途中）':'確定'}</title></circle>`).join('')}</svg>
       <div class="dv2-tip" id="dv2-tip" hidden></div></div>
-    <div class="dv2-note">* は当月より後の月（契約の予定額＝予測。破線）。営業利益は実績の月だけ。棒を押すとその月の詳細。</div>`;
+`;
 }
 function dv2Tip(i){
   const r=dv2TrendRows[i],tip=document.getElementById('dv2-tip');
