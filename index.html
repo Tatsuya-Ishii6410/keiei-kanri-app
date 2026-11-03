@@ -431,7 +431,7 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 @keyframes dv2-ring{from{stroke-dasharray:0 200}}
 .dash-v2 .dv2-chart.is-switch svg{animation:dv2-fade 250ms ease-out 1}
 @keyframes dv2-fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-.dash-v2 .dv2-basis,.dash-v2 #dv2-actions-more:not([hidden]){animation:dv2-fade 250ms ease-out 1}
+.dash-v2 .dv2-basis.is-opening,.dash-v2 #dv2-actions-more:not([hidden]){animation:dv2-fade 250ms ease-out 1}
 .dash-v2 .dv2-ring.lv-good .fg{stroke:var(--ui-good)}.dash-v2 .dv2-ring.lv-caution .fg{stroke:var(--ui-caution)}
 .dash-v2 .dv2-ring.lv-warn .fg{stroke:var(--ui-warn)}.dash-v2 .dv2-ring.lv-none .fg{stroke:var(--ui-accent)}
 .dash-v2 .dv2-ring .land{fill:none;stroke:var(--ui-plan);stroke-width:2;stroke-dasharray:1.5 3;stroke-linecap:round}
@@ -13739,7 +13739,10 @@ function dv2GoCash(){
   showPage('ledger',document.querySelectorAll('.nav-btn')[3]);
   setTimeout(()=>{const el=document.getElementById('cf-balance');if(el){el.scrollIntoView({block:'center'});el.focus();}},50);
 }
-function dv2Toggle(k){dv2Open[k]=!dv2Open[k];renderDashV2();}
+// 開閉：開いた直後の欄だけ展開のアニメーション（250ms）。ほかの操作・データ変更の描き直しでは再生しない
+let dv2JustOpened='';
+function dv2Toggle(k){dv2Open[k]=!dv2Open[k];dv2JustOpened=dv2Open[k]?k:'';renderDashV2();dv2JustOpened='';}
+function dv2Just(k){return dv2JustOpened===k?' is-opening':'';}
 /* 折りたたみの行（経営ミッション・気をつけたい変化・詳細データ）。初期は閉じた1行＋1行の要約。開閉は250ms（開いた直後だけ is-opening）。
    見出しは button（Enter・Space で開閉、aria-expanded）。内容・機能は従来のまま中に入れる */
 let dv2FoldJust='';
@@ -13794,7 +13797,7 @@ function renderDv2Condition(D){
   el.innerHTML=`<div class="dv2-cond-main">${rk?rinkoAvatar(rk.face,c.icon):`<span class="dv2-cond-icon" aria-hidden="true">${c.icon}</span>`}
       <div><div class="dv2-kicker">経営コンディション</div><div class="dv2-cond-title">${c.title}</div></div>
       <button class="dv2-link dv2-tap" onclick="dv2Toggle('cond')" aria-expanded="${!!dv2Open.cond}">判定の根拠 ${dv2Open.cond?'▲':'▼'}</button>${rk?rinkoLine(rk.phrase,rv):''}</div>
-    ${dv2Open.cond?`<div class="dv2-basis"><ol class="dv2-rules">${c.rules.map(r=>`<li class="st-${r.state}"><b>${r.name}</b>
+    ${dv2Open.cond?`<div class="dv2-basis${dv2Just('cond')}"><ol class="dv2-rules">${c.rules.map(r=>`<li class="st-${r.state}"><b>${r.name}</b>
       <span class="dv2-rule-st">${r.state==='hit'?'該当':r.state==='skip'?'判定しない':'該当なし'}</span><br>${escAttr(r.detail)}</li>`).join('')}</ol>
       <div>優先順位：1.資金繰り → 2.入金遅延 → 3.目標ペース（−5pt以上＝順調・−5〜−15pt＝少し遅れ・−15pt未満＝遅れ） → 4.判定材料不足。最初に当てはまる1つを表示</div>
       <div class="dv2-note">出金予定：期限超過＋今日から30日以内（${D.outSoon.until}まで）${D.outSoon.count}件 ${dv2Yen(D.outSoon.total)}（うち期限超過 ${D.outSoon.overdue}件）。
@@ -13818,9 +13821,11 @@ function dv2Delta(d,label,quiet){
 
 
 
-/* アニメーションの時間（v2.0）：カウントアップ600ms／山の現在地600ms／リング600ms／マイルストーン到達500ms／タップ120ms／グラフ切替250ms／詳細の展開250ms
+/* アニメーションの時間（v2.0。CSS もこの値）：カウントアップ600ms（読み込みにつき1回）／山の現在地600ms／リング600ms（いまは使っていない）／
+   マイルストーン到達500ms／カードのタップ120ms／グラフ切替250ms（6・12か月を押したとき）／詳細・折りたたみの展開250ms（開いた直後だけ）／
+   山の初回（山250ms→進捗の線350ms→現在地の光300ms→数字。合わせて0.8秒以内。dv2HeroIntro）
    初回表示・データ変更・明示的な操作のときだけ。スクロールでは再生しない。動きを減らす設定ではすべて無効（CSS と dv2ReducedMotion） */
-const DV2_MS={count:600};
+const DV2_MS={count:600,me:600,ring:600,milestone:500,tap:120,trendSwitch:250,expand:250};
 // 数値のカウントアップ（600ms・読み込みにつき1回。動きを減らす設定のときはしない）
 function dv2CountUp(root){
   if(dv2ReducedMotion())return;
@@ -13887,7 +13892,7 @@ function renderDv2Trend(D){
         <button class="dv2-info" aria-label="グラフの見方" aria-expanded="${!!dv2Open.trend}" onclick="dv2Toggle('trend')">ⓘ</button></h3>
       <div class="dv2-seg" role="group" aria-label="期間">${[6,12].map(k=>`<button class="${len===k?'on':''}" aria-pressed="${len===k}" onclick="setDv2Trend(${k})">${k}か月</button>`).join('')}</div></div>
     <div class="dv2-legend"><span><i class="lg-bar"></i>売上実績</span><span><i class="lg-plan"></i>売上予測</span><span><i class="lg-line"></i>営業利益</span></div>
-    ${dv2Open.trend?`<div class="dv2-basis">★＝過去最高の月（確定した月で売上のある月が3か月以上のとき）。▲▼＝前月比±30%以上かつ差10万円以上（確定した月どうし）。
+    ${dv2Open.trend?`<div class="dv2-basis${dv2Just('trend')}">★＝過去最高の月（確定した月で売上のある月が3か月以上のとき）。▲▼＝前月比±30%以上かつ差10万円以上（確定した月どうし）。
       * と破線の棒＝当月より後の月（契約の予定額＝予測）。営業利益は実績の月だけ（○は当月＝月途中）。
       ${hasPrev?'薄い棒＝前年同月の売上。':'前年同月：データ不足。'}棒を押すとその月の売上・営業利益・前月比。</div>`:''}
     <div class="dv2-chart${dv2TrendSwitched?' is-switch':''}"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="月別の売上と営業利益">
@@ -13966,7 +13971,7 @@ function renderDv2Hero(D){
         <div class="dv2-muted">確定の実績 <b class="dv2-num">${dv2Yen(sp.confirmed)}</b>（確定＋予測 ${dv2Yen(sp.total)}）</div>
         <button class="dv2-btn primary" onclick="dv2GoFiscal()">期の設定で目標を入れる</button>`}
       ${celeb}
-      ${dv2Open.hero?`<div class="dv2-basis">
+      ${dv2Open.hero?`<div class="dv2-basis${dv2Just('hero')}">
         <div>集計期間：${escAttr(fiscalLabel(fy))}（${escAttr(fy.name)}）。売上は期間サマリーと同じ案件ベース（請求レコード、無ければ案件の月額）</div>
         <div>達成率・現在地・マイルストーン・次の目標地点＝確定の実績で計算（確定は期首から当月まで ${sp.confirmedMonths.length}か月。推移グラフの「実績」と同じ）。
           あと＝目標×次のマイルストーン% − 確定の実績</div>
@@ -14073,7 +14078,7 @@ function renderDv2Kpis(D){
         <button class="dv2-info" aria-label="${c.label}の計算根拠" aria-expanded="${!!dv2Open['kpi-'+c.key]}" onclick="event.stopPropagation();dv2Toggle('kpi-${c.key}')">ⓘ</button></div>
       <div class="dv2-num dv2-kpi-val ${c.value===null?'is-null':dv2FitClass(val)}" ${c.value===null?'':`data-count="${c.value}" data-fmt="${c.fmt}" data-key="kpi-${c.key}"`}>${val}</div>
       <div class="dv2-kpi-sub">${c.sub}</div>
-      ${dv2Open['kpi-'+c.key]?`<div class="dv2-basis" onclick="event.stopPropagation()">${c.basis}</div>`:''}
+      ${dv2Open['kpi-'+c.key]?`<div class="dv2-basis${dv2Just('kpi-'+c.key)}" onclick="event.stopPropagation()">${c.basis}</div>`:''}
     </article>`;
   }).join('');
   dv2CountUp(el);
@@ -14094,7 +14099,7 @@ function renderDv2Actions(D){
     +(all&&rest.length?`<ol class="dv2-act-list">${rest.map(a=>dv2ActionRow(a)).join('')}</ol>`:'')
     +(all&&done.length?`<div class="dv2-done-row" aria-label="完了">${done.map(a=>`<span class="dv2-done-chip" data-key="${a.key}">✓ ${escAttr(a.title)}</span>`).join('')}</div>`:'')
     +(all?`<button class="dv2-link dv2-tap" onclick="dv2Toggle('sev')">重要度の見方 ${dv2Open.sev?'▲':'▼'}</button>`:'')
-    +(all&&dv2Open.sev?`<div class="dv2-basis">重要度は固定のルール：<b>赤</b>＝入金遅延・月次締めの未解決／<b>橙</b>＝請求書の未作成・取込待ち・バックアップ・銀行明細／<b>緑</b>＝完了。
+    +(all&&dv2Open.sev?`<div class="dv2-basis${dv2Just('sev')}">重要度は固定のルール：<b>赤</b>＝入金遅延・月次締めの未解決／<b>橙</b>＝請求書の未作成・取込待ち・バックアップ・銀行明細／<b>緑</b>＝完了。
       件数は従来の状態の行と同じ集計です（入金遅延・月次締め・請求書・取込待ち・バックアップ（10日以内）・銀行明細（7日以内））。</div>`:'');
 }
 

@@ -996,6 +996,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - アニメーションの時間：カウントアップ600ms（DV2_MS.count・読み込みにつき1回）／山の現在地600ms／リング600ms（最初の表示だけ。dv2RingDrawn）／
   マイルストーン到達500ms／KPIのタップ120ms／グラフ切替250ms（6・12か月を押したときだけ。dv2TrendSwitched）／詳細の展開250ms。
   スクロールでは再生しない。動きを減らす設定ではすべて無効（.dash-v2 の中の animation・transition を止める）
+  ★ 第4次-B'：時間は DV2_MS にまとめて書いた（CSS も同じ値）。詳細（判定の根拠・ⓘ・重要度の見方・前提）と折りたたみの展開は、開いた直後の欄だけ
+  （dv2Toggle が dv2JustOpened を立て、dv2Just(k) が .is-opening を付ける。ほかの操作・データ変更の描き直しでは再生し直さない）。山の初回は dv2HeroIntro
 
 ## 朝日凛子（新ダッシュボードの案内役）
 - 素材は images/rinko/（別ファイル。HTMLに埋め込まない）。rinko-{wink,smile,think}.webp（全身寄り・透過）と
