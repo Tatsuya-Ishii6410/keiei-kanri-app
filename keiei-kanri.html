@@ -10878,6 +10878,7 @@ function buildMonthlyPL(mi){
   S.ledger.forEach(l=>{
     if(!isActual(l)||dateToAbs(l.date)!==abs)return;
     if(l.type==='売上')return;
+    if(ledgerGroup(l.type)==='settle')return;   // 交通費精算の支払いは経費にしない（交通費は日々の実績で計上済み）
     if(byAccount[l.type]===undefined)byAccount[l.type]=0; // 旧区分もそのまま出す
     byAccount[l.type]+=l.amount;
     if(l.memo){
