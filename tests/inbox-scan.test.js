@@ -39,7 +39,7 @@ const app = {};
 vm.createContext(app);
 vm.runInContext(html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + `
 globalThis.exported = { INBOX_RECEIPT, INBOX_INVOICE, driveFolderIdFrom, payableFormFrom, inboxFormOf, inboxConfOf,
-  payableDupOf, inboxDupOf, inboxLedgerEntry, inboxEntryError, inboxBulkBlocker, matchPlannedOut, rcptExtId, mailExtId, isSettlePaid, settlePayRow, settlePayCandidates, settleLinkRow };`, app);
+  payableDupOf, inboxDupOf, inboxLedgerEntry, inboxEntryError, inboxBulkBlocker, matchPlannedOut, rcptExtId, mailExtId, isSettlePaid, settlePayRow, settlePayCandidates, settleLinkRow, matchPaidSettlement };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -343,7 +343,7 @@ test('受取請求書：同じ請求元＋同じ請求書番号、または同�
 
 console.log('銀行明細CSVとの突合・設定');
 
-test('出金予定は、同額で予定日の前後7日以内なら銀行CSVの出金と突合できる（近いものを優先・交通費精算は除く）', () => {
+test('出金予定は、同額で予定日の前後7日以内なら銀行CSVの出金と突合できる（近いものを優先・交通費精算も対象）', () => {
   const ledger = [
     { id: 1, status: 'planned_out', amount: 55000, date: '2026-10-31', expectedDate: '2026-11-30', desc: '株式会社X' },
     { id: 2, status: 'planned_out', amount: 55000, date: '2026-11-20', expectedDate: '2026-11-25', desc: '別' },
@@ -353,8 +353,21 @@ test('出金予定は、同額で予定日の前後7日以内なら銀行CSVの�
   assert.strictEqual(A.matchPlannedOut(ledger, '2026-11-29', 55000).id, 1);
   assert.strictEqual(A.matchPlannedOut(ledger, '2026-11-24', 55000).id, 2);
   assert.strictEqual(A.matchPlannedOut(ledger, '2026-12-08', 55000), null);
-  assert.strictEqual(A.matchPlannedOut(ledger, '2026-11-25', 8000), null);
+  // 交通費精算も突合する（採用すると振込済み＝区分 交通費精算になり、経費は二重にならない）
+  assert.strictEqual(A.matchPlannedOut(ledger, '2026-11-25', 8000).id, 3);
   assert.strictEqual(A.matchPlannedOut(ledger, '2026-11-30', 54999), null);
+});
+test('銀行CSVの出金が、振込済みにした交通費精算と同じ振込か（同額・前後7日。予定や日々の交通費は対象外）', () => {
+  const ledger = [
+    { id: 7, type: '交通費精算', desc: '交通費精算 2026年9月分', amount: 48630, status: 'actual', date: '2026-11-03', settlementMonth: '2026-09' },
+    { id: 8, type: '交通費', desc: '交通費精算 2026年10月分', amount: 37800, status: 'planned_out', date: '2026-11-25', settlementMonth: '2026-10' },
+    { id: 9, type: '交通費', desc: '日々', amount: 1120, status: 'actual', date: '2026-11-03' },
+  ];
+  assert.strictEqual(A.matchPaidSettlement(ledger, '2026-11-04', 48630).id, 7);
+  assert.strictEqual(A.matchPaidSettlement(ledger, '2026-11-11', 48630), null);
+  assert.strictEqual(A.matchPaidSettlement(ledger, '2026-11-04', 48631), null);
+  assert.strictEqual(A.matchPaidSettlement(ledger, '2026-11-25', 37800), null);
+  assert.strictEqual(A.matchPaidSettlement(ledger, '2026-11-03', 1120), null);
 });
 
 test('交通費精算を振込済みにする：同じ行が実績（区分 交通費精算）になり、精算月の印は残る（実例：9月分 48,630円を 2026-11-03 に振込）', () => {

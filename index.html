@@ -11894,7 +11894,7 @@ function bankCardHtml(r,i){
     +`<div style="margin-top:6px">
       <input type="number" value="${r.amount}" oninput="bankRows[${i}].amount=parseInt(this.value)||0" style="font-size:14px;font-weight:700">
     </div>`
-    +(r.income||r.planId?`<div style="font-size:11px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">${bankMatchCell(r,i)}</div>`:''));
+    +(r.income||r.planId||r.settlePaidId?`<div style="font-size:11px;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">${bankMatchCell(r,i)}</div>`:''));
 }
 
 /* ---- スマホ用の表示（テーブルの代わりにカード・リスト） ----
@@ -13580,11 +13580,11 @@ function inboxBulkBlocker(x,ledger){
 }
 
 /* 銀行明細CSVの出金と照合する出金予定：同額で、予定日が前後 days 日（既定7日）以内の planned_out（いちばん近いもの）
-   交通費精算（settlementMonth あり）は除く（実績にすると交通費が二重に経費になるため） */
+   交通費精算（settlementMonth あり）も対象。採用すると、精算は「振込済み」（settlePayRow：区分 交通費精算）にするので経費は二重にならない */
 function matchPlannedOut(ledger,date,amount,days){
   const d=days==null?7:days;
   const at=l=>l.expectedDate||l.date;
-  return(ledger||[]).filter(l=>l.status==='planned_out'&&!l.settlementMonth&&l.amount===amount&&Math.abs(dayDiff(date,at(l)))<=d)
+  return(ledger||[]).filter(l=>l.status==='planned_out'&&l.amount===amount&&Math.abs(dayDiff(date,at(l)))<=d)
     .sort((a,b)=>Math.abs(dayDiff(date,at(a)))-Math.abs(dayDiff(date,at(b))))[0]||null;
 }
 
@@ -13603,6 +13603,13 @@ function settlePayCandidates(ledger,date,amount,days,tol){
   return(ledger||[]).filter(l=>(l.status||'actual')==='actual'&&l.type!=='売上'&&l.type!=='交通費'&&l.type!=='交通費精算'
       &&!l.settlementMonth&&l.date&&Math.abs((l.amount||0)-amount)<=t&&Math.abs(dayDiff(date,l.date))<=d)
     .sort((a,b)=>Math.abs(dayDiff(date,a.date))-Math.abs(dayDiff(date,b.date))||Math.abs(a.amount-amount)-Math.abs(b.amount-amount));
+}
+/* 銀行明細CSVの出金が、すでに振込済みにした交通費精算と同じ振込か：同額で、振込日の前後 days 日（既定7日）以内の精算の支払い。
+   見つかれば、その明細は「精算の振込として登録済みとみなす」（未選択にして理由を出す。ユーザーが選べば通常の出金として登録できる） */
+function matchPaidSettlement(ledger,date,amount,days){
+  const d=days==null?7:days;
+  return(ledger||[]).filter(l=>isSettlePaid(l)&&l.amount===amount&&l.date&&Math.abs(dayDiff(date,l.date))<=d)
+    .sort((a,b)=>Math.abs(dayDiff(date,a.date))-Math.abs(dayDiff(date,b.date)))[0]||null;
 }
 /* 既存の実績の出金に紐付ける：その行を精算の支払いにする（区分 交通費精算・精算月の印を移す。金額・日付は口座の実績のまま）。
    元の区分はメモに残す。予定の行は呼び出し側で消す（CFの出金は既存の1行だけ） */
@@ -15071,6 +15078,8 @@ async function bankHandleFile(file){
     const match=income?matchProjectByPayment(amount,date):null;
     // 出金は、同額で予定日が近い出金予定（受取請求書・税金など）を突合候補にする
     const plan=income?null:matchPlannedOut(S.ledger,date,amount);
+    // 予定が無く、同じ振込をすでに振込済みにした交通費精算があれば、登録済みとみなす（未選択・理由を表示）
+    const paid=income||plan?null:matchPaidSettlement(S.ledger,date,amount);
     const f=bankDupFlags(S.ledger,date,amount,desc,income);
     bankRows.push({
       date,desc,amount,income,
@@ -15080,7 +15089,8 @@ async function bankHandleFile(file){
       mailNear:f.mailNear,
       mailNearDate:f.mailNearDate,
       auth:!income&&isAuthLike(amount),
-      checked:!f.dup&&!f.mailDup&&!f.mailNear,
+      checked:!f.dup&&!f.mailDup&&!f.mailNear&&!paid,
+      settlePaidId:paid?paid.id:null,     // 振込済みの交通費精算と同じ振込とみなした行（未選択。選べば通常の出金として登録）
       matchId:match?match.p.id:null,
       matchYm:match?match.ym:null,        // 推定した対象月（YYYY-MM）
       matchGross:match?match.gross:0,     // 突合に使った税込金額
@@ -15105,11 +15115,13 @@ function renderBankPreview(){
   const inSum=bankRows.filter(r=>r.income).reduce((a,r)=>a+r.amount,0);
   const outSum=bankRows.filter(r=>!r.income).reduce((a,r)=>a+r.amount,0);
   const dup=bankRows.filter(r=>r.dup||r.mailDup||r.mailNear).length;
+  const settled=bankRows.filter(r=>r.settlePaidId).length;
   const auth=bankRows.some(r=>r.auth);
 
   document.getElementById('bank-msg').innerHTML=
     `<div class="alert alert-success">✓ ${bankRows.length}件の明細を読み込みました`
     +(dup>0?`（うち ${dup}件は重複の可能性があるため未選択）`:'')+'</div>'
+    +(settled>0?`<div class="alert alert-warning" style="font-size:12px">${settled}件は、振込済みにした交通費精算と同じ振込（同額・前後7日）とみなして未選択にしました。理由は各行の「突合」に出しています。別の出金なら選択して登録してください。</div>`:'')
     +(auth?`<div class="alert alert-warning" style="font-size:12px">${AUTH_NOTE}</div>`:'')
     +`<div class="metric-grid">
       <div class="metric-card"><div class="metric-label">取引件数</div><div class="metric-value" style="font-size:20px">${bankRows.length}件</div></div>
@@ -15142,8 +15154,12 @@ function renderBankPreview(){
 function bankMatchCell(r,i){
   if(!r.income){
     const po=r.planId?S.ledger.find(l=>l.id===r.planId):null;
+    const sp=!po&&r.settlePaidId?S.ledger.find(l=>l.id===r.settlePaidId):null;
+    if(sp)return`<div><span class="badge badge-amber">精算の振込として登録済み</span></div>
+    <div style="margin-top:3px">理由：振込済みの ${escAttr(sp.desc)}（${escAttr(sp.date)}・${fmt(sp.amount)}）と同額・前後7日のため、未選択にしました。</div>
+    <div style="color:var(--text-muted);margin-top:2px">別の出金なら、行の先頭を選択すると通常の出金として登録します。</div>`;
     if(!po)return'<span style="color:var(--text-muted)">-</span>';
-    return`<div><span class="badge badge-blue">💡 出金予定と突合</span></div>
+    return`<div><span class="badge badge-blue">${po.settlementMonth?'交通費精算の振込と突合':'💡 出金予定と突合'}</span></div>
     <div style="margin-top:3px">${escAttr(po.desc)}（予定日 ${escAttr(po.expectedDate||po.date)}・${fmt(po.amount)}）</div>
     <label style="display:flex;align-items:center;gap:4px;margin-top:3px;cursor:pointer">
       <input type="checkbox" ${r.applyPlan?'checked':''} onchange="bankRows[${i}].applyPlan=this.checked" style="width:auto">
@@ -15191,6 +15207,12 @@ function bankRegister(){
     // 出金予定と突合した出金は、その予定を実績に変える（同じ支払いを二重に入れない）
     if(!r.income&&r.applyPlan&&r.planId){
       const po=S.ledger.find(l=>l.id===r.planId&&l.status==='planned_out');
+      if(po&&po.settlementMonth){
+        // 交通費精算：振込済み（区分 交通費精算）にする。経費の集計に入らず、CFの実績出金に1回だけ
+        settlePayRow(po,r.date,r.amount,'銀行明細で振込確認（'+r.amount+'円）');
+        planned++;
+        return;
+      }
       if(po){
         po.status='actual';
         po.date=r.date;
