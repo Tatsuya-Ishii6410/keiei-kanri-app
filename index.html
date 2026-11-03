@@ -604,6 +604,11 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .pj-pipe-note{font-size:11px;color:var(--text-muted);margin-left:6px}
 .inv-pend-head{display:flex;flex-direction:column;gap:2px;font-size:13px}
 .inv-pend-head span{font-size:12px}
+.inv-pend-head .btn{align-self:flex-start;margin-top:6px;min-height:40px}
+.app-toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translate(-50%,20px);max-width:calc(100% - 32px);z-index:4000;
+  background:#17233D;color:#fff;font-size:13px;line-height:1.5;padding:10px 14px;border-radius:12px;box-shadow:0 6px 20px rgba(23,35,61,.25);opacity:0;pointer-events:none;transition:opacity 200ms ease,transform 200ms ease}
+.app-toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){.app-toast{transition:none}}
 .inv-pend{list-style:none;margin:0 0 12px;padding:0;border:0.5px solid var(--border);border-radius:var(--radius-md)}
 .inv-pend li{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:10px;border-bottom:0.5px solid var(--border)}
 .inv-pend li:last-child{border-bottom:0}
@@ -2190,7 +2195,7 @@ body.bs-docview{overflow:hidden}
 
 <div class="modal-overlay" id="modal-invoice-sync">
 <div class="modal wide">
-  <div class="modal-header"><span class="modal-title">ドライブから請求書を同期</span><button class="btn sm" onclick="closeModal('modal-invoice-sync')">✕</button></div>
+  <div class="modal-header"><span class="modal-title">ドライブから請求書を同期</span><button class="btn sm" onclick="closeInvoiceSync()" aria-label="閉じる">✕</button></div>
   <div id="inv-pending"></div>
   <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
     請求書関係フォルダの「{年}年{月}月」フォルダにあるPDFを読み取り、
@@ -2207,7 +2212,7 @@ body.bs-docview{overflow:hidden}
   <div id="inv-msg" style="margin:12px 0"></div>
   <div id="inv-list"></div>
   <div class="actions-row">
-    <button class="btn" onclick="closeModal('modal-invoice-sync')">閉じる</button>
+    <button class="btn" onclick="closeInvoiceSync()">閉じる</button>
     <button class="btn success" id="inv-sync-btn" onclick="syncInvoices()" style="display:none">🔄 選択したファイルを同期</button>
   </div>
 </div>
@@ -3626,7 +3631,7 @@ function showPage(p,btn){
 function openModal(id){document.getElementById(id).classList.add('open')}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 document.querySelectorAll('.modal-overlay').forEach(m=>{
-  m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')});
+  m.addEventListener('click',e=>{if(e.target!==m)return;if(m.id==='modal-invoice-sync')closeInvoiceSync();else m.classList.remove('open');});
 });
 
 /* ===== 収支の区分 =====================================================
@@ -9515,6 +9520,8 @@ function openInvoiceSyncModal(){
   invMsg('');
   renderInvPending();
   openModal('modal-invoice-sync');
+  // スマホの戻る操作で閉じられるよう、履歴に1つ積む（closeInvoiceSync・popstate で外す）
+  if(!invSyncHist){try{history.pushState({invSync:1},'');invSyncHist=true;}catch(e){}}
 }
 
 // 既存データとの重なりを調べる
@@ -9681,7 +9688,7 @@ async function syncInvoices(){
   saveState();
   btn.disabled=false;
   // 保留があれば同期の画面を開いたまま、上に保留の一覧を出す
-  if(invPending.length)renderInvPending();else closeModal('modal-invoice-sync');
+  if(invPending.length)renderInvPending();else closeInvoiceSync();
   refreshAll();
   alert(invSyncSummary(cnt)
     +(errors.length?`\n\n読み取れなかったファイル:\n`+errors.join('\n'):''));
@@ -9700,7 +9707,8 @@ function renderInvPending(){
   const billable=S.projects.filter(billableProject);
   const label=x=>`${x.client||'（取引先なし）'}／${x.name}（${x.start||'開始日なし'}〜${x.end||''}）`;
   el.innerHTML=`<div class="alert alert-warning inv-pend-head"><b>案件を決められない請求書 ${invPending.length}件</b>
-      <span>案件を選んで確定するまで、請求書・請求レコード・入金予定は作りません</span></div>
+      <span>案件を選んで確定するまで、請求書・請求レコード・入金予定は作りません</span>
+      <button class="btn sm" id="inv-pend-later" onclick="closeInvoiceSync()">あとで決める</button></div>
     <ul class="inv-pend">${invPending.map((it,i)=>{
       const k=normClientName(it.client);
       const cand=it.cands.map(id=>S.projects.find(x=>x.id===id)).filter(Boolean);
@@ -9716,6 +9724,25 @@ function renderInvPending(){
         <div class="inv-pend-act"><select id="inv-pend-sel-${i}" aria-label="付ける案件"><option value="">案件を選ぶ…</option>${opts}</select>
           <button class="btn sm primary" onclick="confirmInvPending(${i})">確定</button></div></li>`;
     }).join('')}</ul>`;
+}
+/* 同期の画面を閉じる（✕・閉じる・あとで決める・背景の押下・スマホの戻る操作の共通）。保留は残したまま（何も作らない）。
+   保留があれば「N件は保留のままです。次の同期で、もう一度出ます」と知らせる */
+let invSyncHist=false;
+function closeInvoiceSync(fromPop){
+  const m=document.getElementById('modal-invoice-sync');
+  if(m.classList.contains('open')){
+    closeModal('modal-invoice-sync');
+    if(invPending.length)showToast(`${invPending.length}件は保留のままです。次の同期で、もう一度出ます`);
+  }
+  if(!fromPop&&invSyncHist){invSyncHist=false;if(history.state&&history.state.invSync){try{history.back();}catch(e){}}}
+}
+window.addEventListener('popstate',()=>{if(invSyncHist&&!(history.state&&history.state.invSync)){invSyncHist=false;closeInvoiceSync(true);}});
+// 画面の下に短い知らせ（4秒で消える。操作は止めない）
+function showToast(msg){
+  let t=document.getElementById('app-toast');
+  if(!t){t=document.createElement('div');t.id='app-toast';t.className='app-toast';t.setAttribute('role','status');t.setAttribute('aria-live','polite');document.body.appendChild(t);}
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(showToast.timer);showToast.timer=setTimeout(()=>t.classList.remove('show'),4000);
 }
 async function confirmInvPending(i){
   const it=invPending[i];if(!it)return;

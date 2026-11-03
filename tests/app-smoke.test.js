@@ -213,6 +213,25 @@ const SCENARIO = String.raw`(async () => {
       ok(S.monthlyBillings.length === recs0 && S.ledger.filter(l => l.status === 'planned_in').length === plan0 + 1, '保留なのに請求レコード・入金予定ができた');
       ok(rec(906) === undefined || rec(906).invoiceStatus === 'uninvoiced', '商談中に付いた');
       ok(/案件を決められない請求書 3件/.test(document.getElementById('inv-pending').textContent), '保留の件数が画面に出ない');
+      // 「あとで決める」：保留があっても閉じられ、何も作られない。閉じるときに件数を知らせる
+      const snap = () => [S.quotes.length, S.monthlyBillings.length, S.ledger.filter(l => l.status === 'planned_in').length].join(',');
+      const s0 = snap();
+      document.getElementById('inv-pend-later').click(); await wait(300);   // 履歴を1つ戻すのを待つ
+      ok(!document.getElementById('modal-invoice-sync').classList.contains('open'), '「あとで決める」で閉じられない');
+      ok(snap() === s0, '「あとで決める」で何かが作られた');
+      ok(/3件は保留のままです。次の同期で、もう一度出ます/.test((document.getElementById('app-toast') || {}).textContent || ''), '閉じるときの知らせが出ない');
+      // スマホの戻る操作でも閉じる
+      openInvoiceSyncModal(); await wait(50);
+      history.back(); await wait(300);
+      ok(!document.getElementById('modal-invoice-sync').classList.contains('open'), '戻る操作で閉じられない');
+      // 次の同期（保留の記録が無くなった後でも）で、同じPDFがもう一度保留に出る。重ねては出ない
+      invPending = [];
+      openInvoiceSyncModal(); document.getElementById('inv-month').value = String(mi);
+      invFiles = files.map(x => ({ id: x[0], name: x[0] + '.pdf', client: x[1] }));
+      document.getElementById('inv-list').innerHTML = files.map((x, i) => '<input type="checkbox" class="inv-check" value="' + i + '" checked>').join('');
+      await syncInvoices();
+      ok(invPending.map(x => x.f.id).join(',') === 'sf2,sf3,sf4', '次の同期で、同じPDFがもう一度保留に出ない（' + invPending.map(x => x.f.id) + '）');
+      ok(snap() === s0, '2回目の同期で、保留の分や同期済みの分が作られた');
       // 保留から C社 の案件（903）を選んで確定 → 自動と同じ（請求済み・請求書番号・支払期限・入金予定）
       const i = invPending.findIndex(x => x.f.id === 'sf2');
       document.getElementById('inv-pend-sel-' + i).value = '903';
