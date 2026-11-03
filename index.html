@@ -2788,6 +2788,16 @@ function projectListState(p,abs,range,billings,opt){
 }
 // その月（年＋月）が契約期間に入るか。一括請求書作成・一括ステータス変更の対象もこれで決める（期間外の請求レコードは理由にしない）
 function projectInMonth(range,abs){return !!range&&abs>=range[0]&&abs<=range[1];}
+/* ドライブの請求書同期：PDFの宛名（client）とその請求月（abs）から、付ける案件の候補を返す
+   ・同じ取引先：normClientName（全角半角・空白・前後の株式会社／(株)・末尾の様／御中を除く）で完全一致（部分一致はしない）
+   ・受注済み（契約済・進行中・完了）だけ（商談中・失注には付けない）
+   ・その月が契約期間に入る（projectInMonth。終わった古い案件には付けない）
+   rangeOf＝projectMonthRange。返り値は案件の配列：1件なら自動で付ける／0件・2件以上は保留（案件を選んで確定するまで、請求レコード・入金予定を作らない） */
+function invoiceProjectCandidates(projects,client,abs,rangeOf){
+  const k=normClientName(client);
+  if(!k||abs===null||abs===undefined)return[];
+  return(projects||[]).filter(p=>PROJECT_LIST_STATUSES.indexOf(p.status)>=0&&normClientName(p.client)===k&&projectInMonth(rangeOf(p),abs));
+}
 // ===== @project-rules-end
 
 // ===== 請求書の下書き・訂正の判定 ===== @invoice-rules-begin

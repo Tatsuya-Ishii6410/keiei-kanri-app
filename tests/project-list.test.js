@@ -19,8 +19,8 @@ function fnSource(name) {
 }
 const app = {};
 vm.createContext(app);
-vm.runInContext(html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + '\n' + fnSource('projectMonthRange') + `
-globalThis.exported = { projectListState, projectInMonth, projectMonthRange, absYm };`, app);
+vm.runInContext(html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + '\n' + fnSource('projectMonthRange') + '\n' + fnSource('normClientName') + `
+globalThis.exported = { projectListState, projectInMonth, projectMonthRange, absYm, invoiceProjectCandidates };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -133,6 +133,37 @@ test('年＋月で、その月が契約期間に入るときだけ', () => {
   assert.strictEqual(A.projectInMonth(r, abs(2025, 11)), true);
   assert.strictEqual(A.projectInMonth(r, NOV), false);
   assert.strictEqual(A.projectInMonth(null, NOV), false);
+});
+
+console.log('ドライブの請求書同期：付ける案件の候補（invoiceProjectCandidates）');
+const cands = (projects, client, a) => [...A.invoiceProjectCandidates(projects, client, a, A.projectMonthRange)].map(p => p.id);
+
+test('同じ取引先に古い案件と今の案件 → その月が契約期間に入る今の案件だけ', () => {
+  const ps = [P({ id: 1, client: '株式会社フラックスブルーム', start: '2025-04-01', end: '2026-03-31', status: '完了' }),
+    P({ id: 2, client: '株式会社フラックスブルーム', start: '2026-04-01', end: '2027-03-31', status: '進行中' })];
+  assert.deepStrictEqual(cands(ps, '株式会社フラックスブルーム', OCT), [2]);
+  assert.deepStrictEqual(cands(ps, '株式会社フラックスブルーム', abs(2026, 1)), [1]);
+});
+
+test('商談中・失注には付けない（契約済・進行中・完了だけ）', () => {
+  ['商談中', '失注'].forEach(s => assert.deepStrictEqual(cands([P({ id: 3, client: 'A社', start: '2026-10-01', end: '2027-03-31', status: s })], 'A社', OCT), [], s));
+  ['契約済', '進行中', '完了'].forEach(s => assert.deepStrictEqual(cands([P({ id: 3, client: 'A社', start: '2026-10-01', end: '2027-03-31', status: s })], 'A社', OCT), [3], s));
+});
+
+test('部分一致の別会社には付けない。表記ゆれ（株式会社・(株)・全角半角・空白・御中）はそろえて完全一致', () => {
+  const ps = [P({ id: 5, client: 'テスト商事', start: '2026-10-01', end: '2027-03-31' })];
+  assert.deepStrictEqual(cands(ps, 'テスト', OCT), []);
+  assert.deepStrictEqual(cands(ps, 'テスト商事ホールディングス', OCT), []);
+  assert.deepStrictEqual(cands([P({ id: 6, client: '株式会社ＡＢＣ', start: '2026-10-01', end: '2027-03-31' })], '(株) ABC 御中', OCT), [6]);
+});
+
+test('候補が0件（取引先の案件が無い・期間外）／2件以上（同じ取引先で期間内の案件が複数）', () => {
+  const ps = [P({ id: 7, client: 'B社', start: '2026-01-01', end: '2026-06-30' }),
+    P({ id: 8, client: 'C社', start: '2026-10-01', end: '2027-03-31' }), P({ id: 9, client: 'C社', contract: 'single', start: '2026-10-20', status: '完了' })];
+  assert.deepStrictEqual(cands(ps, 'B社', OCT), []);
+  assert.deepStrictEqual(cands(ps, 'D社', OCT), []);
+  assert.deepStrictEqual(cands(ps, 'C社', OCT), [8, 9]);
+  assert.deepStrictEqual(cands(ps, '', OCT), []);
 });
 
 console.log(`\n${passed}件 成功` + (process.exitCode ? '（失敗あり）' : ''));
