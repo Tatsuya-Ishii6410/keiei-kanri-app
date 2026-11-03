@@ -602,6 +602,16 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .pj-pipe-bar .btn{min-height:44px;border-radius:12px}
 .pj-pipe-sum{font-size:13px;margin:0 0 10px;color:var(--text-primary)}
 .pj-pipe-note{font-size:11px;color:var(--text-muted);margin-left:6px}
+.pa-sec{margin-bottom:16px}
+.pa-h{font-size:14px;font-weight:700;margin:0 0 2px}
+.pa-n{font-size:12px;font-weight:700;color:var(--text-secondary)}
+.pa-note{font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:6px}
+.pa-list{list-style:none;margin:0;padding:0;border:0.5px solid var(--border);border-radius:var(--radius-md)}
+.pa-list li{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-bottom:0.5px solid var(--border);font-size:13px;flex-wrap:wrap}
+.pa-list li:last-child{border-bottom:0}
+.pa-sub{display:block;font-size:11px;color:var(--text-muted)}
+.pa-meta{font-size:12px;color:var(--text-secondary);text-align:right;overflow-wrap:anywhere}
+.pa-none{font-size:12px;color:var(--text-muted)}
 .pj-out-note{font-size:12px;color:var(--text-secondary);margin:0 0 8px}
 
 /* ===== 書類の全画面表示（#doc-viewer）。上部の固定バー：56px＋セーフエリア・白・薄い境界線 ===== */
@@ -1764,6 +1774,12 @@ body.bs-docview{overflow:hidden}
     <div id="travel-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
   </div>
   <div class="card">
+    <div class="card-header"><span class="card-title">案件データの点検</span>
+      <button class="btn" onclick="openProjectAudit()">点検する</button></div>
+    <div style="font-size:12px;color:var(--text-secondary);line-height:1.7">期間外の請求レコード・終了日が未設定の月次案件・終了済みで未請求が残る案件・融資力診断の安定売上（修正の前後）を一覧にします。
+      読み取りだけで、データは変更しません。</div>
+  </div>
+  <div class="card">
     <div class="card-header"><span class="card-title">📥 受信箱フォルダ（Googleドライブ）</span></div>
     <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;line-height:1.7">
       Googleドライブに「領収書」「受取請求書」の受信箱フォルダを作り、そのURL（またはフォルダID）を貼ってください。
@@ -2371,6 +2387,14 @@ body.bs-docview{overflow:hidden}
     <button class="btn" id="ci-fare" onclick="calcCalFares()" disabled>🔍 運賃を計算</button>
     <button class="btn primary" id="ci-submit" onclick="registerCalRows()" disabled>選択を台帳に登録</button>
   </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-project-audit">
+<div class="modal wide" style="max-width:860px">
+  <div class="modal-header"><span class="modal-title">案件データの点検（読み取りのみ）</span><button class="btn sm" onclick="closeModal('modal-project-audit')">✕</button></div>
+  <div id="pa-body"></div>
+  <div class="actions-row"><button class="btn" onclick="closeModal('modal-project-audit')">閉じる</button></div>
 </div>
 </div>
 
@@ -4608,6 +4632,54 @@ function pipeLost(id){
   document.getElementById('p-status').value='失注';
   if(invoiceStatusOf(p)==='invoiced'){document.getElementById('modal-project-title').textContent='失注にする（内容を確かめて保存）';return;}
   saveProject();
+}
+
+/* ===== 案件データの点検（読み取りのみ。データは変更しない）=====
+   1. 期間外の請求レコード：案件の契約期間（projectMonthRange＝売上と同じ）に入らない月の請求レコード（売上には入っていない）
+   2. 終了日が未設定の月次・年次の案件（売上は開始月のみ）
+   3. 終了済み（今月より前に期間が終わった）で、未請求の請求レコードが残る案件
+   4. 融資力診断の安定売上：修正前（月だけで比べる projectHasMonth＋projectMonthAmount。ここで再現するだけ）と修正後（recurringSalesOfMonth） */
+function projectAuditData(){
+  const now=new Date(),nowAbs=now.getFullYear()*12+now.getMonth(),mi=now.getMonth();
+  const byId={};S.projects.forEach(p=>{byId[p.id]=p;});
+  const outRange=billingList().filter(b=>{
+    const p=byId[b.projectId],a=ymToAbs(b.billingMonth);
+    return !p||a===null||!projectCoversAbs(p,a);
+  }).map(b=>({b,p:byId[b.projectId]||null})).sort((x,y)=>String(x.b.billingMonth).localeCompare(String(y.b.billingMonth)));
+  const noEnd=S.projects.filter(p=>billableProject(p)&&p.contract!=='single'&&!p.end);
+  const endedOpen=[];
+  S.projects.forEach(p=>{
+    const r=projectMonthRange(p);
+    if(!billableProject(p)||!r||r[1]>=nowAbs)return;
+    // 期間内の月だけ（期間外のレコードは 1. に出す）
+    const open=billingList().filter(b=>b.projectId===p.id&&b.invoiceStatus==='uninvoiced'&&(parseInt(b.amount)||0)>0&&projectCoversAbs(p,ymToAbs(b.billingMonth)));
+    if(open.length)endedOpen.push({p,open});
+  });
+  let oldRecurring=0;
+  S.projects.forEach(p=>{
+    if(!billableProject(p)||(p.contract!=='monthly'&&p.contract!=='annual'))return;
+    if(projectHasMonth(p,mi))oldRecurring+=projectMonthAmount(p,mi);
+  });
+  return{nowAbs,outRange,noEnd,endedOpen,oldRecurring,newRecurring:recurringSalesOfMonth(mi,nowAbs)};
+}
+function openProjectAudit(){
+  const A=projectAuditData();
+  const stLabel={uninvoiced:'未請求',invoiced:'請求済',paid:'入金済',paid_manual:'入金済（手動）'};
+  const ymJ=ym=>{const m=/^(\d{4})-(\d{2})/.exec(String(ym||''));return m?m[1]+'年'+(+m[2])+'月':String(ym||'－');};
+  const name=p=>p?`${escAttr(p.name)}<span class="pa-sub">${escAttr(p.client||'')}</span>`:'<span class="pa-sub">（案件が見つからない）</span>';
+  const sec=(title,note,rows)=>`<section class="pa-sec"><h3 class="pa-h">${title} <span class="pa-n">${rows.length}件</span></h3>
+    <div class="pa-note">${note}</div>${rows.length?`<ul class="pa-list">${rows.join('')}</ul>`:'<div class="pa-none">該当なし</div>'}</section>`;
+  document.getElementById('pa-body').innerHTML=
+    sec('期間外の請求レコード','案件の契約期間に入らない月のレコード。売上には入っていません（一括請求書などで作られた可能性があります）',
+      A.outRange.map(x=>`<li><div>${name(x.p)}</div><div class="pa-meta">${ymJ(x.b.billingMonth)}・${fmt(parseInt(x.b.amount)||0)}・${stLabel[x.b.invoiceStatus]||escAttr(x.b.invoiceStatus||'－')}</div></li>`))
+    +sec('終了日が未設定の月次・年次の案件','売上は開始月のみ。続いている契約なら、案件の終了日を入れてください',
+      A.noEnd.map(p=>`<li><div>${name(p)}</div><div class="pa-meta">開始 ${escAttr(p.start||'－')}・${fmt(p.amount||0)}${p.contract==='annual'?'/年':'/月'}・${escAttr(p.status)}</div></li>`))
+    +sec('終了済みで、未請求が残る案件','今月より前に契約期間が終わった案件のうち、未請求の請求レコードがあるもの',
+      A.endedOpen.map(x=>`<li><div>${name(x.p)}</div><div class="pa-meta">${x.open.map(b=>ymJ(b.billingMonth)).join('・')}（${x.open.length}件・${fmt(x.open.reduce((a,b)=>a+(parseInt(b.amount)||0),0))}）</div></li>`))
+    +`<section class="pa-sec"><h3 class="pa-h">融資力診断の安定売上（今月）</h3>
+      <div class="pa-note">修正前は月だけで比べていたため、去年の同じ月に掛かる終了案件も足していました（ここで再現した値）。修正後は売上と同じ年＋月の値です</div>
+      <ul class="pa-list"><li><div>修正前</div><div class="pa-meta">${fmt(A.oldRecurring)}</div></li><li><div>修正後（いまの値）</div><div class="pa-meta">${fmt(A.newRecurring)}</div></li></ul></section>`;
+  openModal('modal-project-audit');
 }
 
 // 一覧の印（表示だけ）：繰越（前の月の請求済み・未入金）／終了（「終了した案件も表示」で出した案件）／終了日が未設定（売上は開始月のみ）
