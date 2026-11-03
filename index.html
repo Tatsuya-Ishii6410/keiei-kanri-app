@@ -654,6 +654,11 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .uc-row-amt.is-in{color:var(--ui-good-text,#047857)}
 .uc-row[data-plan]>summary{box-shadow:inset 3px 0 0 var(--ui-accent,#3976F6)}
 .uc-row[data-plan=planned_out]>summary{box-shadow:inset 3px 0 0 var(--ui-caution,#F59E0B)}
+.cf-hero-foot{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:8px;padding-top:12px;border-top:1px solid var(--uc-line)}
+.cf-hero-foot .form-group{margin:0;flex:0 1 220px;min-width:0}
+.cf-hero-foot input{font-variant-numeric:tabular-nums;min-height:44px}
+.cf-hero-foot .btn{min-height:44px}
+@media (max-width:480px){.cf-hero-foot .form-group,.cf-hero-foot .btn{flex:1 1 100%;width:100%;justify-content:center}}
 .uc-fixed{display:inline-block;font-size:10px;font-weight:700;color:var(--ui-muted,#64748B);border:1px solid var(--ui-border-solid,#E3E7EF);border-radius:6px;padding:0 5px;margin-right:6px;vertical-align:1px}
 .uc-row[open]>summary{background:var(--ui-line,#EEF1F6)}
 .uc-prog{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:8px 0;font-size:13px}
@@ -1493,14 +1498,15 @@ body.bs-docview{overflow:hidden}
     </div>
   </div>
   <div id="cf-settle-notice"></div>
-  <div class="card">
-    <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
-      <div class="form-group" style="max-width:220px">
-        <label class="form-label">現在の口座残高</label>
-        <input id="cf-balance" type="number" onchange="saveBankBalance()">
+  <!-- 資金状況ヒーローカード（1-2）。月末予測・横棒・内訳は renderLedger が #cf-forecast に描く。残高の入力は桁区切りで表示（保存は saveBankBalance のまま） -->
+  <div class="uc-hero ui-scope" id="cf-hero">
+    <div id="cf-forecast"></div>
+    <div class="cf-hero-foot">
+      <div class="form-group">
+        <label class="form-label" for="cf-balance">現在の口座残高</label>
+        <input id="cf-balance" type="text" inputmode="numeric" autocomplete="off" onfocus="cfBalanceRaw(this)" onblur="cfBalanceShow(this)" onchange="cfBalanceRaw(this);saveBankBalance()">
       </div>
-      <div style="flex:1;min-width:240px;font-size:14px" id="cf-forecast"></div>
-      <button class="btn" onclick="createPlannedFromInvoiced()">📥 前月の請求済み案件を入金予定にする</button>
+      <button class="btn" onclick="createPlannedFromInvoiced()">前月の請求済み案件を入金予定にする</button>
     </div>
   </div>
   <div class="metric-grid">
@@ -4120,11 +4126,13 @@ function ucMore(summary,rows,extraHtml){
     +(extraHtml||'')+`</details>`;
 }
 // ヒーローカード。o:{label,value(数),sub?,barHtml?,moreHtml?}。value を最も大きく出す。負は赤（#DC2626）
-function ucHero(o){
-  return`<div class="uc-hero"><div class="uc-hero-label">${escAttr(o.label)}</div>`
+function ucHero(o){return`<div class="uc-hero">${ucHeroInner(o)}</div>`}
+// 中身だけ（入力欄など動かない部分を持つ外枠 .uc-hero の中に描く時）
+function ucHeroInner(o){
+  return`<div class="uc-hero-label">${escAttr(o.label)}</div>`
     +`<div class="uc-hero-value${(o.value||0)<0?' is-neg':''}">${fmt(o.value)}</div>`
     +(o.sub?`<div class="uc-hero-sub">${escAttr(o.sub)}</div>`:'')
-    +(o.barHtml||'')+(o.moreHtml||'')+`</div>`;
+    +(o.barHtml||'')+(o.moreHtml||'');
 }
 // コンパクトな明細の行（台帳の1行：入出金明細・交通費で共通）。タップで展開
 // o:{main,sub,amount(数),amountClass?,amountNote?,markHtml?,tagsHtml?(種別・予定/実績のバッジ),bodyHtml?,actionsHtml?,attrs?}
@@ -6436,6 +6444,10 @@ function cfPlannedOut(mi){
 
 function bankBalance(){return parseInt(S.bankBalance)||0}
 
+let cfPrevForecast=null;   // 月末予測のカウントアップの起点（表示だけ）
+// 口座残高の入力：表示は桁区切り、入力中と保存の直前は数字だけ（saveBankBalance の parseInt はそのまま）
+function cfBalanceRaw(el){el.value=String(el.value).replace(/[^0-9-]/g,'')}
+function cfBalanceShow(el){const v=String(el.value).replace(/[^0-9-]/g,'');el.value=v===''||v==='-'?v:Number(v).toLocaleString('ja-JP')}
 function saveBankBalance(){
   S.bankBalance=parseInt(document.getElementById('cf-balance').value)||0;
   saveState();
@@ -6457,11 +6469,22 @@ function renderLedger(){
   const t={actualIn:cfInflow(mi),actualOut:cfOutflow(mi),
     planIn:cfPlannedIn(mi),planOut:cfPlannedOut(mi)};
 
-  document.getElementById('cf-balance').value=bankBalance();
+  const balEl=document.getElementById('cf-balance');
+  balEl.value=bankBalance();
+  if(document.activeElement!==balEl)cfBalanceShow(balEl);
   const forecast=bankBalance()+t.actualIn-t.actualOut+t.planIn-t.planOut;
-  document.getElementById('cf-forecast').innerHTML=
-    `${all?'全期間':(mi+1)+'月'}末の残高予測：<strong style="color:${forecast>=0?'var(--green)':'var(--red)'}">${fmt(forecast)}</strong>`
-    +`<span style="font-size:11px;color:var(--text-muted)">（口座残高 ${fmt(bankBalance())} ＋実績 ${fmt(t.actualIn-t.actualOut)} ＋予定 ${fmt(t.planIn-t.planOut)}）</span>`;
+  // 式・対象期間は従来のまま（口座残高＋実績＋予定）。表示だけヒーローに
+  document.getElementById('cf-forecast').innerHTML=ucHeroInner({
+    label:`${all?'全期間':(mi+1)+'月'}末の残高予測`,value:forecast,
+    barHtml:ucBar(bankBalance(),forecast,'現在の口座残高','月末予測'),
+    moreHtml:ucMore('予測の内訳',[
+      ['口座残高',fmt(bankBalance())],
+      ['＋実績（入金−出金）',fmt(t.actualIn-t.actualOut)],
+      ['＋予定（入金予定−出金予定）',fmt(t.planIn-t.planOut)],
+      ['＝月末予測',fmt(forecast)]])
+  });
+  ucCountUp(document.querySelector('#cf-forecast .uc-hero-value'),forecast,cfPrevForecast);
+  cfPrevForecast=forecast;
 
   renderSettleNotice();
   renderTravelNote(mi);

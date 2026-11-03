@@ -266,6 +266,16 @@ const SCENARIO = String.raw`(async () => {
     window.confirm = conf;
     ok(asked && S.ledger.length === n0, '削除の確認が出ない、または確認で取り消しても消えた');
   });
+  await step('CF管理：口座残高の桁区切り（保存する値は数字のまま）', async () => {
+    const b0 = S.bankBalance, el = document.getElementById('cf-balance');
+    ok(el.value === Number(b0).toLocaleString('ja-JP'), '残高が桁区切りで出ない：' + el.value);
+    change('cf-balance', '1,500,000');
+    ok(S.bankBalance === 1500000 && el.value === '1,500,000', '桁区切りの入力で保存値が違う：' + S.bankBalance);
+    const v = document.querySelector('#cf-forecast .uc-hero-value');
+    ok(v && document.querySelector('#cf-forecast .uc-more'), 'ヒーロー（月末予測・内訳）がない');
+    change('cf-balance', String(b0));
+    ok(S.bankBalance === b0, '残高を戻せない');
+  });
   await step('ドライブから取込', async () => {
     openDriveImportModal(); await wait(200);
     document.getElementById('drive-load-btn').click(); await wait(400);
