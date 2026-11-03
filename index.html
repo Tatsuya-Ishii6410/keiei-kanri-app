@@ -86,6 +86,7 @@ tbody tr[style*="font-weight:bold"] td,td[style*="font-weight:bold"],td[style*="
 .lt-menu [role=menuitem]:hover,.lt-menu [role=menuitem]:focus{background:var(--bg-secondary)}
 .lt-menu [role=menuitem]:focus-visible,.list-toolbar .lt-menu-btn:focus-visible,.list-toolbar select:focus-visible,.list-toolbar .lt-primary:focus-visible{outline:2px solid #3976F6;outline-offset:2px}
 .lt-menu [role=menuitem][hidden]{display:none}
+#drive-old[hidden]{display:none}
 .lt-menu [role=menuitem].is-danger{color:var(--red)}
 .lt-menu [role=menuitem]:disabled{opacity:.45;cursor:default}
 .mob-card-actions .lt-menu-wrap{position:relative}
@@ -2002,23 +2003,22 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 <div class="modal-overlay" id="modal-drive-import">
 <div class="modal wide">
   <div class="modal-header"><span class="modal-title">ドライブから経費を取込</span><button class="btn sm" onclick="closeModal('modal-drive-import')">✕</button></div>
-  <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
-    取込フォルダ <a href="https://drive.google.com/drive/folders/1YLUeZuWj6QAVWaXAOLaKE5sZXz4NQhxA" target="_blank" rel="noopener">アスリンク_経費取込フォルダ</a> の
-    PDF・画像をAIで読み取り、経費として登録します。<br>
-    登録したファイルは「処理済み_」を付けてリネームされ、次回以降は初期状態で選択されません。
+  <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;line-height:1.7">
+    領収書フォルダ・受取請求書フォルダのPDF・画像をAIで読み取り、取込待ちに入れます。確認して登録すると、領収書は実績、受取請求書は出金予定になります。
+    登録したファイルは、受信箱の「処理済み」フォルダに移され、次回以降は読み取られません。
   </div>
-  <div class="actions-row" style="justify-content:flex-start;margin-top:0">
-    <button class="btn primary" id="drive-load-btn" onclick="driveLoadFiles()">📂 フォルダを確認する</button>
+  <div id="drive-folders" style="margin-bottom:10px"></div>
+  <!-- 旧フォルダ（コードに固定の EXPENSE_FOLDER_ID）に未処理のファイルがあるときだけ出す。件数は driveList で数える -->
+  <div id="drive-old" class="alert alert-warning" style="margin-bottom:10px" hidden><div>
+    旧フォルダ <a href="https://drive.google.com/drive/folders/1YLUeZuWj6QAVWaXAOLaKE5sZXz4NQhxA" target="_blank" rel="noopener">アスリンク_経費取込フォルダ</a> に、
+    未処理のファイルが <b id="drive-old-n">0</b>件あります。新しい領収書フォルダへ移してください。
+  </div></div>
+  <div class="actions-row" style="justify-content:flex-start;margin:0">
+    <button class="btn primary" id="drive-load-btn" onclick="driveLoadFiles()">フォルダを確認する</button>
   </div>
-  <div id="drive-msg" style="margin:12px 0"></div>
-  <div id="drive-file-list"></div>
-  <div class="actions-row" style="justify-content:flex-start">
-    <button class="btn primary" id="drive-extract-btn" onclick="driveExtractSelected()" style="display:none">🤖 選択したファイルをAIで読み取る</button>
-  </div>
-  <div id="drive-result"></div>
+  <div id="drive-msg" style="margin-top:10px"></div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-drive-import')">閉じる</button>
-    <button class="btn success" id="drive-register-btn" onclick="driveRegister()" style="display:none">✓ 収支に登録する</button>
   </div>
 </div>
 </div>
@@ -5385,6 +5385,16 @@ function renderInboxList(){
   }).join('');
 }
 
+// 週次のトリガーと同じ weeklyInboxScan を呼ぶ（「今すぐ読み取る」と「ドライブから経費を取込」で共通）
+async function callInboxScan(){
+  try{return await gasCall({action:'inboxScan'});}catch(e){return{ok:false,error:'GASに接続できませんでした（'+e.message+'）'};}
+}
+function inboxScanText(json){
+  return`✓ ${json.read}件を読み取りました（成功 ${json.ready}件・失敗 ${json.failed}件）`
+    +(json.unsupported?`／非対応の形式 ${json.unsupported}件`:'')
+    +(json.remaining?`<br>残り ${json.remaining}件は次の実行に回しました。もう一度読み取ると続きを読みます。`:'')
+    +(json.read===0&&!json.unsupported?'<br>新しいファイルはありませんでした。':'');
+}
 // 「📥 今すぐ読み取る」：週次のトリガーと同じ weeklyInboxScan を呼ぶ（1回8ファイルまで）
 async function inboxScanNow(){
   if(!gasEnabled()){alert('GAS_URL が設定されていません');return;}
@@ -5393,14 +5403,10 @@ async function inboxScanNow(){
   inboxBusy=true;renderInboxList();
   const msg=document.getElementById('inbox-msg');
   msg.innerHTML='<div class="alert alert-info"><span class="spinner"></span> 受信箱を読み取っています（1回に8ファイルまで。数分かかることがあります）...</div>';
-  let json;
-  try{json=await gasCall({action:'inboxScan'});}catch(e){json={ok:false,error:'GASに接続できませんでした（'+e.message+'）'};}
+  const json=await callInboxScan();
   inboxBusy=false;
   if(json&&json.ok){
-    msg.innerHTML=`<div class="alert alert-success">✓ ${json.read}件を読み取りました（成功 ${json.ready}件・失敗 ${json.failed}件）`
-      +(json.unsupported?`／非対応の形式 ${json.unsupported}件`:'')
-      +(json.remaining?`<br>残り ${json.remaining}件は次の実行に回しました。もう一度「今すぐ読み取る」を押すと続きを読みます。`:'')
-      +(json.read===0&&!json.unsupported?'<br>新しいファイルはありませんでした。':'')+'</div>';
+    msg.innerHTML=`<div class="alert alert-success">${inboxScanText(json)}</div>`;
   }else{
     msg.innerHTML=`<div class="alert alert-error">❌ ${escAttr((json&&json.error)||'読み取りに失敗しました')}</div>`;
   }
@@ -5558,12 +5564,11 @@ async function inboxRegisterCurrent(it){
 }
 
 /* ===== Googleドライブからの経費取込 ==================================
-   専用フォルダ内のPDF・画像をGAS経由でAIに読み取らせ、経費として登録する。
-   Driveの操作もAI呼び出しもGAS側で行う（APIキーをブラウザに置かないため）。
+   週次の取込（受信箱フォルダの読み取り）の入口。「フォルダを確認する」は「今すぐ読み取る」と同じ inboxScan を呼び、
+   結果は取込待ち（inbox シート）に入る。登録は取込待ちの一覧から（領収書→実績、受取請求書→出金予定）。
+   フォルダは settings の inboxFolders.receipt / inboxFolders.invoice（設定ページの「受信箱フォルダ」）。
+   旧フォルダ（GASの EXPENSE_FOLDER_ID＝アスリンク_経費取込フォルダ）は、未処理のファイルがあるときだけリンクと件数を出す（driveList）
    ===================================================================== */
-
-let driveFiles=[];    // フォルダ内のファイル一覧
-let driveRows=[];     // 読み取り結果 {fileId,fileName,date,type,desc,amount,error}
 
 // GASへPOSTして応答をそのまま返す（ok判定は呼び出し側で行う）
 async function gasCall(body){
@@ -5580,329 +5585,78 @@ async function gasCall(body){
 
 function driveMsg(html){document.getElementById('drive-msg').innerHTML=html||''}
 
-/* ===== デビット通知から取込（CF管理） =================================
-   GASの debitMails（Gmailは読み取りのみ）で利用通知の日時・金額・店名を受け取り、
-   経費の実績として登録する。判定（区分・重複・認証）は @import-rules の関数を使う。
-   外部IDは 'mail:{messageId}' を ledger の calId 列に入れる。
-   =================================================================== */
-
-let debitRows=[];        // プレビュー行（debitRowsFrom の戻り値）
-let debitUnreadable=[];  // 読み取れなかったメール {subject,received,reason}
-let debitSkipped=0;      // 外部IDが登録済みで除外した件数
-let debitPeriodTo='';    // 取得した期間の終わり（lastDebitSync の更新に使う）
-
-// ブラウザのローカル日付で YYYY-MM-DD（toISOString は UTC なので朝9時前に前日になる）
-function localYmd(d){
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
-function localToday(){return localYmd(new Date())}
-function shiftYmd(ymd,days){
-  const p=String(ymd).split('-').map(Number);
-  return localYmd(new Date(p[0],p[1]-1,p[2]+days));
+function openDriveImportModal(){
+  driveMsg('');
+  renderDriveFolders();
+  openModal('modal-drive-import');
+  driveOldCheck();
 }
 
-function debitMsg(html){document.getElementById('di-msg').innerHTML=html||''}
-
-function openDebitImportModal(){
-  fillRecentDatalists();
-  const last=S.mail&&S.mail.lastDebitSync;
-  const t=localToday();
-  // 既定：前回取込日の翌日〜今日。初回は当月1日から
-  document.getElementById('di-from').value=last?shiftYmd(last,1):t.slice(0,8)+'01';
-  document.getElementById('di-to').value=t;
-  debitRows=[];debitUnreadable=[];debitSkipped=0;debitPeriodTo='';
-  debitMsg(last?`前回の取込：${last} まで`:'');
-  renderDebitPreview();
-  openModal('modal-debit-import');
+// 設定ページの「受信箱フォルダ」へ
+function goInboxSettings(){
+  closeModal('modal-drive-import');
+  showPage('settings',document.querySelectorAll('.nav-btn')[6]);
+  const el=document.getElementById('ib-receipt');
+  if(el)setTimeout(()=>{el.closest('.card').scrollIntoView({block:'start'});el.focus({preventScroll:true});},50);
 }
 
-async function fetchDebitMails(){
-  const since=document.getElementById('di-from').value;
-  const until=document.getElementById('di-to').value;
-  if(!since||!until){alert('期間を入力してください');return;}
-  if(since>until){alert('期間の終わりが始まりより前です');return;}
-  const btn=document.getElementById('di-fetch');
-  btn.disabled=true;
-  debitMsg('<div class="alert alert-info"><span class="spinner"></span> メールを読み取っています...</div>');
-  try{
-    const json=await gasGet({action:'debitMails',since,until});
-    if(!json||!json.ok)throw new Error((json&&json.error)||'メールを取得できませんでした');
-    const r=debitRowsFrom(json.items,S.ledger);
-    debitRows=r.rows;debitSkipped=r.skipped;
-    debitUnreadable=json.unreadable||[];
-    debitPeriodTo=until;
-    debitMsg(`<div class="alert alert-success">✓ ${(json.items||[]).length}件の利用通知を読み取りました`
-      +(debitSkipped?`（登録済み ${debitSkipped}件は除外）`:'')+'</div>'
-      +(json.truncated?'<div class="alert alert-warning">メールが多いため一部しか読めていない可能性があります。期間を短くしてください。</div>':''));
-  }catch(e){
-    debitMsg(`<div class="alert alert-error">❌ ${e.message}<br><small>初めて使うときは、GASエディタで testGmailAccess を実行して権限を承認し、新しいバージョンでデプロイしてください。</small></div>`);
-  }
-  btn.disabled=false;
-  renderDebitPreview();
-}
-
-function debitBadges(r){
-  return[
-    r.dup?'<span class="badge badge-amber">重複の可能性あり</span>':'',
-    r.auth?AUTH_BADGE:'',
-    r.needsCheck?'<span class="badge badge-red">要確認</span>':''
-  ].filter(Boolean).join(' ');
-}
-
-// 表とカードの両方に入力欄があるので、値はデータ側（debitRows）に入れる
-function debitEdit(i,field,el){
-  const r=debitRows[i];
-  if(!r)return;
-  if(field==='checked')r.checked=el.checked;
-  else if(field==='amount')r.amount=parseInt(el.value)||0;
-  else{
-    r[field]=el.value;
-    if(field==='type')r.needsCheck=false; // 自分で選んだ区分は確認済み
-  }
-  renderDebitPreview();
-}
-
-function debitTypeOptions(cur){
-  return LEDGER_TYPES.filter(t=>t!=='売上').map(t=>`<option ${t===cur?'selected':''}>${t}</option>`).join('');
-}
-
-function renderDebitPreview(){
-  const body=document.getElementById('di-body');
-  const sel=debitRows.filter(r=>r.checked);
-  document.getElementById('di-submit').disabled=sel.length===0;
-  const unread=debitUnreadable.length===0?'':`<details style="margin:10px 0;font-size:13px" open>
-    <summary style="cursor:pointer">読み取れなかったメール ${debitUnreadable.length}件</summary>
-    <div style="margin-top:6px">${debitUnreadable.map(u=>`<div style="padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">
-      ${u.received} ／ ${u.subject}<span style="color:var(--text-muted)">（${u.reason||'読み取れませんでした'}）</span></div>`).join('')}</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">為替差額の追加引落しなど形式が違うメールです。必要なら「+ 実績入力」で登録してください。</div>
-  </details>`;
-  if(debitRows.length===0){
-    body.innerHTML=unread+(debitPeriodTo?'<div class="empty-state">新しく登録できる利用通知はありません。</div>':'');
+// 2つのフォルダのリンク（未設定なら設定への導線）
+function renderDriveFolders(){
+  const c=S.inboxFolders||{};
+  const el=document.getElementById('drive-folders');
+  const btn=document.getElementById('drive-load-btn');
+  btn.disabled=!c.receipt&&!c.invoice;
+  if(!c.receipt&&!c.invoice){
+    el.innerHTML='<div class="alert alert-warning">設定でフォルダを指定してください。'
+      +' <button class="btn sm" onclick="goInboxSettings()">設定を開く</button></div>';
     return;
   }
-  const total=sel.reduce((a,r)=>a+r.amount,0);
-  const auth=debitRows.some(r=>r.auth);
-  body.innerHTML=(auth?`<div class="alert alert-warning" style="font-size:12px">${AUTH_NOTE}</div>`:'')
-    +`<div class="table-wrap mob-table"><table>
-      <thead><tr><th></th><th>日時</th><th>店名</th><th>区分</th><th style="text-align:right">金額</th><th>摘要</th><th></th></tr></thead>
-      <tbody>${debitRows.map((r,i)=>`<tr>
-        <td><input type="checkbox" ${r.checked?'checked':''} onchange="debitEdit(${i},'checked',this)" style="width:auto"></td>
-        <td style="font-size:12px;white-space:nowrap">${r.datetime}</td>
-        <td style="font-size:12px">${r.merchant||'-'}</td>
-        <td><select onchange="debitEdit(${i},'type',this)" style="font-size:12px;padding:4px">${debitTypeOptions(r.type)}</select></td>
-        <td><input type="number" value="${r.amount}" onchange="debitEdit(${i},'amount',this)" style="width:96px;font-size:12px;padding:4px 6px;text-align:right"></td>
-        <td><input type="text" value="${escAttr(r.desc)}" onchange="debitEdit(${i},'desc',this)" style="min-width:180px;font-size:12px;padding:4px 6px">${entertainInputs('debitRows',i,r)}</td>
-        <td>${debitBadges(r)}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>
-    <div class="mob-cards">${debitRows.map((r,i)=>mobCard(
-      `<div class="mob-check">
-        <input type="checkbox" ${r.checked?'checked':''} onchange="debitEdit(${i},'checked',this)">
-        <div style="flex:1;font-size:13px">${r.datetime}<br><strong>${r.merchant||'-'}</strong></div>
-      </div>`
-      +(debitBadges(r)?`<div style="margin-top:6px">${debitBadges(r)}</div>`:'')
-      +`<div style="margin-top:8px"><select onchange="debitEdit(${i},'type',this)">${debitTypeOptions(r.type)}</select></div>`
-      +`<div style="margin-top:6px"><input type="number" value="${r.amount}" onchange="debitEdit(${i},'amount',this)" style="font-size:14px;font-weight:700"></div>`
-      +`<div style="margin-top:6px"><input type="text" value="${escAttr(r.desc)}" onchange="debitEdit(${i},'desc',this)"></div>`
-      +entertainInputs('debitRows',i,r))).join('')}</div>`
-    +`<div style="text-align:right;font-size:14px;margin-top:10px">選択 ${sel.length}件　合計 <strong style="font-size:17px">${fmt(total)}</strong></div>`
-    +unread;
+  const link=(id,label)=>id
+    ?`<a class="btn sm" href="https://drive.google.com/drive/folders/${encodeURIComponent(id)}" target="_blank" rel="noopener">${label}</a>`
+    :`<span style="font-size:12px;color:var(--text-muted)">${label}：未設定（<a href="#" onclick="goInboxSettings();return false">設定でフォルダを指定してください</a>）</span>`;
+  el.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${link(c.receipt,'領収書フォルダ')}${link(c.invoice,'受取請求書フォルダ')}</div>`;
 }
 
-// 交際費の行に出す「誰と」「用件」。入力中に描き直さないよう、データに直接入れる
-function entertainInputs(arr,i,r){
-  if(r.type!=='交際費')return'';
-  return`<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-    <input type="text" list="dl-with" placeholder="誰と *" value="${escAttr(r.withWhom||'')}" oninput="${arr}[${i}].withWhom=this.value" style="flex:1;min-width:120px;font-size:12px;padding:4px 6px">
-    <input type="text" list="dl-purpose" placeholder="用件 *" value="${escAttr(r.purpose||'')}" oninput="${arr}[${i}].purpose=this.value" style="flex:1;min-width:120px;font-size:12px;padding:4px 6px">
-  </div>`;
-}
-
-// 取込で選んだ行のうち、交際費で「誰と」「用件」が空のもの
-function entertainMissing(rows){
-  return rows.filter(r=>expenseEntryError(r));
-}
-
-function registerDebitRows(){
-  const sel=debitRows.filter(r=>r.checked&&r.date&&r.amount);
-  if(sel.length===0){alert('登録する行を選択してください');return;}
-  if(entertainMissing(sel).length){alert('交際費の行は「誰と」「用件」を入力してください（'+entertainMissing(sel).length+'件）');return;}
-  if(!confirm(`${sel.length}件を経費（実績）として登録します。よろしいですか？`))return;
-  const known={};
-  S.ledger.forEach(l=>{if(l.calId)known[l.calId]=true;});
-  let added=0;
-  sel.forEach(r=>{
-    if(known[r.extId])return; // 念のため外部IDで二重登録を防ぐ
-    S.ledger.push({
-      id:S.nextLedgerId++,
-      date:r.date,
-      expectedDate:'',
-      type:r.type,
-      desc:r.desc.trim()||(r.merchant+'（Visaデビット）'),
-      amount:r.amount,
-      memo:'メール取込',
-      status:'actual',
-      calId:r.extId,
-      withWhom:r.type==='交際費'?String(r.withWhom||'').trim():'',
-      purpose:r.type==='交際費'?String(r.purpose||'').trim():''
-    });
-    known[r.extId]=true;
-    added++;
-  });
-  // 取込済みの最終日。今日はまだ通知が届くかもしれないので、最大でも昨日までとする
-  const yesterday=shiftYmd(localToday(),-1);
-  const covered=debitPeriodTo&&debitPeriodTo<yesterday?debitPeriodTo:yesterday;
-  if(!S.mail.lastDebitSync||covered>S.mail.lastDebitSync)S.mail.lastDebitSync=covered;
-  const done={};
-  sel.forEach(r=>{done[r.extId]=true;});
-  debitRows=debitRows.filter(r=>!done[r.extId]);
-  debitSkipped+=added;
-  saveState();
-  refreshAll();
-  debitMsg(`<div class="alert alert-success">✓ ${added}件を経費として登録しました</div>`);
-  renderDebitPreview();
-}
-
-function openDriveImportModal(){
-  driveFiles=[];driveRows=[];
-  document.getElementById('drive-file-list').innerHTML='';
-  document.getElementById('drive-result').innerHTML='';
-  document.getElementById('drive-extract-btn').style.display='none';
-  document.getElementById('drive-register-btn').style.display='none';
-  driveMsg('');
-  openModal('modal-drive-import');
-}
-
-// フォルダ内のファイル一覧を取得する
-async function driveLoadFiles(){
-  const btn=document.getElementById('drive-load-btn');
-  btn.disabled=true;
-  driveMsg('<div class="alert alert-info"><span class="spinner"></span> フォルダを確認しています...</div>');
+// 旧フォルダの未処理の件数（名前が「処理済み_」で始まらないファイル）。0件・読めないときは出さない
+async function driveOldCheck(){
+  const el=document.getElementById('drive-old');
+  el.hidden=true;
+  if(!gasEnabled())return;
   try{
     const json=await gasCall({action:'driveList'});
-    if(!json.ok)throw new Error(json.error||'一覧を取得できませんでした');
-    driveFiles=json.files||[];
-  }catch(e){
-    driveMsg(`<div class="alert alert-error">❌ フォルダを確認できませんでした<br><small>${e.message}</small></div>`);
-    btn.disabled=false;return;
-  }
-  btn.disabled=false;
-  renderDriveFileList();
+    if(!json||!json.ok)return;
+    const n=(json.files||[]).filter(f=>!f.processed).length;
+    document.getElementById('drive-old-n').textContent=n;
+    el.hidden=!n;
+  }catch(e){/* 旧フォルダが読めなくても取込はできる */}
 }
 
-function renderDriveFileList(){
-  const el=document.getElementById('drive-file-list');
-  if(driveFiles.length===0){
-    driveMsg('<div class="alert alert-warning">フォルダにファイルがありません</div>');
-    el.innerHTML='';
-    document.getElementById('drive-extract-btn').style.display='none';
+// 取込待ちの件数（種類ごと）。一覧（inboxItems）と同じものを数える
+function inboxCounts(items){
+  const list=items||[];
+  return{receipt:list.filter(x=>x.kind!==INBOX_INVOICE).length,invoice:list.filter(x=>x.kind===INBOX_INVOICE).length,total:list.length};
+}
+
+// 「フォルダを確認する」：「今すぐ読み取る」と同じ inboxScan を呼び、取込待ちを読み直して件数を出す
+async function driveLoadFiles(){
+  const c=S.inboxFolders||{};
+  if(!c.receipt&&!c.invoice){renderDriveFolders();return;}
+  if(!gasEnabled()){driveMsg('<div class="alert alert-error">GAS_URL が設定されていません</div>');return;}
+  const btn=document.getElementById('drive-load-btn');
+  btn.disabled=true;
+  driveMsg('<div class="alert alert-info"><span class="spinner"></span> 受信箱を読み取っています（1回に8ファイルまで。数分かかることがあります）...</div>');
+  const json=await callInboxScan();
+  await refreshInboxItems();
+  btn.disabled=false;
+  if(!(json&&json.ok)){
+    driveMsg(`<div class="alert alert-error">${escAttr((json&&json.error)||'読み取りに失敗しました')}</div>`);
     return;
   }
-  const yet=driveFiles.filter(f=>!f.processed).length;
-  driveMsg(`<div class="alert alert-info">${driveFiles.length}件のファイルが見つかりました（未処理 ${yet}件）</div>`);
-  el.innerHTML='<div class="table-wrap"><table><thead><tr>'
-    +'<th style="width:36px"></th><th>ファイル名</th><th>種類</th><th style="text-align:right">サイズ</th><th>状態</th>'
-    +'</tr></thead><tbody>'
-    +driveFiles.map((f,i)=>`<tr>
-      <td><input type="checkbox" class="drive-check" value="${i}" ${f.processed?'':'checked'} style="width:auto"></td>
-      <td style="font-size:12px">${f.name}</td>
-      <td style="font-size:12px;color:var(--text-secondary)">${f.mimeType==='application/pdf'?'PDF':'画像'}</td>
-      <td style="text-align:right;font-size:12px">${Math.max(1,Math.round(f.size/1024))} KB</td>
-      <td>${f.processed?'<span class="badge badge-gray">処理済み</span>':'<span class="badge badge-blue">未処理</span>'}</td>
-    </tr>`).join('')
-    +'</tbody></table></div>';
-  document.getElementById('drive-extract-btn').style.display='';
-}
-
-function selectedDriveFiles(){
-  return Array.from(document.querySelectorAll('.drive-check'))
-    .filter(c=>c.checked)
-    .map(c=>driveFiles[parseInt(c.value)]);
-}
-
-// 選択したファイルを1件ずつAIで読み取る
-async function driveExtractSelected(){
-  const files=selectedDriveFiles();
-  if(files.length===0){alert('読み取るファイルを選択してください');return;}
-  const btn=document.getElementById('drive-extract-btn');
-  btn.disabled=true;
-  driveRows=[];
-  for(let i=0;i<files.length;i++){
-    const f=files[i];
-    driveMsg(`<div class="alert alert-info"><span class="spinner"></span> AIで読み取り中... ${i+1}/${files.length}　${f.name}</div>`);
-    let row={fileId:f.id,fileName:f.name,date:'',type:'その他経費',desc:f.name,amount:0,error:''};
-    try{
-      const json=await gasCall({action:'driveExtract',fileId:f.id});
-      if(json.ok&&json.data){
-        row.date=json.data.date||today();
-        row.type=json.data.type||'その他経費';
-        row.desc=json.data.desc||f.name;
-        row.amount=json.data.amount||0;
-      }else{
-        row.error=json.error||'読取失敗';
-      }
-    }catch(e){
-      row.error=e.message;
-    }
-    driveRows.push(row);
-  }
-  btn.disabled=false;
-  renderDriveResult();
-}
-
-function renderDriveResult(){
-  const ng=driveRows.filter(r=>r.error).length;
-  driveMsg(ng===0
-    ? `<div class="alert alert-success">✓ ${driveRows.length}件を読み取りました。内容を確認して登録してください。</div>`
-    : `<div class="alert alert-warning">${driveRows.length}件中 ${ng}件が読取失敗です。手入力で補ってから登録してください。</div>`);
-
-  const opts=t=>LEDGER_TYPES.filter(x=>x!=='売上')
-    .map(x=>`<option ${x===t?'selected':''}>${x}</option>`).join('');
-
-  document.getElementById('drive-result').innerHTML='<div class="table-wrap"><table><thead><tr>'
-    +'<th style="width:36px"></th><th>ファイル</th><th style="min-width:130px">日付</th><th style="min-width:150px">区分</th>'
-    +'<th style="min-width:160px">摘要</th><th style="min-width:110px">金額</th>'
-    +'</tr></thead><tbody>'
-    +driveRows.map((r,i)=>`<tr>
-      <td><input type="checkbox" class="drive-row-check" value="${i}" checked style="width:auto"></td>
-      <td style="font-size:11px;color:var(--text-secondary)">${r.fileName}${r.error?`<br><span class="badge badge-red">読取失敗</span>`:''}</td>
-      <td><input type="date" value="${r.date}" oninput="driveRows[${i}].date=this.value" style="font-size:12px"></td>
-      <td><select oninput="driveRows[${i}].type=this.value" onchange="driveRows[${i}].type=this.value" style="font-size:12px">${opts(r.type)}</select></td>
-      <td><input type="text" value="${escAttr(r.desc)}" oninput="driveRows[${i}].desc=this.value" style="font-size:12px"></td>
-      <td><input type="number" value="${r.amount}" oninput="driveRows[${i}].amount=parseInt(this.value)||0" style="font-size:12px"></td>
-    </tr>`).join('')
-    +'</tbody></table></div>'
-    +(ng>0?`<div style="font-size:11px;color:var(--text-muted);margin-top:8px">読取失敗の行: ${driveRows.filter(r=>r.error).map(r=>r.fileName+'（'+r.error+'）').join(' / ')}</div>`:'');
-
-  document.getElementById('drive-register-btn').style.display='';
-}
-
-// 確認した内容を収支に登録し、元ファイルを「処理済み_」にリネームする
-async function driveRegister(){
-  const idx=Array.from(document.querySelectorAll('.drive-row-check'))
-    .filter(c=>c.checked).map(c=>parseInt(c.value));
-  const rows=idx.map(i=>driveRows[i]).filter(r=>r.date&&r.desc&&r.amount);
-  if(rows.length===0){alert('登録できる行がありません。日付・摘要・金額を入力してください。');return;}
-
-  const btn=document.getElementById('drive-register-btn');
-  btn.disabled=true;
-  rows.forEach(r=>{
-    S.ledger.push({id:S.nextLedgerId++,date:r.date,type:r.type,desc:r.desc,amount:r.amount});
-  });
-  saveState();
-
-  let renamed=0;
-  try{
-    const json=await gasCall({action:'driveProcessed',fileIds:rows.map(r=>r.fileId)});
-    if(json.ok)renamed=json.renamed||0;
-  }catch(e){
-    // リネームに失敗しても収支の登録は済んでいるので、続行して警告だけ出す
-    driveMsg(`<div class="alert alert-warning">収支は登録しましたが、ファイルのリネームに失敗しました（次回も一覧に出ます）<br><small>${e.message}</small></div>`);
-  }
-  btn.disabled=false;
-  closeModal('modal-drive-import');
-  alert(rows.length+'件を収支に登録しました'+(renamed>0?`\n（${renamed}件のファイルを「処理済み_」にリネームしました）`:''));
-  refreshAll();
+  const n=inboxCounts(inboxItems);
+  driveMsg(`<div class="alert alert-success">${inboxScanText(json)}</div>`
+    +`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px">`
+    +`<span>領収書 <b>${n.receipt}</b>件／受取請求書 <b>${n.invoice}</b>件・取込待ち <b>${n.total}</b>件</span>`
+    +`<button class="btn sm primary" onclick="closeModal('modal-drive-import');openInboxList()">取込待ちを開く</button></div>`);
 }
 
 /* ===== キャッシュフロー管理 ==========================================

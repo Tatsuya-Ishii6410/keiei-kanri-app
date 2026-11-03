@@ -178,8 +178,16 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - 自動追加された収支を削除しても、次に反映したとき再作成される。
   止めたいときは固定費を無効にするか終了月を設定する
 
-## ドライブ経費取込
-- 専用フォルダID：1YLUeZuWj6QAVWaXAOLaKE5sZXz4NQhxA（アスリンク_経費取込フォルダ）
+## ドライブ経費取込（CF管理の「ドライブから取込」）
+- ★ 2026-11-03から、週次の取込（受信箱フォルダの読み取り）の入口。処理は「今すぐ読み取る」と共通（callInboxScan → GASの inboxScan＝weeklyInboxScan）。
+  結果は取込待ち（inbox シート）に入り、登録は取込待ちの一覧から（領収書→実績、受取請求書→出金予定）。登録・スキップしたファイルは受信箱の「処理済み」フォルダへ
+  移り、名前は YYYYMMDD_支払先_金額（inboxDone。「受信箱フォルダの週次読み取り」の節）
+- フォルダは settings の inboxFolders.receipt / inboxFolders.invoice（設定ページの「受信箱フォルダ」）。モーダルにはその2つのリンク（renderDriveFolders）。
+  未設定なら「設定でフォルダを指定してください」と設定への導線（goInboxSettings）。結果は「領収書 N件／受取請求書 N件・取込待ち N件」（inboxCounts。取込待ちの一覧と同じ inboxItems を数える）
+- 旧フォルダ（アスリンク_経費取込フォルダ 1YLUeZuWj6QAVWaXAOLaKE5sZXz4NQhxA。GASの EXPENSE_FOLDER_ID とモーダルのリンクは残してある）は、
+  未処理（名前が「処理済み_」で始まらない）のファイルがあるときだけ、リンクと件数と「新しい領収書フォルダへ移してください」を出す（driveOldCheck。driveList で数える）
+- GASの変更はなし（inboxScan / inboxList / driveList は既存のまま。driveExtract / driveProcessed はアプリから呼ばなくなった。GAS側には残してある）
+- 以下はこれまでの旧フォルダの取込の記録：
 - 処理済みファイルは「処理済み_」プレフィックスでリネーム
 - Drive操作・AI読み取り・リネームはすべてGAS側で実行する
   （ブラウザからDrive APIやAnthropic APIは呼べない。APIキーが公開されるため）
