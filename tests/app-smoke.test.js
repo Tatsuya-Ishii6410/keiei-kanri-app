@@ -321,6 +321,96 @@ const SCENARIO = String.raw`(async () => {
     window.confirm = conf;
     ok(asked && S.ledger.length === n0, '削除の確認が出ない、または確認で取り消しても消えた');
   });
+  /* 交通費精算の振込（実例：2026年9月分 48,630円を 2026-11-03 に口座振込）。今日を基準に「2か月前の分を、今月3日に振込」で作る（2026-11 では実例と同じ日付）
+     精算の支払いは 経費の集計から外れ、CFの実績出金に1回だけ入る。CF管理・月次レポート・ダッシュボード・損益・税金の試算・交通費台帳で確認 */
+  await step('交通費精算の振込：経費は変わらず、CFの出金は1回だけ（振込済み → 銀行CSV・既存の出金への紐付け）', async () => {
+    const keep = JSON.parse(JSON.stringify(S.ledger)), keepTax = JSON.parse(JSON.stringify(S.taxSettings || {}));
+    const pad = n => String(n).padStart(2, '0'), now = new Date();
+    const ymOf = d => d.getFullYear() + '-' + pad(d.getMonth() + 1);
+    const tD = new Date(now.getFullYear(), now.getMonth() - 2, 1), tYm = ymOf(tD), pYm = ymOf(now), pay = pYm + '-03';
+    const miT = tD.getMonth(), miP = now.getMonth(), absT = tD.getFullYear() * 12 + miT, absP = now.getFullYear() * 12 + miP;
+    const sameYear = monthYear(miT) === tD.getFullYear() && monthYear(miP) === now.getFullYear();   // 月だけで選ぶ画面は、今の期に入る時だけ見る
+    const plan = () => ({ id: 9001, type: '交通費', desc: '交通費精算 ' + tD.getFullYear() + '年' + (miT + 1) + '月分', amount: 48630, status: 'planned_out', date: pay, expectedDate: pay, settlementMonth: tYm, memo: '' });
+    const base = () => keep.concat([
+      { id: 9002, type: '交通費', desc: '青野ヶ原駅→三宮駅（電車）', amount: 30000, status: 'actual', date: tYm + '-10', visit: 'A社', purpose: '商談' },
+      { id: 9003, type: '交通費', desc: '自宅→加古川（車）', amount: 18630, status: 'actual', date: tYm + '-20', visit: 'B社', purpose: '現地調査' },
+      plan()]);
+    taxSettings().consumptionTax.method = 'general';
+    const fy = activeFiscalYear();
+    const snap = () => {
+      if (sameYear) { document.getElementById('report-month').value = String(miT); generateReport(); }
+      const rep = sameYear ? (document.getElementById('page-report').textContent.match(/経費合計[^¥]*(¥[0-9,]+)/) || [])[1] : null;
+      const cf = cashflowTotals(cashflowRows(miP));
+      // 月次P/L（損益計算書）：表の行だけ見る（XLSX は読み込まないので、行をそのまま返す代わりを入れる）
+      let pl = null;
+      if (sameYear) {
+        const keepX = window.XLSX; window.XLSX = { utils: { aoa_to_sheet: rows => ({ rows }) } };
+        try { pl = JSON.stringify(buildMonthlyPL(miP).ws.rows); } finally { window.XLSX = keepX; }
+      }
+      return {
+        exp: [sumLedgerAbs(absT).expense, sumLedgerAbs(absP).expense],                  // 月次レポート・期の集計の元
+        report: rep,                                                                     // 月次レポートの画面の「経費合計」
+        dash: [dashMonthNumbers(absT).expense, dashMonthNumbers(absP).expense],          // ダッシュボード
+        profit: [profitOfAbs(absT), profitOfAbs(absP)],                                  // 損益（営業利益）
+        plSettle: pl === null ? null : pl.includes('交通費精算'),                         // 月次P/L に精算の行が出ないこと
+        corp: fy ? estimateCorporateTax(fy).income : null,                               // 税金の試算（法人税の課税所得）
+        purchases: fy ? estimateConsumptionTax(fy).basis : null,                         // 税金の試算（消費税の課税仕入）
+        cfOut: cf.actualOut, cfPlanOut: cf.planOut,                                      // CF管理
+        travel: sameYear ? travelActualTotal(miT) : null,                                // 交通費台帳
+      };
+    };
+    const same = (a, b, keys, label) => keys.forEach(k => ok(JSON.stringify(a[k]) === JSON.stringify(b[k]), label + '：' + k + ' が変わった ' + JSON.stringify(a[k]) + '→' + JSON.stringify(b[k])));
+    const EXP = ['exp', 'report', 'dash', 'profit', 'corp', 'travel'];
+    try {
+      // 0) 振込前（出金予定のまま）
+      S.ledger = base(); refreshAll();
+      const s0 = snap();
+      ok(s0.travel === null || s0.travel === 48630, '交通費台帳の合計が違う：' + s0.travel);
+      // 1) 案A：CF管理の行から「振込済みにする」（2026-11-03・48,630円）
+      nav('ledger'); switchCfTab('cf', document.querySelector('[onclick*="switchCfTab(\'cf\'"]')); change('ledger-month', String(miP));
+      const r = document.querySelector('#ledger-cards .uc-row[data-ledger-id="9001"]');
+      const b = r && [...r.querySelectorAll('.uc-row-actions button')].find(x => x.textContent.trim() === '振込済みにする');
+      ok(b && ![...r.querySelectorAll('button')].some(x => x.textContent.trim() === '実績に変換'), '精算の行に「振込済みにする」がない（または実績に変換が出る）');
+      if (!b) return;
+      b.click();
+      ok(document.getElementById('pc-title').textContent === '交通費精算を振込済みにする' && !document.querySelector('#pc-dups input'), '振込済みの画面が違う（候補が無いのに警告が出る）');
+      document.getElementById('pc-date').value = pay; document.getElementById('pc-amount').value = '48630';
+      confirmPlanned();
+      const l = S.ledger.find(x => x.id === 9001);
+      ok(l && isSettlePaid(l) && l.date === pay && l.amount === 48630 && l.settlementMonth === tYm && S.ledger.filter(x => x.id === 9001).length === 1, '振込済みの行が正しくない');
+      const s1 = snap();
+      same(s0, s1, EXP, '振込済みにした後の経費');
+      ok(s1.plSettle !== true, '月次P/L に交通費精算が経費として出る');
+      ok(s1.cfOut === s0.cfOut + 48630 && s1.cfPlanOut === s0.cfPlanOut - 48630, 'CFの出金が1回だけになっていない：' + [s0.cfOut, s1.cfOut, s0.cfPlanOut, s1.cfPlanOut]);
+      if (sameYear) { change('tl-month', String(miT)); renderTravelLedger(); ok(/振込済み/.test(document.getElementById('tl-summary').textContent), '交通費台帳の精算状況が「振込済み」にならない'); }
+      // 2) 案C：同じ振込を含む銀行CSV（翌日の日付）→ 登録済みとみなして未選択、理由を表示。そのまま登録しても二重にならない
+      nav('csv');
+      const csv = '取引日,摘要,お支払金額,お預り金額,残高,メモ\n' + (pYm + '-04').replace(/-/g, '/') + ',ﾌﾘｺﾐ ｺｳﾂｳﾋ,48630,,900000,\n';
+      await bankHandleFile(new File([csv], 'bank.csv', { type: 'text/csv' }));
+      ok(bankRows.length === 1 && bankRows[0].settlePaidId === 9001 && !bankRows[0].checked, '振込済みの精算と同じ振込が、未選択にならない');
+      ok(/精算の振込として登録済み/.test(document.getElementById('bank-result').textContent) && /理由/.test(document.getElementById('bank-result').textContent), '取込の確認画面に理由が出ない');
+      bankRegister();   // 何も選ばれていない → 登録しない
+      const s2 = snap();
+      same(s1, s2, EXP.concat(['cfOut', 'cfPlanOut']), '銀行CSVの取込の後');
+      // ユーザーが取り消して選べば、通常の出金として登録できる（黙って除外しない）
+      const n2 = S.ledger.length; bankRows[0].checked = true; bankRegister();
+      ok(S.ledger.length === n2 + 1, '選んだのに通常の出金として登録されない');
+      // 3) 案Aの二重の検知：先に銀行CSVで出金（その他経費）がある状態で振込済みにする → 既存の行に紐付け（予定は消す）
+      S.ledger = base().concat([{ id: 9004, type: 'その他経費', desc: 'ﾌﾘｺﾐ ｺｳﾂｳﾋ', amount: 48630, status: 'actual', date: pYm + '-04', calId: 'bank:x' }]); refreshAll();
+      openPlanConfirm(9001); document.getElementById('pc-date').value = pay; document.getElementById('pc-amount').value = '48630'; renderSettleDups();
+      const radio = document.querySelector('#pc-dups input[name="pc-dup"]:checked');
+      ok(radio && radio.value === '9004' && /二重/.test(document.getElementById('pc-dups').textContent), '既存の出金があるのに警告・紐付けの選択肢が出ない');
+      confirmPlanned();
+      const s3 = snap(), linked = S.ledger.find(x => x.id === 9004);
+      ok(!S.ledger.some(x => x.id === 9001) && linked && isSettlePaid(linked) && linked.settlementMonth === tYm, '紐付けで、予定が消えない・既存の行が精算の支払いにならない');
+      same(s0, s3, EXP, '紐付けの後の経費');
+      ok(s3.cfOut === s0.cfOut + 48630 && s3.cfPlanOut === s0.cfPlanOut - 48630, '紐付けの後、CFの出金が1回だけになっていない');
+      window.__settleNumbers = { s0, s1, s3 };
+    } finally {
+      closeModal('modal-plan-confirm'); bankRows = [];
+      S.ledger = keep; S.taxSettings = keepTax; change('ledger-month', ''); refreshAll();
+    }
+  });
   await step('編集・追加の画面：見出し／本文／固定フッター（保存・キャンセル・閉じ方は従来どおり）', async () => {
     // 見出し＋最後の子が actions-row のモーダルは、すべて3層（交通費は te-、ほかは mf-）
     const bad = [...document.querySelectorAll('.modal-overlay>.modal')].filter(m => {
@@ -468,7 +558,7 @@ const SCENARIO = String.raw`(async () => {
   await step('設定', async () => { nav('settings'); ok(document.querySelector('#page-settings.active'), '設定が開かない'); });
   window.__step = '終了';
   await wait(800);
-  return { checks, gas: window.__gas, alerts: window.__alerts, errs: window.__errs };
+  return { checks, gas: window.__gas, alerts: window.__alerts, errs: window.__errs, settle: window.__settleNumbers };
 })()`;
 
 (async () => {
@@ -533,7 +623,7 @@ const SCENARIO = String.raw`(async () => {
       errors.push(`[${currentStep}] 操作の途中で例外：${(d.exception && d.exception.description || d.text).split('\n').slice(0, 3).join(' / ')}`);
     }
     const v = (r.result && r.result.value) || {};
-    const res = { checks: v.checks || [], gas: v.gas || [], alerts: v.alerts || [] };
+    const res = { checks: v.checks || [], gas: v.gas || [], alerts: v.alerts || [], settle: v.settle };
     // ページの中で集めたものを正とし、DevTools だけが拾ったもの（ページの仕組みが動く前など）を足す
     const pageErrs = v.errs || [];
     const extra = errors.filter(e => !pageErrs.some(p => p.split('：').slice(1).join('：').slice(0, 40) && e.includes(p.split('：').slice(1).join('：').split(' / ')[0].slice(0, 40))));
@@ -550,7 +640,7 @@ const SCENARIO = String.raw`(async () => {
       return cleanup(1);
     }
     console.log(`画面の実行テスト：エラーなし（12の画面・操作。GASの偽の呼び出し ${res.gas.length}回・alert ${res.alerts.length}回）`);
-    if (process.env.SMOKE_VERBOSE) console.log(res.gas, res.alerts);
+    if (process.env.SMOKE_VERBOSE) console.log(res.gas, res.alerts, JSON.stringify(res.settle));
     cleanup(0);
   } catch (e) {
     console.error('✗ 画面の実行テストを動かせませんでした：' + e.message);
