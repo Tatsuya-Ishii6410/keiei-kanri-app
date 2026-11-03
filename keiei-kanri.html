@@ -555,8 +555,39 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .req-mark{color:var(--red)}
 @media (max-width:768px){.rc-grid{grid-template-columns:1fr}.rc-photo{position:static}.rc-photo img{max-height:45vh}.rc-photo iframe{height:50vh}}
 .modal.doc{max-width:720px}
+/* ===== 書類の全画面表示（#doc-viewer）。上部の固定バー：56px＋セーフエリア・白・薄い境界線 ===== */
+#doc-viewer{position:fixed;inset:0;z-index:3000;display:flex;flex-direction:column;background:#E9EDF3}
+#doc-viewer[hidden]{display:none}
+body.bs-docview{overflow:hidden}
+.dvw-bar{flex:none;display:flex;align-items:center;gap:8px;height:calc(56px + env(safe-area-inset-top));
+  padding:env(safe-area-inset-top) max(8px,env(safe-area-inset-right)) 0 max(8px,env(safe-area-inset-left));
+  background:#FFFFFF;border-bottom:1px solid rgba(23,35,61,.08);color:#17233D}
+.dvw-back{display:inline-flex;align-items:center;gap:2px;min-width:44px;min-height:44px;padding:0 12px 0 6px;border:none;border-radius:12px;
+  background:none;color:#17233D;font:inherit;font-size:15px;font-weight:500;cursor:pointer;flex:none;-webkit-appearance:none;transition:background-color 120ms ease}
+.dvw-back:active{background:#F1F5FB}
+.dvw-back:focus-visible{outline:2px solid #3976F6;outline-offset:2px}
+.dvw-title{flex:1;min-width:0;font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dvw-actions{display:flex;align-items:center;gap:8px;flex:none}
+.dvw-actions .btn{min-height:44px;border-radius:12px;white-space:nowrap}
+.dvw-actions .lt-menu-wrap{position:relative}
+.dvw-actions .lt-menu{right:0;left:auto}
+.dvw-stage{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;padding:24px;
+  padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+.dvw-sheet{width:794px;margin:0 auto;background:#fff;box-shadow:0 1px 4px rgba(23,35,61,.12)}
 @media(max-width:480px){
-  #modal-preview-quote .actions-row .btn{width:100%;justify-content:center}
+  .dvw-stage{padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+  .dvw-title{font-size:13px}
+  .dvw-actions .btn{padding:0 12px;font-size:13px}
+}
+@media(max-width:400px){.dvw-title{display:none}.dvw-bar{justify-content:space-between}}
+/* 印刷：書類だけを出す（バー・アプリの画面は写さない）。@page は開いている間だけ #dvw-page で余白0にする */
+@media print{
+  body.bs-docview>:not(#doc-viewer){display:none!important}
+  body.bs-docview{background:#fff!important;overflow:visible!important}
+  body.bs-docview #doc-viewer{position:static!important;display:block!important;background:#fff!important}
+  body.bs-docview .dvw-bar{display:none!important}
+  body.bs-docview .dvw-stage{overflow:visible!important;padding:0!important}
+  body.bs-docview .dvw-sheet{zoom:1!important;width:auto!important;max-width:794px;margin:0 auto!important;box-shadow:none!important}
 }
 .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--navy)}
 /* ===== 交通費の追加・編集（modal-travel-entry）：ヘッダー／本文（スクロール）／フッター（固定）の3層 =====
@@ -937,11 +968,6 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
   .metric-value{font-size:21px}
 }
 
-/* 帳票プレビューは縮めずに横スクロールさせる */
-#quote-preview-content{overflow-x:auto;-webkit-overflow-scrolling:touch}
-@media(max-width:768px){
-  #quote-preview-content>div{min-width:640px}
-}
 @media(max-width:768px){
   .col-grid{grid-template-columns:1fr}
 }
@@ -964,6 +990,17 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
     <button class="login-btn" id="login-btn" onclick="doLogin()">ログイン</button>
     <div class="login-error" id="login-error"></div>
   </div>
+</div>
+
+<!-- 書類の全画面表示（請求書・見積書・交通費台帳のPDF）。アプリの中に重ねて開くので、ログイン・一覧の位置・選択中の月はそのまま。
+     本文は shadow DOM に入れる（アプリのCSSが帳票に混ざらない・帳票のCSSがアプリに漏れない）。印刷はこの画面から window.print() -->
+<div id="doc-viewer" role="dialog" aria-modal="true" aria-labelledby="dvw-title" hidden>
+  <div class="dvw-bar">
+    <button type="button" class="dvw-back" onclick="closeDocViewer()" aria-label="戻る"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>戻る</span></button>
+    <span class="dvw-title" id="dvw-title"></span>
+    <div class="dvw-actions" id="dvw-actions"></div>
+  </div>
+  <div class="dvw-stage" id="dvw-stage"><div class="dvw-sheet" id="dvw-sheet"></div></div>
 </div>
 
 <div class="app" id="app-root" style="display:none">
@@ -2477,20 +2514,6 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 </div>
 </div>
 
-<div class="modal-overlay" id="modal-preview-quote">
-<div class="modal doc">
-  <div class="modal-header"><span class="modal-title" id="preview-modal-title">見積書プレビュー</span><button class="btn sm" onclick="closeModal('modal-preview-quote')">✕</button></div>
-  <div id="quote-preview-content"></div>
-  <div class="actions-row">
-    <button class="btn" onclick="closeModal('modal-preview-quote')">閉じる</button>
-    <button class="btn" id="qp-edit" onclick="closeModal('modal-preview-quote');openEditInvoiceModal(currentQuoteData.id)">✏️ 編集</button>
-    <button class="btn primary" id="qp-issue" onclick="closeModal('modal-preview-quote');issueDraftInvoice(currentQuoteData.id)">✅ 発行する</button>
-    <button class="btn" id="qp-download" onclick="downloadQuote()">📥 HTMLダウンロード</button>
-    <button class="btn primary" id="qp-print" onclick="printQuotePdf()">🖨 PDFで保存（印刷）</button>
-  </div>
-</div>
-</div>
-
 <div class="modal-overlay" id="modal-add-ledger">
 <div class="modal">
   <div class="modal-header"><span class="modal-title" id="modal-ledger-title">収支を入力</span><button class="btn sm" onclick="closeModal('modal-add-ledger')">✕</button></div>
@@ -2873,6 +2896,12 @@ function invoiceMonthOf(q,billings){
 function invoiceFileName(q,ym){
   const client=String(q.client||'').replace(/\s*御中\s*$/,'').trim()||'宛先未設定';
   return(`【アスリンク請求書（${invYmJp(ym)}）分】_${client}御中`).replace(/[\\/:*?"<>|\r\n]/g,'_');
+}
+// 見積書：【アスリンク見積書（2026年10月）分】_株式会社○○御中。年月は契約開始月（月額固定）→ 請求月 → 見積日の月
+function quoteFileName(q){
+  const client=String(q.client||'').replace(/\s*御中\s*$/,'').trim()||'宛先未設定';
+  const ym=q.contractStart||q.billingMonth||String(q.date||'').slice(0,7);
+  return(`【アスリンク見積書（${invYmJp(ym)}）分】_${client}御中`).replace(/[\\/:*?"<>|\r\n]/g,'_');
 }
 // ===== @invoice-rules-end
 
@@ -5583,6 +5612,189 @@ async function gasCall(body){
   return await res.json();
 }
 
+/* ===== デビット通知から取込（CF管理） =================================
+   GASの debitMails（Gmailは読み取りのみ）で利用通知の日時・金額・店名を受け取り、
+   経費の実績として登録する。判定（区分・重複・認証）は @import-rules の関数を使う。
+   外部IDは 'mail:{messageId}' を ledger の calId 列に入れる。
+   =================================================================== */
+
+let debitRows=[];        // プレビュー行（debitRowsFrom の戻り値）
+let debitUnreadable=[];  // 読み取れなかったメール {subject,received,reason}
+let debitSkipped=0;      // 外部IDが登録済みで除外した件数
+let debitPeriodTo='';    // 取得した期間の終わり（lastDebitSync の更新に使う）
+
+// ブラウザのローカル日付で YYYY-MM-DD（toISOString は UTC なので朝9時前に前日になる）
+function localYmd(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function localToday(){return localYmd(new Date())}
+function shiftYmd(ymd,days){
+  const p=String(ymd).split('-').map(Number);
+  return localYmd(new Date(p[0],p[1]-1,p[2]+days));
+}
+
+function debitMsg(html){document.getElementById('di-msg').innerHTML=html||''}
+
+function openDebitImportModal(){
+  fillRecentDatalists();
+  const last=S.mail&&S.mail.lastDebitSync;
+  const t=localToday();
+  // 既定：前回取込日の翌日〜今日。初回は当月1日から
+  document.getElementById('di-from').value=last?shiftYmd(last,1):t.slice(0,8)+'01';
+  document.getElementById('di-to').value=t;
+  debitRows=[];debitUnreadable=[];debitSkipped=0;debitPeriodTo='';
+  debitMsg(last?`前回の取込：${last} まで`:'');
+  renderDebitPreview();
+  openModal('modal-debit-import');
+}
+
+async function fetchDebitMails(){
+  const since=document.getElementById('di-from').value;
+  const until=document.getElementById('di-to').value;
+  if(!since||!until){alert('期間を入力してください');return;}
+  if(since>until){alert('期間の終わりが始まりより前です');return;}
+  const btn=document.getElementById('di-fetch');
+  btn.disabled=true;
+  debitMsg('<div class="alert alert-info"><span class="spinner"></span> メールを読み取っています...</div>');
+  try{
+    const json=await gasGet({action:'debitMails',since,until});
+    if(!json||!json.ok)throw new Error((json&&json.error)||'メールを取得できませんでした');
+    const r=debitRowsFrom(json.items,S.ledger);
+    debitRows=r.rows;debitSkipped=r.skipped;
+    debitUnreadable=json.unreadable||[];
+    debitPeriodTo=until;
+    debitMsg(`<div class="alert alert-success">✓ ${(json.items||[]).length}件の利用通知を読み取りました`
+      +(debitSkipped?`（登録済み ${debitSkipped}件は除外）`:'')+'</div>'
+      +(json.truncated?'<div class="alert alert-warning">メールが多いため一部しか読めていない可能性があります。期間を短くしてください。</div>':''));
+  }catch(e){
+    debitMsg(`<div class="alert alert-error">❌ ${e.message}<br><small>初めて使うときは、GASエディタで testGmailAccess を実行して権限を承認し、新しいバージョンでデプロイしてください。</small></div>`);
+  }
+  btn.disabled=false;
+  renderDebitPreview();
+}
+
+function debitBadges(r){
+  return[
+    r.dup?'<span class="badge badge-amber">重複の可能性あり</span>':'',
+    r.auth?AUTH_BADGE:'',
+    r.needsCheck?'<span class="badge badge-red">要確認</span>':''
+  ].filter(Boolean).join(' ');
+}
+
+// 表とカードの両方に入力欄があるので、値はデータ側（debitRows）に入れる
+function debitEdit(i,field,el){
+  const r=debitRows[i];
+  if(!r)return;
+  if(field==='checked')r.checked=el.checked;
+  else if(field==='amount')r.amount=parseInt(el.value)||0;
+  else{
+    r[field]=el.value;
+    if(field==='type')r.needsCheck=false; // 自分で選んだ区分は確認済み
+  }
+  renderDebitPreview();
+}
+
+function debitTypeOptions(cur){
+  return LEDGER_TYPES.filter(t=>t!=='売上').map(t=>`<option ${t===cur?'selected':''}>${t}</option>`).join('');
+}
+
+function renderDebitPreview(){
+  const body=document.getElementById('di-body');
+  const sel=debitRows.filter(r=>r.checked);
+  document.getElementById('di-submit').disabled=sel.length===0;
+  const unread=debitUnreadable.length===0?'':`<details style="margin:10px 0;font-size:13px" open>
+    <summary style="cursor:pointer">読み取れなかったメール ${debitUnreadable.length}件</summary>
+    <div style="margin-top:6px">${debitUnreadable.map(u=>`<div style="padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">
+      ${u.received} ／ ${u.subject}<span style="color:var(--text-muted)">（${u.reason||'読み取れませんでした'}）</span></div>`).join('')}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">為替差額の追加引落しなど形式が違うメールです。必要なら「+ 実績入力」で登録してください。</div>
+  </details>`;
+  if(debitRows.length===0){
+    body.innerHTML=unread+(debitPeriodTo?'<div class="empty-state">新しく登録できる利用通知はありません。</div>':'');
+    return;
+  }
+  const total=sel.reduce((a,r)=>a+r.amount,0);
+  const auth=debitRows.some(r=>r.auth);
+  body.innerHTML=(auth?`<div class="alert alert-warning" style="font-size:12px">${AUTH_NOTE}</div>`:'')
+    +`<div class="table-wrap mob-table"><table>
+      <thead><tr><th></th><th>日時</th><th>店名</th><th>区分</th><th style="text-align:right">金額</th><th>摘要</th><th></th></tr></thead>
+      <tbody>${debitRows.map((r,i)=>`<tr>
+        <td><input type="checkbox" ${r.checked?'checked':''} onchange="debitEdit(${i},'checked',this)" style="width:auto"></td>
+        <td style="font-size:12px;white-space:nowrap">${r.datetime}</td>
+        <td style="font-size:12px">${r.merchant||'-'}</td>
+        <td><select onchange="debitEdit(${i},'type',this)" style="font-size:12px;padding:4px">${debitTypeOptions(r.type)}</select></td>
+        <td><input type="number" value="${r.amount}" onchange="debitEdit(${i},'amount',this)" style="width:96px;font-size:12px;padding:4px 6px;text-align:right"></td>
+        <td><input type="text" value="${escAttr(r.desc)}" onchange="debitEdit(${i},'desc',this)" style="min-width:180px;font-size:12px;padding:4px 6px">${entertainInputs('debitRows',i,r)}</td>
+        <td>${debitBadges(r)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <div class="mob-cards">${debitRows.map((r,i)=>mobCard(
+      `<div class="mob-check">
+        <input type="checkbox" ${r.checked?'checked':''} onchange="debitEdit(${i},'checked',this)">
+        <div style="flex:1;font-size:13px">${r.datetime}<br><strong>${r.merchant||'-'}</strong></div>
+      </div>`
+      +(debitBadges(r)?`<div style="margin-top:6px">${debitBadges(r)}</div>`:'')
+      +`<div style="margin-top:8px"><select onchange="debitEdit(${i},'type',this)">${debitTypeOptions(r.type)}</select></div>`
+      +`<div style="margin-top:6px"><input type="number" value="${r.amount}" onchange="debitEdit(${i},'amount',this)" style="font-size:14px;font-weight:700"></div>`
+      +`<div style="margin-top:6px"><input type="text" value="${escAttr(r.desc)}" onchange="debitEdit(${i},'desc',this)"></div>`
+      +entertainInputs('debitRows',i,r))).join('')}</div>`
+    +`<div style="text-align:right;font-size:14px;margin-top:10px">選択 ${sel.length}件　合計 <strong style="font-size:17px">${fmt(total)}</strong></div>`
+    +unread;
+}
+
+// 交際費の行に出す「誰と」「用件」。入力中に描き直さないよう、データに直接入れる
+function entertainInputs(arr,i,r){
+  if(r.type!=='交際費')return'';
+  return`<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+    <input type="text" list="dl-with" placeholder="誰と *" value="${escAttr(r.withWhom||'')}" oninput="${arr}[${i}].withWhom=this.value" style="flex:1;min-width:120px;font-size:12px;padding:4px 6px">
+    <input type="text" list="dl-purpose" placeholder="用件 *" value="${escAttr(r.purpose||'')}" oninput="${arr}[${i}].purpose=this.value" style="flex:1;min-width:120px;font-size:12px;padding:4px 6px">
+  </div>`;
+}
+
+// 取込で選んだ行のうち、交際費で「誰と」「用件」が空のもの
+function entertainMissing(rows){
+  return rows.filter(r=>expenseEntryError(r));
+}
+
+function registerDebitRows(){
+  const sel=debitRows.filter(r=>r.checked&&r.date&&r.amount);
+  if(sel.length===0){alert('登録する行を選択してください');return;}
+  if(entertainMissing(sel).length){alert('交際費の行は「誰と」「用件」を入力してください（'+entertainMissing(sel).length+'件）');return;}
+  if(!confirm(`${sel.length}件を経費（実績）として登録します。よろしいですか？`))return;
+  const known={};
+  S.ledger.forEach(l=>{if(l.calId)known[l.calId]=true;});
+  let added=0;
+  sel.forEach(r=>{
+    if(known[r.extId])return; // 念のため外部IDで二重登録を防ぐ
+    S.ledger.push({
+      id:S.nextLedgerId++,
+      date:r.date,
+      expectedDate:'',
+      type:r.type,
+      desc:r.desc.trim()||(r.merchant+'（Visaデビット）'),
+      amount:r.amount,
+      memo:'メール取込',
+      status:'actual',
+      calId:r.extId,
+      withWhom:r.type==='交際費'?String(r.withWhom||'').trim():'',
+      purpose:r.type==='交際費'?String(r.purpose||'').trim():''
+    });
+    known[r.extId]=true;
+    added++;
+  });
+  // 取込済みの最終日。今日はまだ通知が届くかもしれないので、最大でも昨日までとする
+  const yesterday=shiftYmd(localToday(),-1);
+  const covered=debitPeriodTo&&debitPeriodTo<yesterday?debitPeriodTo:yesterday;
+  if(!S.mail.lastDebitSync||covered>S.mail.lastDebitSync)S.mail.lastDebitSync=covered;
+  const done={};
+  sel.forEach(r=>{done[r.extId]=true;});
+  debitRows=debitRows.filter(r=>!done[r.extId]);
+  debitSkipped+=added;
+  saveState();
+  refreshAll();
+  debitMsg(`<div class="alert alert-success">✓ ${added}件を経費として登録しました</div>`);
+  renderDebitPreview();
+}
+
 function driveMsg(html){document.getElementById('drive-msg').innerHTML=html||''}
 
 function openDriveImportModal(){
@@ -6636,13 +6848,9 @@ function printTravelLedger(){
     +'</tbody>'
   ).join('');
 
-  const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
-<title>交通費台帳 ${travelPeriodLabel(mi)}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Noto Sans JP','Hiragino Kaku Gothic ProN',Meiryo,sans-serif;color:#111;font-size:12px;padding:16mm 14mm;background:#fff}
+  // 書類の全画面表示（shadow DOM）に入れる。以前の単体HTMLの body の指定は .tl-doc に付ける（見た目は同じ）
+  const css=`
+.tl-doc{font-family:'Noto Sans JP','Hiragino Kaku Gothic ProN',Meiryo,sans-serif;color:#111;font-size:12px;padding:16mm 14mm;background:#fff}
 h1{font-size:18px;font-weight:700;color:#1a2e4a;margin-bottom:4px}
 .head{border-bottom:2px solid #1a2e4a;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px}
 .meta{font-size:11px;color:#555;line-height:1.9;text-align:right;white-space:nowrap}
@@ -6656,9 +6864,8 @@ td.date{white-space:nowrap;vertical-align:top}
 .daysum{font-size:9px;color:#555;margin-top:2px}
 .num{text-align:right;white-space:nowrap}
 tfoot td{background:#eef1f5;font-weight:700;border-top:2px solid #1a2e4a}
-.foot{margin-top:14px;font-size:11px;line-height:2;color:#333}
-@page{size:A4 portrait;margin:0}
-</style></head><body>
+.foot{margin-top:14px;font-size:11px;line-height:2;color:#333}`;
+  const html=`<div class="tl-doc">
 <div class="head">
   <div>
     <h1>交通費台帳</h1>
@@ -6685,13 +6892,14 @@ tfoot td{background:#eef1f5;font-weight:700;border-top:2px solid #1a2e4a}
   合計金額：<strong>${docYen(total)}</strong>　／　件数：${rows.length}件<br>
   精算状況：${status}
 </div>
-</body></html>`;
+</div>`;
 
-  const w=window.open('','_blank');
-  if(!w){alert('ポップアップがブロックされました。表示を許可してください。');return;}
-  w.document.write(html);
-  w.document.close();
-  w.onload=()=>{w.focus();w.print();};
+  openDocViewer({
+    title:'交通費台帳',
+    fileName:`交通費台帳 ${travelPeriodLabel(mi)}`,
+    css,html,
+    actions:'<button type="button" class="btn primary" onclick="printDocViewer()">印刷・PDF保存</button>'
+  });
 }
 
 /* ---- 入力モーダル ---- */
@@ -11877,11 +12085,11 @@ function buildDocHtml(q,c){
       <td style="${td}text-align:right">${docYen(it.qty*it.unit)}</td>
     </tr>`).join('')}</tbody>
     <tfoot>
-      <tr><td colspan="2" style="border:none"></td><td style="${sumTd}">${monthly?'月額小計（税抜）':'小計（税抜）'}</td><td style="${sumTd}">${docYen(sub)}</td></tr>
-      <tr><td colspan="2" style="border:none"></td><td style="${sumTd}">消費税（10%）</td><td style="${sumTd}">${docYen(tax)}</td></tr>
-      <tr><td colspan="2" style="border:none"></td><td style="${totalTd}">${monthly?'月額合計（税込）':'合計金額（税込）'}</td><td style="${totalTd}">${docYen(total)}-</td></tr>
+      <tr><td colspan="2" style="border:none"></td><td style="${sumTd}white-space:nowrap">${monthly?'月額小計（税抜）':'小計（税抜）'}</td><td style="${sumTd}">${docYen(sub)}</td></tr>
+      <tr><td colspan="2" style="border:none"></td><td style="${sumTd}white-space:nowrap">消費税（10%）</td><td style="${sumTd}">${docYen(tax)}</td></tr>
+      <tr><td colspan="2" style="border:none"></td><td style="${totalTd}white-space:nowrap">${monthly?'月額合計（税込）':'合計金額（税込）'}</td><td style="${totalTd}">${docYen(total)}-</td></tr>
       ${periodTotal!==null?`<tr><td colspan="2" style="border:none"></td>
-        <td style="${totalTd}">契約期間合計（税込）</td>
+        <td style="${totalTd}white-space:nowrap">契約期間合計（税込）</td>
         <td style="${totalTd}">${docYen(periodTotal)}-</td></tr>
       <tr><td colspan="4" style="padding:6px 12px;text-align:right;font-size:11px;color:#555;border:none">月額合計 ${docYen(total)} × ${months}ヶ月</td></tr>`:''}
     </tfoot>
@@ -11900,26 +12108,87 @@ function buildDocHtml(q,c){
 </div>`;
 }
 
+/* ===== 書類の全画面表示（#doc-viewer） ===============================
+   請求書・見積書（showPreviewModal）と交通費台帳のPDF出力（printTravelLedger）。以前は別ウィンドウ（window.open）で開いていたため、
+   ホーム画面から開いたアプリ（standalone）では戻る操作がなく、アプリに戻れなかった。
+   上部の固定バー：左「← 戻る」（閉じて元の一覧へ）・右に操作（印刷・PDF保存など）。バーは印刷に写さない。
+   開いている間は document.title を保存時のファイル名にする（印刷→PDF保存の既定名）。閉じたら元に戻す。
+   紙の見た目は単体HTML（docStandaloneHtml）と同じ：A4・余白0（@page はこの画面を開いている間だけ差し込む）・幅794px。
+   スマホでは本文を画面幅に縮小して表示（zoom）。ピンチで拡大できる。履歴に1つ積むので、端末の「戻る」でも閉じる */
+let dvwOpen=false,dvwPrevTitle='';
+function openDocViewer({title,fileName,css,html,actions}){
+  const v=document.getElementById('doc-viewer');
+  const host=document.getElementById('dvw-sheet');
+  const root=host.shadowRoot||host.attachShadow({mode:'open'});
+  root.innerHTML='<style>:host{all:initial;display:block;font-family:'+DOC_JA_FONT+'}*{box-sizing:border-box;margin:0;padding:0}'+(css||'')+'</style>'+html;
+  document.getElementById('dvw-title').textContent=title||'';
+  document.getElementById('dvw-actions').innerHTML=actions||'';
+  if(!dvwOpen){
+    dvwPrevTitle=document.title;
+    v.hidden=false;dvwOpen=true;
+    document.body.classList.add('bs-docview');
+    let ps=document.getElementById('dvw-page');
+    if(!ps){ps=document.createElement('style');ps.id='dvw-page';ps.textContent='@page{size:A4 portrait;margin:0}';}
+    document.head.appendChild(ps);   // アプリの @page（余白15mm）より後ろに置いて上書きする
+    try{history.pushState({dvw:1},'');}catch(e){}
+    document.getElementById('dvw-stage').scrollTop=0;
+    setTimeout(()=>v.querySelector('.dvw-back').focus({preventScroll:true}),0);
+  }
+  document.title=fileName||title||dvwPrevTitle;
+  fitDocViewer();
+}
+function closeDocViewer(fromPop){
+  if(!dvwOpen)return;
+  dvwOpen=false;
+  document.getElementById('doc-viewer').hidden=true;
+  document.body.classList.remove('bs-docview');
+  const ps=document.getElementById('dvw-page');if(ps)ps.remove();
+  document.title=dvwPrevTitle;
+  if(!fromPop&&history.state&&history.state.dvw){try{history.back();}catch(e){}}
+}
+window.addEventListener('popstate',()=>{if(dvwOpen)closeDocViewer(true);});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&dvwOpen&&!document.querySelector('.modal-overlay.open')&&!(document.activeElement&&document.activeElement.closest('.lt-menu,.lt-menu-btn[aria-expanded=true]')))closeDocViewer();});
+// スマホ：A4の幅（794px）を画面の幅に縮小して表示（PCは等倍）
+function fitDocViewer(){
+  if(!dvwOpen)return;
+  const st=document.getElementById('dvw-stage');
+  const pad=parseFloat(getComputedStyle(st).paddingLeft)||0;
+  const z=Math.min(1,(st.clientWidth-pad*2)/794);
+  document.getElementById('dvw-sheet').style.zoom=z>0?z:1;
+}
+window.addEventListener('resize',fitDocViewer);
+// 印刷：フォントの読み込みを待ってから。ファイル名は document.title（openDocViewer で設定済み）
+function printDocViewer(){
+  const go=()=>{try{window.print();}catch(e){}};
+  const ready=document.fonts&&document.fonts.ready;
+  if(ready)ready.then(()=>setTimeout(go,100));else setTimeout(go,300);
+}
+
 function showPreviewModal(){
   const q=currentQuoteData;
   const inv=isInvoiceDoc(q);
   const st=inv?docStatusOf(q):'issued';
-  document.getElementById('preview-modal-title').textContent=(q.type||'見積書')+'プレビュー'
-    +(inv?'（'+INVOICE_DOC_STATES[st].label+(st!=='draft'&&invRevision(q)>1?'・訂正版':'')+'）':'');
-  document.getElementById('quote-preview-content').innerHTML=buildDocHtml(q,S.company);
-  // 下書きは発行してから出力する（PDF・HTMLのボタンは出さない）
-  document.getElementById('qp-edit').style.display=inv&&st==='draft'?'':'none';
-  document.getElementById('qp-issue').style.display=inv&&st==='draft'?'':'none';
-  document.getElementById('qp-download').style.display=inv&&st==='draft'?'none':'';
-  document.getElementById('qp-print').style.display=inv&&st==='draft'?'none':'';
-  openModal('modal-preview-quote');
+  const id=escAttr(q.id);
+  // 下書きは発行してから出力する（印刷・HTMLのボタンは出さない）。発行すると、この画面のまま発行済みの表示に替わる
+  const actions=inv&&st==='draft'
+    ?`<button type="button" class="btn" onclick="closeDocViewer();openEditInvoiceModal('${id}')">編集</button>`
+      +`<button type="button" class="btn primary" onclick="issueDraftInvoice('${id}')">発行する</button>`
+    :`<div class="lt-menu-wrap"><button type="button" class="btn lt-menu-btn" id="dvw-more-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="dvw-more-menu" onclick="ltMenu(this)">その他 ▾</button>`
+      +`<div class="lt-menu" id="dvw-more-menu" role="menu" aria-labelledby="dvw-more-btn" hidden><button role="menuitem" tabindex="-1" onclick="ltMenu(null);downloadQuote()">HTMLダウンロード</button></div></div>`
+      +`<button type="button" class="btn primary" onclick="printQuotePdf()">印刷・PDF保存</button>`;
+  openDocViewer({
+    title:(q.type||'見積書')+(inv?'（'+INVOICE_DOC_STATES[st].label+(st!=='draft'&&invRevision(q)>1?'・訂正版':'')+'）':''),
+    fileName:docFileBase(q),
+    html:buildDocHtml(q,S.company),
+    actions
+  });
 }
 
 // 保存するときのファイル名（拡張子なし）
-// 請求書：【アスリンク請求書（2026年11月）分】_株式会社○○御中／見積書：見積書_番号_日付
+// 請求書：【アスリンク請求書（2026年11月）分】_株式会社○○御中／見積書：【アスリンク見積書（2026年10月）分】_株式会社○○御中
 function docFileBase(q){
   if(isInvoiceDoc(q))return invoiceFileName(q,invoiceMonthOf(q,billingList()));
-  return `${q.type||'見積書'}_${q.id}_${q.date}`;
+  return quoteFileName(q);
 }
 
 // 単体で開ける帳票HTML。<title> をファイル名にしておくと、印刷→PDF保存の既定名になる
@@ -11942,18 +12211,10 @@ function downloadQuote(){
   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
 }
 
-// 別ウィンドウで開いて印刷ダイアログを出す。「PDFに保存」を選ぶと、ファイル名は <title> になる
-// フォントの読み込みを待ってから印刷する（待たないと代替フォントで出力されることがある）
+// 書類の全画面表示から印刷ダイアログを出す（別ウィンドウは開かない）。「PDFに保存」の既定のファイル名は document.title（docFileBase）
 function printQuotePdf(){
-  const q=currentQuoteData;
-  const w=window.open('','_blank');
-  if(!w){alert('ポップアップがブロックされました。このサイトのポップアップを許可してください。');return;}
-  w.document.open();
-  w.document.write(docStandaloneHtml(q));
-  w.document.close();
-  const go=()=>{try{w.focus();w.print();}catch(e){}};
-  const ready=w.document.fonts&&w.document.fonts.ready;
-  if(ready)ready.then(()=>setTimeout(go,200));else setTimeout(go,800);
+  if(!dvwOpen)showPreviewModal();
+  printDocViewer();
 }
 
 async function handlePDFUpload(event){

@@ -28,6 +28,9 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   すべて同じ関数を使うので、同じ月なら数字が一致する
 
 ## 修正後の作業
+★ パッチで範囲（「/* ===== A」から「/* ===== B」まで など）をまるごと置き換えたら、前後の版で定義済みの関数・変数の名前を比べ、
+  意図したもの以外が消えていないか確かめる（2026-11-03、ドライブ取込の置き換えでデビット通知の取込と localYmd を消し、
+  請求書の発行・月次締めの完了が落ちていた。テストは @…-rules の範囲しか読まないので気づけない）
 コードを修正したら必ず以下を実行：
 1. git add .
 2. git commit -m "修正内容を簡潔に"
@@ -523,7 +526,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   CF管理に入金予定を作る。重複判定は ledger の projectId × billingMonth
 - ★ GASの応答に含まれない項目は keepLocalWhenMissing() で手元の値を残す。
   シート未追加の古いデプロイに読み直されてデータが消えるのを防ぐため
-- 交通費台帳はCSV（BOM付き・合計行あり）とPDF（別ウィンドウでprint）を出力できる
+- 交通費台帳はCSV（BOM付き・合計行あり）とPDF（書類の全画面表示から印刷。ファイル名「交通費台帳 {期間}」）を出力できる
   移動手段は摘要の末尾「（電車）」などの括弧から取り出す（travelModeOf。旧「電車・バス」もそのまま出す）
 - レポートページのモバイル対応では、予実の表に
   .fc-month-table / .fc-project-table を付けて列の出し分けをしている
@@ -592,8 +595,9 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 ### ファイル名・PDF
 - 請求書は「【アスリンク請求書（2026年11月）分】_株式会社○○御中」（invoiceFileName。年月は invoiceMonthOf＝
   billingMonth → 紐づく請求レコード → 請求日の月）。見積書は従来どおり
-- 「🖨 PDFで保存（印刷）」は別ウィンドウに帳票を書き、フォント読み込み後に print。<title> をファイル名にしてあるので
-  「PDFに保存」の既定名になる。HTMLダウンロードも同じ名前
+- 見積書は「【アスリンク見積書（2026年10月）分】_株式会社○○御中」（quoteFileName。年月は契約開始月 → 請求月 → 見積日の月）
+- 表示・「印刷・PDF保存」は書類の全画面表示（#doc-viewer。下の節）。開いている間 document.title をファイル名にするので
+  「PDFに保存」の既定名になる。HTMLダウンロード（docStandaloneHtml）も同じ名前
 - 帳票のフォントは DOC_JA_FONT（Noto Sans CJK JP → Webフォントの Noto Sans JP）。単体HTMLには DOC_FONT_LINK を入れる
 
 ## 領収書の写真から経費登録（CF管理）
@@ -1026,3 +1030,21 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - ※ 月次レポートの月の初期値：initReportPage は「select が空なら前月」と書いてあるが、select は最初から「1月」が選ばれていて空にならないため、
   いつも1月（期の並びでは翌年1月）になる。累計（fiscalTotals）は選んだ月までの案件売上（未来の月は契約の予定額）を足し、経費は実績だけなので、
   未来の月を選ぶと確定と予定の区別なく売上が入り、利益が大きく出る（直すかは確認中）
+
+## 書類の全画面表示（#doc-viewer。請求書・見積書・交通費台帳のPDF）
+- ★ 別ウィンドウ（window.open＋document.write）は使わない。ホーム画面から開いたアプリ（standalone）では戻る操作がなく、アプリに戻れなかった
+- アプリの中に重ねて開く（openDocViewer / closeDocViewer）。下のアプリはそのまま（ログイン・一覧のスクロール位置・選択中の月を失わない）
+  開くと履歴に1つ積む（history.pushState）。端末の「戻る」（popstate）・Esc でも閉じる
+- 上部の固定バー（.dvw-bar。56px＋safe-area-inset-top・白・薄い境界線）：左「← 戻る」（44px）、真ん中に書類名（400px以下は隠す）、右に操作
+  請求書の下書き：［編集］［発行する］（下書きは出力しない。発行するとこの画面のまま発行済みの表示に替わり、発行のボタンは消える）
+  発行済み・取消・見積書：［その他 ▾：HTMLダウンロード］［印刷・PDF保存］／交通費台帳：［印刷・PDF保存］
+- 本文は shadow DOM（#dvw-sheet）に入れる。アプリのCSSが帳票に混ざらず、帳票のCSS（交通費台帳の table・h1 など）もアプリに漏れない
+  交通費台帳の以前の body の指定は .tl-doc に付けている
+- 紙の見た目は以前の別ウィンドウと同じ：開いている間だけ <style id="dvw-page">@page{size:A4 portrait;margin:0}</style> を head の最後に足し、
+  アプリの @page（余白15mm）を上書きする（閉じたら外す）。幅794px。@media print では body.bs-docview の #doc-viewer 以外とバーを隠す
+  （実際のPDFで、交通費台帳は以前とピクセル一致、請求書・見積書は下の折り返しの修正だけが違う）
+- 印刷は printDocViewer（フォントの読み込みを待って window.print()）。ファイル名は開いている間の document.title
+  （請求書 invoiceFileName／見積書 quoteFileName／交通費台帳「交通費台帳 {期間}」）。閉じたら元のタイトルに戻す
+- スマホは本文（794px）を画面の幅に縮小して表示（fitDocViewer の zoom。リサイズで計算し直す）。ピンチで拡大できる（viewport で拡大を禁止していない）
+- 合計の見出し（小計・消費税・合計金額（税込）・月額合計・契約期間合計）は white-space:nowrap。以前は紙でも「合計金額（税 / 込）」と折り返していた
+- 月次レポート・案件予実・融資力診断の印刷は、もともとアプリの画面のまま window.print() なので対象外（別ウィンドウを開かない）

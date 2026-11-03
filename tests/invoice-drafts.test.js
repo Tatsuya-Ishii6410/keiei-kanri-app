@@ -24,7 +24,7 @@ vm.createContext(app);
 vm.runInContext(html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + `
 globalThis.exported = { docStatusOf, invoiceDisplayNo, normalizeQuoteDoc, invoiceDetectYm,
   missingInvoiceTargets, createDraftInvoices, applyInvoiceEdit, cancelInvoiceDoc, canDeleteQuote,
-  invoiceFileName, invoiceMonthOf, invoiceKey, issueInvoiceDoc, isDraftId };`, app);
+  invoiceFileName, quoteFileName, invoiceMonthOf, invoiceKey, issueInvoiceDoc, isDraftId };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -404,6 +404,13 @@ test('【アスリンク請求書（2026年11月）分】_株式会社○○御�
   assert.strictEqual(A.invoiceFileName(q, '2026-11'), '【アスリンク請求書（2026年11月）分】_株式会社テスト御中');
   // ファイル名に使えない文字は _ に
   assert.strictEqual(A.invoiceFileName({ client: 'A/B:C' }, '2026-01'), '【アスリンク請求書（2026年1月）分】_A_B_C御中');
+});
+
+test('見積書：【アスリンク見積書（年月）分】_会社名御中（年月は契約開始月 → 請求月 → 見積日の月）', () => {
+  assert.strictEqual(A.quoteFileName({ client: '株式会社テスト 御中', contractStart: '2026-10', date: '2026-09-20' }), '【アスリンク見積書（2026年10月）分】_株式会社テスト御中');
+  assert.strictEqual(A.quoteFileName({ client: '株式会社テスト', date: '2026-09-20' }), '【アスリンク見積書（2026年9月）分】_株式会社テスト御中');
+  assert.strictEqual(A.quoteFileName({ client: '', billingMonth: '2027-01', date: '2026-12-01' }), '【アスリンク見積書（2027年1月）分】_宛先未設定御中');
+  assert.strictEqual(A.quoteFileName({ client: 'A/B:C', date: '2026-01-05' }), '【アスリンク見積書（2026年1月）分】_A_B_C御中');
 });
 
 test('請求月は 書類の billingMonth → 紐づく請求レコード → 請求日の月 の順', () => {
