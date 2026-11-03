@@ -71,6 +71,12 @@
 - LEDGER_STATES の「📅 予定」は CSV 出力でも使うので定義は変えず、画面に出す所だけ外す
 - 前後の比較：tests/ui-shot.js（見本のデータ・使い捨てのプロフィールのヘッドレス Chrome。本番サイトは開かない）
 
+## 段階3 案件管理（済）の決めごと
+- 営業サマリー #pj-hero：id（project-total・project-total-sub・project-forecast・project-forecast-sub）は従来のまま。確定（契約済・進行中・完了）と見込み（商談中）を枠で分け、見込みは確定の合計に含めないと明記
+- スマホの一覧 projectRowHtml（ucRow）。印（繰越・終了・終了日未設定）は footHtml で閉じた行にも出す。操作は mobActions（主な1つ＋その他）。月次請求を開いた案件は開いたまま描く
+- `ucSteps(steps,current,label,changed)`：順序のある状態のステップ。current が順序の外なら空（失注はバッジ）。達成率は出さない。changed の時だけ今の段に uc-pop（reduced-motion で止める）
+- 見込みタブ・PCの表は変えていない（絵文字だけ外した）
+
 ## 確認
 - 各段階：375px と 1440px の前後のスクリーンショット、一覧部分の縦の長さの前後の数値
 - 横スクロールなし。npm test（静的チェック・画面の実行テスト）が通る

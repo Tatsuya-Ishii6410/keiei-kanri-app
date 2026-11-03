@@ -22,13 +22,17 @@
   - [x] 2-c 絵文字を外す・スマホの操作エリアを2行（.tl-tb）。「その他」＝CSV出力・PDF出力・旧「電車・バス」の手段を整理（名前は変えず）
   - 残り（段階5の監査へ）：カレンダー取込の完了メッセージの「⚠要編集」（8161行付近。交通費台帳の画面の外）
   - 実データの確認（ユーザー）：スマホで交通費台帳を開き、合計・件数・精算予定日が前と同じかスクショで確認
-- [ ] 段階3：案件管理
+- [x] 段階3：案件管理（377eed1・2187d65・0d20024）
+  - [x] 3-a 営業サマリー（#pj-hero。確定の売上合計を最大、売上見込みは「未確定」の別枠。集計は renderProjects のまま）
+  - [x] 3-b スマホの一覧を ucRow（projectRowHtml。閉じた行＝案件名・顧客・金額・状態・印、展開＝期間・種別・請求・入金・操作・月次請求）。ucRow に footHtml。PCの表は維持
+  - [x] 3-c ステップ（ucSteps・PROJECT_STEPS。失注はバッジ。状態が変わった時だけ軽い動き）。スマホの行の展開の中だけ（PCの表はバッジのまま）
+  - 実データの確認（ユーザー）：スマホで案件管理を開き、売上合計・売上見込み・件数・繰越などの印が前と同じかスクショで確認
 - [ ] 段階4：見積・請求
 - [ ] 段階4.5：PC幅の微調整（段階1・2で PC の画面全体が約8〜9%長くなった。ヒーロー・要約カードを、PCでは低く・横並びにする）
 - [ ] 段階5：そのほかの画面の監査（報告のみ）。対象に、カレンダー取込の完了メッセージの「⚠要編集」の絵文字を含める
 
-現在の段階：段階3
-次の一手：段階3 案件管理（2-1 営業サマリー → 2-2 カードの高さ → 2-3 状態のステップ。tests/ui-shot.js の PAGES に projects を足す。撮影：node tests/ui-shot.js shot <名前> <scratchpad> [前のHTML] [ledger|travel]、比較：node tests/ui-shot.js shot <名前> <scratchpad> [前のHTML]、比較：combine）
+現在の段階：段階4
+次の一手：段階4 見積・請求（renderQuotes・renderQuoteTable・quoteCardHtml を調べる → 要約・行・請求の状態の表示。tests/ui-shot.js の PAGES に quotes を足す。撮影：node tests/ui-shot.js shot <名前> <scratchpad> [前のHTML] [ledger|travel|projects|projectsOpen]、比較：node tests/ui-shot.js combine <出力.png> <前> <後> <scratchpad>）
 
 ## 完了した準備：作業ルールの整備（途中で止まらないために）
 
