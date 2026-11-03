@@ -400,6 +400,13 @@ const SCENARIO = String.raw`(async () => {
       openPlanConfirm(9001); document.getElementById('pc-date').value = pay; document.getElementById('pc-amount').value = '48630'; renderSettleDups();
       const radio = document.querySelector('#pc-dups input[name="pc-dup"]:checked');
       ok(radio && radio.value === '9004' && /二重/.test(document.getElementById('pc-dups').textContent), '既存の出金があるのに警告・紐付けの選択肢が出ない');
+      // 金額に差がある候補だけの時は、初期値で紐付けが選ばれない。選ばずに保存すると止まる（新しい実績を作らない）
+      document.getElementById('pc-amount').value = '48000'; renderSettleDups();
+      ok(document.querySelector('#pc-dups input[name="pc-dup"]') && !document.querySelector('#pc-dups input[name="pc-dup"]:checked'), '金額に差がある時に、初期値で紐付けが選ばれている');
+      const n3 = S.ledger.length; confirmPlanned();
+      ok(S.ledger.length === n3 && S.ledger.find(x => x.id === 9001).status === 'planned_out', '選ばずに保存したのに、実績ができた');
+      document.getElementById('pc-amount').value = '48630'; renderSettleDups();
+      ok((document.querySelector('#pc-dups input[name="pc-dup"]:checked') || {}).value === '9004', '金額が一致する時に、初期値で紐付けが選ばれない');
       confirmPlanned();
       const s3 = snap(), linked = S.ledger.find(x => x.id === 9004);
       ok(!S.ledger.some(x => x.id === 9001) && linked && isSettlePaid(linked) && linked.settlementMonth === tYm, '紐付けで、予定が消えない・既存の行が精算の支払いにならない');

@@ -6769,7 +6769,8 @@ function renderSettleDups(){
   const opt=(v,label,on)=>`<label class="pc-dup-opt"><input type="radio" name="pc-dup" value="${v}"${on?' checked':''}> <span>${label}</span></label>`;
   box.innerHTML=`<div class="alert alert-warning" style="font-size:12px;margin-top:10px">同じ振込らしい実績の出金がすでにあります（振込日の前後7日・金額の差1,000円以内）。`
     +`新しく実績を作ると、CFの出金が二重になります。</div>`
-    +c.map((x,i)=>opt(x.id,`この実績に紐付ける：${escAttr(x.date)}　${escAttr(x.desc)}　${fmt(x.amount)}（${escAttr(x.type)}）`,i===0)).join('')
+    // 初期値は、金額が完全に一致する候補（いちばん近い日付）だけ。差がある時は選ばせる（別の支払いが精算に変わり、経費から消えるのを防ぐ）
+    +c.map(x=>opt(x.id,`この実績に紐付ける：${escAttr(x.date)}　${escAttr(x.desc)}　${fmt(x.amount)}（${escAttr(x.type)}）${x.amount!==amount?`　※金額の差 ${fmt(Math.abs(x.amount-amount))}`:''}`,x===c.find(y=>y.amount===amount))).join('')
     +opt('new','どれも別の支払い（この精算の振込ではない）。この予定を新しく実績にする',false);
 }
 // 実績に変換できる予定：入金予定と出金予定。交通費精算の出金予定（settlementMonth）は除く
@@ -6792,6 +6793,7 @@ function confirmPlanned(){
   // 交通費精算：振込済みにする（区分 交通費精算の実績。経費の集計には入れず、CFの実績出金に1回だけ）
   if(ledgerStatusOf(l)==='planned_out'&&l.settlementMonth){
     const pick=document.querySelector('#pc-dups input[name="pc-dup"]:checked');
+    if(!pick&&document.querySelector('#pc-dups input[name="pc-dup"]')){alert('同じ振込らしい出金があります。紐付ける出金か「どれも別の支払い」を選んでください');return;}
     const link=pick&&pick.value!=='new'?S.ledger.find(x=>x.id===Number(pick.value)):null;
     if(link){
       // 既存の実績に紐付ける：その行を精算の支払いにして、予定の行は消す（CFの出金は既存の1行だけ）
