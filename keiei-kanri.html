@@ -250,21 +250,21 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
 .dv2-pchip select{position:absolute;inset:0;width:100%;height:100%;min-height:0;opacity:0;border:0;padding:0;margin:0;font-size:16px;cursor:pointer;-webkit-appearance:none;appearance:none}
 .dv2-pchip:focus-within{outline:2px solid #3976F6;outline-offset:2px}
 .dash-v2 section,.dash-v2 details,.dash-v2 .dv2-head{scroll-margin-top:calc(64px + env(safe-area-inset-top))}
-/* ===== 上部バー（共通ナビ）。body.tbn-on＝旧ダッシュボード以外の全画面。body.dv2-on＝新ダッシュボードの表示中（固有の要素だけ） =====
+/* ===== 上部バー（共通ナビ）。body.bs-nav2＝旧ダッシュボード以外の全画面。body.dv2-on＝新ダッシュボードの表示中（固有の要素だけ） =====
    既存のメニュー・ロック（ログアウト）・同期の判定・通知・期／月の選択の処理はそのまま。見た目と配置だけ
-   .tb-new（body.tbn-on のとき表示）：≡（スマホだけ）・タイトル・同期の点・ロック／tb-v2：ベル・アバター・スクロール後の月チップ（新ダッシュボードだけ） */
+   .tb-new（body.bs-nav2 のとき表示）：≡（スマホだけ）・タイトル・同期の点・ロック／tb-v2：ベル・アバター・スクロール後の月チップ（新ダッシュボードだけ） */
 .tb-v2,.tb-new{display:none!important}
-body.tbn-on .tb-new{display:inline-flex!important}
+body.bs-nav2 .tb-new{display:inline-flex!important}
 body.dv2-on .tb-v2{display:inline-flex!important}
 body.dv2-on #tb-month-chip[hidden]{display:none!important}
-body.tbn-on .topbar{background:#FFFFFF;border-bottom:1px solid rgba(23,35,61,.06);box-shadow:none;height:calc(56px + env(safe-area-inset-top));
+body.bs-nav2 .topbar{background:#FFFFFF;border-bottom:1px solid rgba(23,35,61,.06);box-shadow:none;height:calc(56px + env(safe-area-inset-top));
   padding-top:env(safe-area-inset-top);transition:box-shadow 120ms ease}
-body.tbn-on .topbar.is-scrolled{box-shadow:0 1px 6px rgba(23,35,61,.06)}
-body.tbn-on .topbar .save-indicator,body.tbn-on .topbar .tb-logout,body.tbn-on .menu-btn{display:none!important}
-body.tbn-on .tb-left{flex:1;min-width:0}
-body.tbn-on .topbar-title{color:#17233D;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.tbn-on .topbar-right{gap:2px;flex:none}
-body.tbn-on .tb-menu{display:none!important}
+body.bs-nav2 .topbar.is-scrolled{box-shadow:0 1px 6px rgba(23,35,61,.06)}
+body.bs-nav2 .topbar .save-indicator,body.bs-nav2 .topbar .tb-logout,body.bs-nav2 .menu-btn{display:none!important}
+body.bs-nav2 .tb-left{flex:1;min-width:0}
+body.bs-nav2 .topbar-title{color:#17233D;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.bs-nav2 .topbar-right{gap:2px;flex:none}
+body.bs-nav2 .tb-menu{display:none!important}
 /* 同期の状態：同期済み＝緑の点（8px）／同期中・ローカル保存＝灰色の点／同期エラー＝赤の文字。新ダッシュボードはあいさつ行に出すので出さない */
 .tb-sync{align-items:center;justify-content:center;min-width:28px;height:44px;padding:0 6px;font-size:12px;font-weight:700;color:#DC2626;white-space:nowrap}
 .tb-sync-dot{width:8px;height:8px;border-radius:50%;background:#64748B}
@@ -272,7 +272,7 @@ body.tbn-on .tb-menu{display:none!important}
 .tb-sync.is-err .tb-sync-dot{display:none}
 body.dv2-on .tb-sync{display:none!important}
 /* 固定ナビの下に、移動先の先頭が隠れないように */
-body.tbn-on .content :is(.page,.section-header,.card,.report-card,.tab-group){scroll-margin-top:calc(64px + env(safe-area-inset-top))}
+body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){scroll-margin-top:calc(64px + env(safe-area-inset-top))}
 .tb-icon{position:relative;width:44px;height:44px;flex:none;align-items:center;justify-content:center;border:0;border-radius:12px;background:transparent;color:#17233D;
   cursor:pointer;padding:0;-webkit-appearance:none;appearance:none;transition:background-color 120ms ease}
 .tb-icon:active{background:#F1F5FB}
@@ -517,8 +517,8 @@ body.tbn-on .content :is(.page,.section-header,.card,.report-card,.tab-group){sc
   .dash-v2{margin:-16px -12px;padding:12px 16px 32px}
   .dash-v2 .dv2-hero{grid-template-columns:minmax(0,1fr)}
   .dash-v2 .dv2-mtn{max-height:140px}
-  body.tbn-on .tb-menu{display:inline-flex!important}
-  body.tbn-on .topbar{padding-left:4px;padding-right:4px}
+  body.bs-nav2 .tb-menu{display:inline-flex!important}
+  body.bs-nav2 .topbar{padding-left:4px;padding-right:4px}
 }
 @media (max-width:480px){
   .dash-v2{margin:-12px -10px;padding:10px 16px 28px}
@@ -3335,6 +3335,36 @@ document.addEventListener('keydown',e=>{
     items[n].focus();e.preventDefault();
   }
 });
+
+/* ボタン・タブ・メニュー項目の先頭の絵文字を .lt-emoji で包む（スマホ幅＝480px以下だけ隠す。PCは display:contents で見た目そのまま）
+   描画のたびに作られるボタンにも効くよう、DOMに足された要素を MutationObserver で見る。文字の中身（textContent）は変えない
+   ★ ダッシュボード（#page-dashboard）の中は触らない。▶◀（開閉の印）と ←（戻る）は意味があるので残す */
+const EMOJI_SEL='.btn,.tab,[role=menuitem],.nav-btn,.csv-type-btn';
+const EMOJI_LEAD=/^\s*(?:(?:(?![\u25B6\u25C0])\p{Extended_Pictographic}|[\u2713\u2714])(?:\uFE0F|\u200D\p{Extended_Pictographic})*\s*)+/u;
+function wrapLeadEmoji(root){
+  if(!root||root.nodeType!==1)return;
+  const els=root.matches(EMOJI_SEL)?[root]:[];
+  root.querySelectorAll(EMOJI_SEL).forEach(e=>els.push(e));
+  els.forEach(el=>{
+    if(el.closest('#page-dashboard'))return;
+    let t=el.firstChild;
+    while(t&&t.nodeType===3&&!t.nodeValue.trim())t=t.nextSibling;
+    if(!t||t.nodeType!==3)return;
+    const m=t.nodeValue.match(EMOJI_LEAD);
+    if(!m||!el.textContent.trim().slice(m[0].trim().length).trim())return;   // 絵文字だけのボタン（✕など）は包まない
+    const sp=document.createElement('span');sp.className='lt-emoji';sp.setAttribute('aria-hidden','true');sp.textContent=m[0];
+    t.nodeValue=t.nodeValue.slice(m[0].length);el.insertBefore(sp,t);
+  });
+}
+(function(){
+  const init=()=>{
+    wrapLeadEmoji(document.body);
+    new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{
+      if(n.nodeType===1)wrapLeadEmoji(n);else if(n.nodeType===3&&n.parentElement)wrapLeadEmoji(n.parentElement);
+    }))).observe(document.body,{childList:true,subtree:true});
+  };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
 
 const PAGE_TITLES={dashboard:'ダッシュボード',projects:'案件管理',quotes:'見積・請求',
   ledger:'キャッシュフロー管理',csv:'CSV取込',report:'月次レポート',settings:'設定',close:'月次締め'};
@@ -13444,7 +13474,7 @@ function syncDv2Body(v2){
   const on=(v2===undefined?dashVersion===2:v2)&&document.getElementById('page-dashboard').classList.contains('active');
   document.body.classList.toggle('dv2-on',!!on);
   const dash=document.getElementById('page-dashboard').classList.contains('active');
-  document.body.classList.toggle('tbn-on',!dash||(v2===undefined?dashVersion===2:!!v2));
+  document.body.classList.toggle('bs-nav2',!dash||(v2===undefined?dashVersion===2:!!v2));
   if(!on){const c=document.getElementById('tb-month-chip');if(c)c.hidden=true;}
 }
 // あいさつ行の補助テキスト：「11月3日（火）・同期済み」。同期エラーは赤

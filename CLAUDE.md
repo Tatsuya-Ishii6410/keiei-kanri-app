@@ -908,9 +908,14 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - ★ スマホの左端の影：画面外にあるサイドバーの box-shadow がはみ出していた。閉じているときは box-shadow:none、開いたとき（.sidebar.open）だけ影を付ける
 
 ## 共通ナビ（全画面の上部バー）
-- 新ダッシュボードの上部ナビの見た目を全画面で使う。body.tbn-on（旧ダッシュボードの表示中だけ外す。syncDv2Body が placeDashboard / showPage のたびに付け外し）
-  ★ body に付けるクラスを部品のクラス（.tb-new）と同じ名前にしないこと（.tb-new{display:none} が body に効いて画面が消える）
-- .tb-new（tbn-on のとき表示）：≡（スマホだけ。aria-label「メニュー」・toggleSidebar）／タイトル（PAGE_TITLES のまま。長ければ「…」）／
+- 絵文字（スマホ幅だけ隠す）：ボタン・タブ・メニュー項目（.btn / .tab / [role=menuitem] / .nav-btn / .csv-type-btn）の先頭の絵文字を
+  wrapLeadEmoji が .lt-emoji で包む（MutationObserver で描画のたびに）。480px以下は display:none、PCは display:contents で見た目そのまま
+  ★ #page-dashboard の中は触らない（ダッシュボードの絵文字は別の作業でSVGにする）。▶◀（開閉の印）・←・絵文字だけのボタン（✕など）は残す
+- 新ダッシュボードの上部ナビの見た目を全画面で使う。body.bs-nav2（旧ダッシュボードの表示中だけ外す。syncDv2Body が placeDashboard / showPage のたびに付け外し）
+  ★ body に付ける状態クラスは、接頭辞 bs-（body state）の専用名にする（例 bs-nav2）。部品・画面のクラスと同じ名前は使わない
+    （衝突は2回起きた：.dash-v2 の中の .main がアプリの外枠 .main と衝突／body に tb-new を付けて .tb-new{display:none} が body に効き画面が消えた）
+    ※ dv2-on は規則より前に作ったもの（そのまま使っている）
+- .tb-new（bs-nav2 のとき表示）：≡（スマホだけ。aria-label「メニュー」・toggleSidebar）／タイトル（PAGE_TITLES のまま。長ければ「…」）／
   同期の状態 #tb-sync／ロック #tb-lock（開いた鍵の線画。logout()＝確認のあとログアウト）
   .tb-v2（dv2-on のときだけ）：ベル・アバター・スクロール後の月チップ（新ダッシュボード固有。変更なし）
 - 同期の状態は setSyncStatus がそのまま決める（判定は変えていない）。#tb-sync に is-ok／is-sync／is-off／is-err を付けるだけ：
