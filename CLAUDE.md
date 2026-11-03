@@ -981,22 +981,12 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   円形アバター rinko-{wink,smile,think}-avatar-112.webp / -224.webp。画面は44pxで表示し、srcset で 1x＝112・2x＝224（拡大はしない）
   ★「真剣」の表情は使わない・作らない。名札は空白のまま
 - デプロイ（.github/workflows/deploy.yml）は index.html に加えて images/ も _site に入れる
-- 判定は変えない。既存の結果から表情と一言を選ぶだけ（@dash-rules の rinkoForCondition / rinkoForHighlights）
-  | 経営コンディション（dashCondition の level） | 表情 | 一言 |
-  | good（順調です） | ウインク | good |
-  | caution（目標より少し遅れています） | 考える | check |
-  | warn（資金繰りに注意・入金の確認が必要・目標より遅れています）＝重大 | 画像なし | なし（既存の文字だけ） |
-  | none（判定材料が不足）・データあり | 考える | check |
-  | none・データなし（案件も収支も0件）＝空の状態 | 考える | empty |
-  ハイライトは1件以上のときだけ笑顔＋highlight。★ 悪い知らせにウインク・笑顔は使わない
-- 置き場所は最大2つ：①経営コンディションのカード（アイコンの代わりに44pxのアバター。段階のアイコンは右下の小さな印に）／
-  ②今月のハイライト（見出しの下に1行）。③空の状態は①の中に出す（①と同時には出ない）
-- 一言は RINKO_PHRASES（PC。です・ます、1行40文字以内、決まった数字を書かない）と RINKO_PHRASES_SHORT（スマホ。全角18字以内）。
-  {名前} で実データを差し込める（rinkoPhrase(key,vars,short)）。rinkoLine が両方を書き、639px以下は短い文を1行（折り返さない）で出す
-- ★ カードの高さを増やさない：経営コンディションはアバター（44px）をタイトルの行の中（アイコンの位置）に置き、一言はその下の1行（18px）だけ。
-  一言は「判定の根拠」の下まで使う（grid の2〜3列）。ハイライトは見出しの横に32pxのアバター＋一言1行
-  実測（375px。画像なし→あり）：順調 71→89／少し遅れ 97→115／重大 71→71（画像なし）／空の状態 97→115。どれも +18px（目標は +20px 以内）
-  ハイライト 197→228。320px でも同じ（重大はタイトルが折り返して 97→97）
+- 判定は変えない。既存の結果から表情と一言を選ぶだけ（@dash-rules の rinkoForCondition(level,hasData,key) / rinkoForHighlights）
+- 表情は RINKO_FACE_BY_LEVEL（2026-11-03〜）：good（順調）＝ウインク／caution（少し遅れ）・warn（資金繰り・入金遅延・遅れ＝重大）・none＝考える。
+  ハイライト・祝福＝笑顔。★ 悪い知らせにウインク・笑顔は使わない（重大でも画像を出し、表情は考える）
+- 一言は RINKO_PHRASES（編集できる）。キーは cash／overdue／good／behind（少し遅れ・遅れ）／none（目標未設定）／empty（データなし）／highlight／celebrate。
+  です・ます、1〜2行（改行 \n で区切る）・各40字以内。{件数}{金額}{差}{地点}{あと}{不足} に実データを差し込む（renderDv2Condition が値を渡す）。
+  値が無い行は出さない（rinkoPhrase。架空の値で埋めない）。「今月の」は使わない。スマホ用の短い文（RINKO_PHRASES_SHORT）はやめた（1〜2行で折り返す）
 - 設定ページ「🙋 ダッシュボードの案内役」の「凛子を表示する」。localStorage の bizapp_rinko_v1（'0' だけオフ。未設定・読めないときはオン）
   オフでも経営コンディションの文字はそのまま
 - 画像は alt=""（装飾）。一言は普通の文字。フェードインは表情ごとに最初の1回だけ（rinkoFaded）、動きを減らす設定ではなし

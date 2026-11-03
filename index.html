@@ -324,16 +324,12 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 .rinko-av.is-fade img{animation:rinko-in 300ms ease-out 1 both}
 .dash-v2 .rinko-badge{position:absolute;right:-3px;bottom:-3px;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:10px;font-weight:700;color:#fff;background:var(--lv);box-shadow:0 0 0 2px var(--ui-surface,#fff)}
-/* 一言は1行（行の高さ18px）。アバターはタイトルの行の中（経営コンディション）／見出しの横（ハイライト）に置き、行を増やさない。
-   一言は判定の根拠のボタンの下まで使う（grid の2〜3列）。スマホ（639px以下）は短い文（.rk-short）で折り返さない */
+/* 一言は1〜2行（行の高さ18px。折り返してよい）。アバターはタイトルの行の中（経営コンディション）／見出しの横（ハイライト）に置く。
+   一言は判定の根拠のボタンの下まで使う（grid の2〜3列） */
 .dash-v2 .dv2-cond.has-rinko .dv2-cond-main{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 10px;align-items:center}
 .dash-v2 .dv2-cond.has-rinko .rinko-line{grid-column:2/4}
 .dash-v2 .rinko-line{margin:0;font-size:13px;line-height:18px;color:var(--ui-muted-strong);overflow-wrap:anywhere}
-.dash-v2 .rinko-line .rk-short{display:none}
-@media(max-width:639px){
-  .dash-v2 .rinko-line{white-space:nowrap}
-  .dash-v2 .rinko-line .rk-long{display:none}.dash-v2 .rinko-line .rk-short{display:inline}
-}
+.dash-v2 .rinko-line .rk-l{display:block}
 .dash-v2 .dv2-hl .dv2-hl-title{display:flex;align-items:center;gap:8px;min-width:0}
 .dash-v2 .dv2-hl .rinko-av,.dash-v2 .dv2-hl .rinko-av img{width:32px;height:32px}
 .dash-v2 .dv2-hl .rinko-av{background:rgba(255,255,255,.9)}
@@ -13414,36 +13410,37 @@ function dashHighlights(x){
 }
 
 /* 朝日凛子（ダッシュボードの案内役）。数字・判定は変えない。既存の経営コンディションとハイライトの結果から表情と一言を選ぶだけ
-   一言は です・ます、1行40文字以内。{名前} の形で実データを差し込める（rinkoPhrase）。決まった数字は書かない
-   表情：順調＝ウインク／要確認・注意＝考える／重大（赤）＝画像なし・既存の文字だけ／ハイライト＝笑顔／データなし＝考える
-   ★ 悪い知らせにウインク・笑顔は使わない。「真剣」の表情は使わない */
+   表情は RINKO_FACE_BY_LEVEL（経営コンディションの段階ごと）：順調＝ウインク／注意（caution）・重大（warn）・判定材料不足＝考える。ハイライト・祝福＝笑顔
+   ★ 悪い知らせにウインク・笑顔は使わない。「真剣」の表情は使わない
+   一言は RINKO_PHRASES（編集できる）。です・ます、1〜2行（改行 \n で区切る）・各40字以内。{名前} に実データを差し込む（決まった数字は書かない）
+   差し込む値が無い行は出さない（rinkoPhrase） */
+const RINKO_FACE_BY_LEVEL={good:'wink',caution:'think',warn:'think',none:'think'};
 const RINKO_PHRASES={
-  good:'今月も順調です。この調子でいきましょう。',
-  check:'確認したい点が、あります。下の項目を見てみましょう。',
-  highlight:'今月の達成です。おつかれさまでした。',
-  empty:'まだデータがありません。入力すると、ここに表示されます。'
-};
-// スマホ（639px以下）で使う短い文。1行に収める（全角18字以内）。キーは RINKO_PHRASES と同じ
-const RINKO_PHRASES_SHORT={
-  good:'今月も順調です。',
-  check:'確認したい点があります。',
-  highlight:'今月の達成です。',
-  empty:'まだデータがありません。'
+  cash:'30日以内の出金予定が、残高を{不足}上回っています。\n入出金の予定を確認しましょう。',
+  overdue:'入金の確認が必要な案件が{件数}件あります。\n合計は{金額}です。',
+  good:'確定の達成率が、期の経過より{差}pt先を進んでいます。\nこの調子でいきましょう。',
+  behind:'確定の達成率が、期の経過より{差}pt遅れています。\n次の{地点}%まで、あと{あと}です。',
+  none:'期の売上目標を入れると、進み具合を判定できます。',
+  empty:'まだデータがありません。入力すると、ここに表示されます。',
+  highlight:'{件数}件の成果がありました。おつかれさまでした。',
+  celebrate:'確定で売上目標の{地点}%に到達しました。'
 };
 const RINKO_FACES=['wink','smile','think'];
-// 経営コンディションの段階（dashCondition の level）→ 表情と一言。重大（warn）と不明な段階は null（画像も一言も出さない）
-function rinkoForCondition(level,hasData){
-  if(level==='good')return{face:'wink',phrase:'good'};
-  if(level==='caution')return{face:'think',phrase:'check'};
-  if(level==='none')return{face:'think',phrase:hasData?'check':'empty'};
-  return null;
+/* 経営コンディション（dashCondition の level と key）→ 表情と一言のキー。key：cash／overdue／pace／none
+   pace は順調なら good、少し遅れ・遅れは behind。none は、データがあれば none（目標未設定）、無ければ empty */
+function rinkoForCondition(level,hasData,key){
+  const face=RINKO_FACE_BY_LEVEL[level];
+  if(!face)return null;
+  const k=key||(level==='none'?'none':'pace');
+  const phrase=k==='cash'?'cash':k==='overdue'?'overdue':k==='pace'?(level==='good'?'good':'behind'):(hasData?'none':'empty');
+  return{face,phrase};
 }
 // ハイライト：1件以上のときだけ笑顔
 function rinkoForHighlights(count){return count>0?{face:'smile',phrase:'highlight'}:null;}
-// 一言に実データを差し込む（{名前} → vars の値。無い名前はそのまま）
-function rinkoPhrase(key,vars,short){
-  const t=(short?RINKO_PHRASES_SHORT[key]:RINKO_PHRASES[key])||'';
-  return t.replace(/\{([^{}]+)\}/g,(m,k)=>vars&&vars[k]!==undefined&&vars[k]!==null?String(vars[k]):m);
+// 一言に実データを差し込む（{名前} → vars の値）。返り値は行の配列。値の無い {名前} が残る行は出さない
+function rinkoPhrase(key,vars){
+  return String(RINKO_PHRASES[key]||'').split('\n').map(t=>t.replace(/\{([^{}]+)\}/g,(m,k)=>vars&&vars[k]!==undefined&&vars[k]!==null&&vars[k]!==''?String(vars[k]):m))
+    .filter(t=>t&&!/\{[^{}]+\}/.test(t));
 }
 // 表示のオン・オフ（localStorage の値。'0' だけオフ。未設定・読めないときはオン）
 function rinkoEnabled(stored){return stored!=='0';}
@@ -13708,21 +13705,24 @@ function rinkoAvatar(face,badge){
   const a=rinkoAvatarSrc(face),fade=!rinkoFaded[face]&&!dv2ReducedMotion();rinkoFaded[face]=true;
   return`<span class="rinko-av${fade?' is-fade':''}" data-face="${face}"><img src="${a.src}" srcset="${a.srcset}" width="44" height="44" alt="" decoding="async" onerror="this.style.visibility='hidden'">${badge?`<span class="rinko-badge" aria-hidden="true">${badge}</span>`:''}</span>`;
 }
-// 一言の文字（PCは長い文、スマホは短い文。CSSで出し分ける）
-function rinkoLine(key){return`<p class="rinko-line"><span class="rk-long">${escAttr(rinkoPhrase(key))}</span><span class="rk-short">${escAttr(rinkoPhrase(key,null,true))}</span></p>`;}
+// 一言の文字（1〜2行。実データを差し込む）
+function rinkoLine(key,vars){return`<p class="rinko-line">${rinkoPhrase(key,vars).map(t=>`<span class="rk-l">${escAttr(t)}</span>`).join('')}</p>`;}
 function dv2HasData(){return !!((S.projects&&S.projects.length)||(S.ledger&&S.ledger.length));}
 
 // 経営コンディション
 function renderDv2Condition(D){
   const c=dashCondition({cash:D.cash,outSoon:D.outSoon,overdue:D.od.length,rate:D.rate,elapsed:D.elapsedRate});
   const el=document.getElementById('dv2-cond');
-  const rk=rinkoOn()?rinkoForCondition(c.level,dv2HasData()):null;
+  const rk=rinkoOn()?rinkoForCondition(c.level,dv2HasData(),c.key):null;
+  const nx=D.split?nextMilestone(D.rate,D.split.confirmed,D.target):null;
+  const rv={不足:D.cash!==null?dv2Yen(D.outSoon.total-D.cash):'',件数:D.od.length,金額:dv2Yen(D.overdueTotal),
+    差:c.diff===null||c.diff===undefined?'':Math.abs(c.diff).toFixed(1),地点:nx?nx.p:'',あと:nx?dv2Yen(nx.left):''};
   el.className='dv2-card dv2-cond lv-'+c.level+(rk?' has-rinko':'');
   el.dataset.key=c.key;
   el.dataset.rinko=rk?rk.face:'';
   el.innerHTML=`<div class="dv2-cond-main">${rk?rinkoAvatar(rk.face,c.icon):`<span class="dv2-cond-icon" aria-hidden="true">${c.icon}</span>`}
       <div><div class="dv2-kicker">経営コンディション</div><div class="dv2-cond-title">${c.title}</div></div>
-      <button class="dv2-link dv2-tap" onclick="dv2Toggle('cond')" aria-expanded="${!!dv2Open.cond}">判定の根拠 ${dv2Open.cond?'▲':'▼'}</button>${rk?rinkoLine(rk.phrase):''}</div>
+      <button class="dv2-link dv2-tap" onclick="dv2Toggle('cond')" aria-expanded="${!!dv2Open.cond}">判定の根拠 ${dv2Open.cond?'▲':'▼'}</button>${rk?rinkoLine(rk.phrase,rv):''}</div>
     ${dv2Open.cond?`<div class="dv2-basis"><ol class="dv2-rules">${c.rules.map(r=>`<li class="st-${r.state}"><b>${r.name}</b>
       <span class="dv2-rule-st">${r.state==='hit'?'該当':r.state==='skip'?'判定しない':'該当なし'}</span><br>${escAttr(r.detail)}</li>`).join('')}</ol>
       <div>優先順位：1.資金繰り → 2.入金遅延 → 3.目標ペース（−5pt以上＝順調・−5〜−15pt＝少し遅れ・−15pt未満＝遅れ） → 4.判定材料不足。最初に当てはまる1つを表示</div>
@@ -14026,7 +14026,7 @@ function renderDv2Highlights(D){
   const rk=rinkoOn()?rinkoForHighlights(list.length):null;
   el.dataset.rinko=rk?rk.face:'';
   el.innerHTML=`<div class="dv2-card-head"><div class="dv2-hl-title">${rk?rinkoAvatar(rk.face):''}<h3 class="dv2-h3">今月のハイライト</h3></div><span class="dv2-hl-note">自動判定（AI分析ではありません）</span></div>
-    ${rk?rinkoLine(rk.phrase):''}
+    ${rk?rinkoLine(rk.phrase,{件数:list.length}):''}
     <ul class="dv2-hl-list">${list.map(h=>`<li class="${fresh.indexOf(h.key)>=0?'is-new':''}" data-key="${escAttr(h.key)}"><span class="dv2-hl-icon" aria-hidden="true">${h.icon}</span>${escAttr(h.text)}</li>`).join('')}</ul>`;
 }
 

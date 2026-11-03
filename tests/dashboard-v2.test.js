@@ -25,7 +25,7 @@ globalThis.exported = { dashGreeting, monthOverMonth, dashMilestones, routePoint
   normClientName, newCustomerCount, retentionRate, winRate, ringState,
   heroProgress, msLabelPos, niceAxis, pct, plannedWindow, dashCondition, milestoneCelebration, recordMonth, bigChanges,
   actionItems, dashMissionList, deadlineLabel, dashInsights, paceLevel, nextMilestone, withinDays, overdueZeroRecord, dashHighlights, heroState,
-  RINKO_PHRASES, RINKO_PHRASES_SHORT, RINKO_FACES, rinkoForCondition, rinkoForHighlights, rinkoPhrase, rinkoEnabled, rinkoAvatarSrc };`, app);
+  RINKO_PHRASES, RINKO_FACE_BY_LEVEL, RINKO_FACES, rinkoForCondition, rinkoForHighlights, rinkoPhrase, rinkoEnabled, rinkoAvatarSrc };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -452,31 +452,32 @@ test('fiscalYears の新規顧客目標数・継続率目標・成約率目標�
 
 console.log('朝日凛子（表情・一言・表示の切り替え）');
 
-test('表情の対応：順調＝ウインク／少し遅れ＝考える／重大（赤）＝画像なし／判定材料不足＝考える', () => {
-  const lv = l => A.dashCondition({ cash: null, outSoon: { total: 0, count: 0, until: '' }, overdue: 0, rate: l[0], elapsed: l[1] }).level;
-  assert.strictEqual(lv([50, 50]), 'good');
-  assert.deepStrictEqual(plain(A.rinkoForCondition('good', true)), { face: 'wink', phrase: 'good' });
-  assert.strictEqual(lv([40, 50]), 'caution');
-  assert.deepStrictEqual(plain(A.rinkoForCondition('caution', true)), { face: 'think', phrase: 'check' });
-  assert.strictEqual(lv([20, 50]), 'warn');
-  assert.strictEqual(A.rinkoForCondition('warn', true), null);
-  assert.deepStrictEqual(plain(A.rinkoForCondition('none', true)), { face: 'think', phrase: 'check' });
-  assert.deepStrictEqual(plain(A.rinkoForCondition('none', false)), { face: 'think', phrase: 'empty' });
+test('表情の割り当て（RINKO_FACE_BY_LEVEL）：順調＝ウインク／注意＝考える／重大＝考える／判定材料不足＝考える', () => {
+  assert.deepStrictEqual(plain(A.RINKO_FACE_BY_LEVEL), { good: 'wink', caution: 'think', warn: 'think', none: 'think' });
+  const lv = l => A.dashCondition({ cash: null, outSoon: { total: 0, count: 0, until: '' }, overdue: 0, rate: l[0], elapsed: l[1] });
+  const c1 = lv([50, 50]); assert.strictEqual(c1.level, 'good');
+  assert.deepStrictEqual(plain(A.rinkoForCondition(c1.level, true, c1.key)), { face: 'wink', phrase: 'good' });
+  const c2 = lv([40, 50]); assert.strictEqual(c2.level, 'caution');
+  assert.deepStrictEqual(plain(A.rinkoForCondition(c2.level, true, c2.key)), { face: 'think', phrase: 'behind' });
+  const c3 = lv([20, 50]); assert.strictEqual(c3.level, 'warn');
+  assert.deepStrictEqual(plain(A.rinkoForCondition(c3.level, true, c3.key)), { face: 'think', phrase: 'behind' });
+  assert.deepStrictEqual(plain(A.rinkoForCondition('none', true, 'none')), { face: 'think', phrase: 'none' });
+  assert.deepStrictEqual(plain(A.rinkoForCondition('none', false, 'none')), { face: 'think', phrase: 'empty' });
   assert.strictEqual(A.rinkoForCondition('unknown', true), null);
 });
 
-test('悪い知らせ（資金繰り・入金遅延・遅れ）にはウインク・笑顔を使わない（重大は画像も出さない）', () => {
+test('悪い知らせ（資金繰り・入金遅延・遅れ）は考える。ウインク・笑顔を使わない。一言は判定の種類に合わせる', () => {
   const base = { cash: null, outSoon: { total: 0, count: 0, until: '' }, overdue: 0, rate: 50, elapsed: 50 };
-  const cases = [Object.assign({}, base, { cash: 100, outSoon: { total: 500, count: 1, until: '' } }),
-    Object.assign({}, base, { overdue: 2 }), Object.assign({}, base, { rate: 10 })];
-  cases.forEach(x => {
+  const cases = [[Object.assign({}, base, { cash: 100, outSoon: { total: 500, count: 1, until: '' } }), 'cash'],
+    [Object.assign({}, base, { overdue: 2 }), 'overdue'], [Object.assign({}, base, { rate: 10 }), 'behind']];
+  cases.forEach(([x, phrase]) => {
     const c = A.dashCondition(x);
     assert.strictEqual(c.level, 'warn');
-    assert.strictEqual(A.rinkoForCondition(c.level, true), null);
+    assert.deepStrictEqual(plain(A.rinkoForCondition(c.level, true, c.key)), { face: 'think', phrase });
   });
   ['caution', 'warn', 'none'].forEach(l => [true, false].forEach(d => {
     const r = A.rinkoForCondition(l, d);
-    assert(!r || (r.face !== 'wink' && r.face !== 'smile'), l);
+    assert(r && r.face !== 'wink' && r.face !== 'smile', l);
   }));
 });
 
@@ -485,27 +486,24 @@ test('ハイライト：1件以上のときだけ笑顔。0件は出さない', 
   assert.strictEqual(A.rinkoForHighlights(0), null);
 });
 
-test('一言：です・ます、1行40文字以内、決まった数字を含まない。実データを差し込める', () => {
+test('一言：です・ます、1〜2行・各40字以内（長い実データを入れても）、決まった数字を書かない、「今月の」を使わない', () => {
+  const big = { 不足: '¥12,345,678', 件数: '12', 金額: '¥123,456,789', 差: '45.6', 地点: '75', あと: '¥12,345,678' };
   Object.keys(A.RINKO_PHRASES).forEach(k => {
     const t = A.RINKO_PHRASES[k];
-    assert(t.length <= 40, k + ' が40文字を超えています');
-    assert(/(す|しょう|した)。$/.test(t), k + ' がです・ます調で終わっていません');
-    assert(!/[0-9０-９]/.test(t), k + ' に数字が入っています');
+    assert(!/[0-9０-９]/.test(t.replace(/\{[^{}]+\}/g, '').replace(/30日/, '')), k + ' に決まった数字が入っています');
+    assert(!/今月の/.test(t), k + ' に「今月の」');
+    const lines = A.rinkoPhrase(k, big);
+    assert(lines.length >= 1 && lines.length <= 2, k + ' の行数');
+    lines.forEach(l => {
+      assert(l.length <= 40, k + ' が40文字を超えています：' + l);
+      assert(/(す|しょう|した)。$/.test(l), k + ' がです・ます調で終わっていません：' + l);
+      assert(!/[{}]/.test(l), k + ' に差し込まれていない値');
+    });
   });
-  // スマホの短い文：同じキーがそろっていて、1行（全角18字以内）・です・ます・数字なし
-  assert.deepStrictEqual(Object.keys(A.RINKO_PHRASES_SHORT).sort(), Object.keys(A.RINKO_PHRASES).sort());
-  Object.keys(A.RINKO_PHRASES_SHORT).forEach(k => {
-    const t = A.RINKO_PHRASES_SHORT[k];
-    assert(t.length <= 18, k + ' の短い文が18字を超えています');
-    assert(/(す|しょう|した|ません)。$/.test(t), k + ' の短い文がです・ます調で終わっていません');
-    assert(!/[0-9０-９]/.test(t), k + ' の短い文に数字が入っています');
-    assert.strictEqual(A.rinkoPhrase(k, null, true), t);
-  });
-  assert.strictEqual(A.rinkoPhrase('good'), A.RINKO_PHRASES.good);
-  A.RINKO_PHRASES.test = '{月}も順調です。';
-  assert.strictEqual(A.rinkoPhrase('test', { 月: '11月' }), '11月も順調です。');
-  assert.strictEqual(A.rinkoPhrase('test', {}), '{月}も順調です。');
-  delete A.RINKO_PHRASES.test;
+  assert.deepStrictEqual(plain(A.rinkoPhrase('overdue', { 件数: 4, 金額: '¥440,000' })), ['入金の確認が必要な案件が4件あります。', '合計は¥440,000です。']);
+  // 値が無い行は出さない（架空の値で埋めない）
+  assert.deepStrictEqual(plain(A.rinkoPhrase('behind', { 差: '6.2' })), ['確定の達成率が、期の経過より6.2pt遅れています。']);
+  assert.deepStrictEqual(plain(A.rinkoPhrase('none')), [A.RINKO_PHRASES.none]);
 });
 
 test('表示の切り替え：既定はオン、"0" だけオフ（読めないときもオン）。保存した値を読み直しても同じ', () => {
