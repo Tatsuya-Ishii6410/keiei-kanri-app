@@ -651,6 +651,10 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .uc-row-body{padding:4px 14px 12px;font-size:13px;color:var(--uc-muted)}
 .uc-row-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .uc-row-actions .btn{min-height:44px}
+.uc-row-amt.is-in{color:var(--ui-good-text,#047857)}
+.uc-row[data-plan]>summary{box-shadow:inset 3px 0 0 var(--ui-accent,#3976F6)}
+.uc-row[data-plan=planned_out]>summary{box-shadow:inset 3px 0 0 var(--ui-caution,#F59E0B)}
+.uc-fixed{display:inline-block;font-size:10px;font-weight:700;color:var(--ui-muted,#64748B);border:1px solid var(--ui-border-solid,#E3E7EF);border-radius:6px;padding:0 5px;margin-right:6px;vertical-align:1px}
 .uc-row[open]>summary{background:var(--ui-line,#EEF1F6)}
 .uc-prog{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:8px 0;font-size:13px}
 .uc-prog-track{grid-column:1/-1;height:6px;border-radius:999px;background:var(--ui-line,#EEF1F6);overflow:hidden}
@@ -6505,7 +6509,7 @@ function renderLedger(){
       </div></td>
     </tr>`;
   }).join('');
-  document.getElementById('ledger-cards').innerHTML=rows.map(cfCardHtml).join('');
+  document.getElementById('ledger-cards').innerHTML=rows.length?`<div class="uc-rows ui-scope">${rows.map(cfRowHtml).join('')}</div>`:'';
 }
 
 /* ---- 入力モーダル ---- */
@@ -11553,25 +11557,27 @@ function quoteCardHtml(q,isInvoice,nowYmd){
 
 /* ---- CF管理（キャッシュフロー一覧） ---- */
 
-function cfCardHtml(l){
+// スマホの入出金明細：コンパクトな行（共通部品 ucRow）。タップで補足と操作を展開（操作・削除の確認は従来の関数のまま）
+function cfRowHtml(l){
   const st=ledgerStatusOf(l);
   const inflow=isInflow(l);
-  // 実績は白、入金予定は薄青、出金予定は薄アンバー
-  const bg=st==='planned_in'?'background:var(--blue-bg)'
-    :st==='planned_out'?'background:var(--amber-bg)':'';
-  return mobCard(
-    `<div class="mob-card-header">
-      <span style="font-size:13px">${ledgerDateOf(l)}</span>
-      <span class="badge ${LEDGER_STATES[st].cls}">${LEDGER_STATES[st].label}</span>
-    </div>`
-    +`<div style="margin-bottom:6px">${ledgerBadge(l.type)}</div>`
-    +`<div style="font-size:13px;word-break:break-word">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}${receiptLinkHtml(l)}</div>`
-    +(expenseExtraText(l)?`<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">${escAttr(expenseExtraText(l))}</div>`:'')
-    +(l.memo?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${l.memo}</div>`:'')
-    +`<div class="mob-amount" style="color:${inflow?'var(--green)':'var(--red)'}">${inflow?'入金 ':'出金 '}${fmt(l.amount)}</div>`
-    +mobActions(`${st==='planned_in'?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">✓ 実績に変換</button>`:''}
-      <button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button>
-      <button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button>`),bg);
+  const stLabel=st==='actual'?'実績':st==='planned_in'?'入金予定':'出金予定';
+  const extra=expenseExtraText(l);
+  return ucRow({
+    main:l.desc,
+    sub:ledgerDateOf(l),
+    tagsHtml:`<span class="badge ${LEDGER_STATES[st].cls}">${stLabel}</span>${ledgerBadge(l.type)}`,
+    markHtml:l.fixedCostId?'<span class="uc-fixed" title="固定費から自動追加">固定費</span>':'',
+    amount:l.amount,amountNote:inflow?'入金':'出金',amountClass:inflow?'is-in':'is-out',
+    attrs:` data-ledger-id="${l.id}"${st!=='actual'?` data-plan="${st}"`:''}`,
+    bodyHtml:`<div>${escAttr(ledgerDateOf(l))}・${escAttr(l.type)}・${stLabel}</div>`
+      +`<div style="word-break:break-word">${escAttr(l.desc)}${receiptLinkHtml(l)}</div>`
+      +(extra?`<div>${escAttr(extra)}</div>`:'')
+      +(l.memo?`<div>${escAttr(l.memo)}</div>`:''),
+    actionsHtml:`${st==='planned_in'?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">実績に変換</button>`:''}`
+      +`<button class="btn sm" onclick="openLedgerModal(${l.id})">編集</button>`
+      +`<button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button>`
+  });
 }
 
 /* ---- CF管理（計画 vs 実績） ---- */

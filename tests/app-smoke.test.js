@@ -246,6 +246,26 @@ const SCENARIO = String.raw`(async () => {
     }
   });
   await step('CF管理', async () => { nav('ledger'); switchCfTab('cf', document.querySelector('[onclick*="switchCfTab(\'cf\'"]')); });
+  await step('CF管理：スマホの明細の行（展開・操作・削除の確認）', async () => {
+    change('ledger-month', '');
+    const rowsEl = [...document.querySelectorAll('#ledger-cards .uc-row')];
+    ok(rowsEl.length === cashflowRows(null).length, '明細の行の数が一覧と違う：' + rowsEl.length);
+    const r = document.querySelector('#ledger-cards .uc-row[data-ledger-id="106"]');
+    ok(r && r.querySelector('summary'), '入金予定の行がない');
+    if (!r) return;
+    r.querySelector('summary').click();
+    ok(r.open, 'タップで展開されない');
+    const btn = t => [...r.querySelectorAll('.uc-row-actions button')].find(b => b.textContent.trim() === t);
+    ok(btn('実績に変換') && btn('編集') && btn('削除'), '展開に 実績に変換・編集・削除 がない');
+    btn('編集').click();
+    ok(document.getElementById('modal-add-ledger').classList.contains('open'), '編集が開かない');
+    closeModal('modal-add-ledger');
+    const n0 = S.ledger.length, conf = window.confirm; let asked = false;
+    window.confirm = () => { asked = true; return false; };
+    btn('削除').click();
+    window.confirm = conf;
+    ok(asked && S.ledger.length === n0, '削除の確認が出ない、または確認で取り消しても消えた');
+  });
   await step('ドライブから取込', async () => {
     openDriveImportModal(); await wait(200);
     document.getElementById('drive-load-btn').click(); await wait(400);
