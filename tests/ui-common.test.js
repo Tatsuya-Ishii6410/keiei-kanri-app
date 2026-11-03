@@ -56,4 +56,23 @@ test('ヒーロー：負の値は is-neg（#DC2626）、アイコンは線画SVG
   assert(A.ucIcon('wallet').startsWith('<svg') && A.ucIcon('none') === '');
 });
 
+test('KPI：絞り込み処理を渡した時だけボタン（無い機能を動くように見せない）', () => {
+  const plain = A.ucKpis([{ label: '実績入金', value: '¥1' }]);
+  assert(!plain.includes('<button') && !plain.includes('is-link'));
+  const link = A.ucKpis([{ label: '実績入金', value: '¥1', onclickJs: 'f("a")' }]);
+  assert(link.includes('<button type="button" class="uc-kpi is-link"') && link.includes('f(&quot;a&quot;)'));
+});
+test('明細の行：種別・予定/実績のバッジ（tagsHtml）を補助の行に出す', () => {
+  const r = A.ucRow({ main: '摘要', sub: '5/1', amount: 1000, tagsHtml: '<span class="badge badge-blue">予定</span>' });
+  assert(r.includes('<span class="uc-row-sub"><span class="badge badge-blue">予定</span>5/1</span>'));
+});
+test('カウントアップ：初回・前の値が無い時は、すぐ最終値（入力や更新を待たせない）', () => {
+  app.document = { hidden: false };
+  vm.runInContext(fnSource('ucCountUp') + '\nglobalThis.cu = ucCountUp;', app);
+  const el = { dataset: {}, textContent: '' };
+  app.cu(el, 12345);
+  assert.strictEqual(el.textContent, '¥12,345');
+  assert.strictEqual(el.dataset.ucV, '12345');
+});
+
 console.log(`\n${passed}件 成功`);

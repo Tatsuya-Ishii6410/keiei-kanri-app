@@ -610,46 +610,55 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .app-toast.show{opacity:1;transform:translate(-50%,0)}
 @media (prefers-reduced-motion:reduce){.app-toast{transition:none}}
 /* ===== UI改修の共通部品（uc-）：ヒーロー／KPI 2列／明細の行／進捗行／バッジ／差額（docs/ui-revamp.md） ===== */
-.uc-hero{background:var(--bg-primary);border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(16,24,40,.05)}
-.uc-hero-label{font-size:13px;color:var(--text-secondary);font-weight:600}
+/* 色は指示書の「共通ビジュアル」＝ .ui-scope の --ui-* を使う（無い所では括弧内の同じ値）。角丸16px・淡い影 */
+.uc-hero,.uc-kpi,.uc-rows{--uc-text:var(--ui-text,#17233D);--uc-muted:var(--ui-muted,#64748B);--uc-accent:var(--ui-accent,#3976F6);--uc-line:var(--ui-border-solid,#E3E7EF)}
+.uc-hero{background:linear-gradient(135deg,#FFFFFF 0%,var(--ui-tint-blue,#EEF3FF) 100%);border:1px solid var(--uc-line);border-radius:20px;padding:18px 20px;margin-bottom:16px;box-shadow:0 6px 20px rgba(23,35,61,.08);color:var(--uc-text)}
+.uc-hero-label{font-size:13px;color:var(--uc-muted);font-weight:600}
 .uc-hero-value{font-size:32px;font-weight:800;line-height:1.2;margin:4px 0 2px;font-variant-numeric:tabular-nums;word-break:break-all}
 .uc-hero-value.is-neg{color:#DC2626}
-.uc-hero-sub{font-size:12px;color:var(--text-secondary)}
-.uc-bar{position:relative;height:10px;border-radius:999px;background:var(--gray-bg);margin:12px 0 6px;overflow:hidden}
-.uc-bar>span{position:absolute;top:0;bottom:0;border-radius:999px}
+.uc-hero-sub{font-size:12px;color:var(--uc-muted)}
+.uc-bar{position:relative;height:10px;border-radius:999px;background:var(--ui-line,#EEF1F6);margin:12px 0 6px;overflow:hidden}
+.uc-bar>span{position:absolute;top:0;bottom:0;border-radius:999px;transition:width .3s ease,left .3s ease}
 .uc-bar .uc-bar-base{left:0;background:#94A3B8}
-.uc-bar .uc-bar-up{background:#2563EB}
+.uc-bar .uc-bar-up{background:var(--uc-accent)}
 .uc-bar .uc-bar-down{background:repeating-linear-gradient(45deg,#94A3B8 0 4px,#CBD5E1 4px 8px)}
-.uc-bar-legend{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums}
-.uc-more>summary{list-style:none;cursor:pointer;min-height:44px;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--blue-text);font-weight:600}
+.uc-bar-legend{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--uc-muted);font-variant-numeric:tabular-nums}
+.uc-more>summary{list-style:none;cursor:pointer;min-height:44px;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ui-accent-text,#2557D6);font-weight:600}
 .uc-more>summary::-webkit-details-marker,.uc-row>summary::-webkit-details-marker{display:none}
 .uc-more dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0 0 4px;font-size:13px}
 .uc-more dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
 .uc-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:16px}
 @media (min-width:1024px){.uc-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
-.uc-kpi{background:var(--bg-primary);border:1px solid var(--border);border-radius:12px;padding:12px 14px;min-width:0}
-.uc-kpi-label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);font-weight:600}
-.uc-kpi-label svg{flex:none;color:var(--text-muted)}
+.uc-kpi{background:#FFFFFF;border:1px solid var(--uc-line);border-radius:16px;padding:12px 14px;min-width:0;color:var(--uc-text);box-shadow:0 1px 3px rgba(23,35,61,.05)}
+.uc-kpi-label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--uc-muted);font-weight:600}
+.uc-kpi-label svg{flex:none;color:var(--uc-accent)}
 .uc-kpi-value{font-size:20px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.uc-rows{border:1px solid var(--border);border-radius:12px;background:var(--bg-primary);overflow:hidden}
-.uc-row+.uc-row{border-top:1px solid var(--border)}
-.uc-row>summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;min-height:44px;padding:8px 14px}
-.uc-row>summary:focus-visible{outline:2px solid #2563EB;outline-offset:-2px}
+.uc-kpi.is-link{cursor:pointer;min-height:44px;transition:transform .15s ease,box-shadow .15s ease}
+.uc-kpi.is-link:active{transform:scale(.98)}
+.uc-kpi.is-link:focus-visible{outline:2px solid var(--uc-accent);outline-offset:2px}
+.uc-rows{border:1px solid var(--uc-line);border-radius:16px;background:#FFFFFF;overflow:hidden;color:var(--uc-text)}
+.uc-row+.uc-row{border-top:1px solid var(--uc-line)}
+.uc-row>summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;min-height:44px;padding:8px 14px;transition:background-color .15s ease}
+.uc-row>summary:active{background:var(--ui-line,#EEF1F6)}
+.uc-row>summary:focus-visible{outline:2px solid var(--uc-accent);outline-offset:-2px}
 .uc-row-main{font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.uc-row-sub{grid-column:1;font-size:12px;color:var(--text-secondary);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uc-row-sub{grid-column:1;font-size:12px;color:var(--uc-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uc-row-sub .badge,.uc-row-sub .uc-badge-alert{padding:1px 7px;margin-right:4px;vertical-align:1px}
+.uc-row[open] .uc-row-body,.uc-more[open]>:not(summary){animation:uc-open .2s ease}
+@keyframes uc-open{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 .uc-row-amt{grid-row:1/span 2;grid-column:2;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .uc-row-amt small{display:block;font-weight:500;font-size:11px}
-.uc-row-body{padding:4px 14px 12px;font-size:13px;color:var(--text-secondary)}
+.uc-row-body{padding:4px 14px 12px;font-size:13px;color:var(--uc-muted)}
 .uc-row-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .uc-row-actions .btn{min-height:44px}
-.uc-row[open]>summary{background:var(--gray-bg)}
+.uc-row[open]>summary{background:var(--ui-line,#EEF1F6)}
 .uc-prog{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:8px 0;font-size:13px}
-.uc-prog-track{grid-column:1/-1;height:6px;border-radius:999px;background:var(--gray-bg);overflow:hidden}
-.uc-prog-track>span{display:block;height:100%;background:#2563EB;border-radius:999px}
+.uc-prog-track{grid-column:1/-1;height:6px;border-radius:999px;background:var(--ui-line,#EEF1F6);overflow:hidden}
+.uc-prog-track>span{display:block;height:100%;background:var(--ui-accent,#3976F6);border-radius:999px;transition:width .3s ease}
 .uc-badge-alert{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;color:#DC2626;background:#FEF2F2;border:1px solid #FECACA;white-space:nowrap}
 .uc-diff{color:var(--text-secondary);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 @media (max-width:480px){.uc-hero{padding:14px 16px}.uc-hero-value{font-size:28px}.uc-kpi-value{font-size:17px}}
-@media (prefers-reduced-motion:reduce){.uc-bar>span,.uc-prog-track>span{transition:none}}
+@media (prefers-reduced-motion:reduce){.uc-bar>span,.uc-prog-track>span,.uc-kpi.is-link,.uc-row>summary{transition:none}.uc-kpi.is-link:active{transform:none}.uc-row[open] .uc-row-body,.uc-more[open]>:not(summary){animation:none}}
 .inv-pend{list-style:none;margin:0 0 12px;padding:0;border:0.5px solid var(--border);border-radius:var(--radius-md)}
 .inv-pend li{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:10px;border-bottom:0.5px solid var(--border)}
 .inv-pend li:last-child{border-bottom:0}
@@ -4065,10 +4074,31 @@ function ucDiff(actual,plan){
   const pct=plan?`（${Math.round(d/Math.abs(plan)*100)}%）`:'';
   return`<span class="uc-diff">${mark}${fmt(Math.abs(d))}${pct}</span>`;
 }
-// KPIの2列（PCは4列）。items:[{icon,label,value(文字),valueHtml?}]
+// KPIの2列（PCは4列）。items:[{icon,label,value(文字),valueHtml?,id?,onclickJs?}]
+// onclickJs は「既存の絞り込み処理」がある時だけ渡す（無い機能を動くように見せない）。渡すとボタンになる
 function ucKpis(items){
-  return`<div class="uc-kpis">${items.map(k=>`<div class="uc-kpi"><div class="uc-kpi-label">${k.icon?ucIcon(k.icon,14):''}<span>${escAttr(k.label)}</span></div>`
-    +`<div class="uc-kpi-value"${k.id?` id="${escAttr(k.id)}"`:''}>${k.valueHtml!=null?k.valueHtml:escAttr(k.value)}</div></div>`).join('')}</div>`;
+  return`<div class="uc-kpis">${items.map(k=>{
+    const tag=k.onclickJs?'button':'div';
+    const act=k.onclickJs?` type="button" class="uc-kpi is-link" onclick="${escAttr(k.onclickJs)}"`:' class="uc-kpi"';
+    return`<${tag}${act}><div class="uc-kpi-label">${k.icon?ucIcon(k.icon,14):''}<span>${escAttr(k.label)}</span></div>`
+      +`<div class="uc-kpi-value"${k.id?` id="${escAttr(k.id)}"`:''}>${k.valueHtml!=null?k.valueHtml:escAttr(k.value)}</div></${tag}>`;
+  }).join('')}</div>`;
+}
+// 控えめなカウントアップ（0.4秒）。from が無い初回・reduced-motion・非表示では、すぐ最終値を出す（データ更新や入力を待たせない）
+function ucCountUp(el,to,from){
+  if(!el)return;
+  const f=from!=null?Number(from):Number(el.dataset.ucV);
+  el.dataset.ucV=String(to);
+  const reduce=typeof dv2ReducedMotion==='function'&&dv2ReducedMotion();
+  if(!isFinite(f)||f===to||reduce||document.hidden||typeof requestAnimationFrame!=='function'){el.textContent=fmt(to);return;}
+  const t0=performance.now();
+  const step=t=>{
+    if(el.dataset.ucV!==String(to))return;   // 途中で新しい値が来たら、古い動きはやめる
+    const k=Math.min(1,(t-t0)/400);
+    el.textContent=fmt(k<1?f+(to-f)*(1-Math.pow(1-k,3)):to);
+    if(k<1)requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 // 横棒（基準→結果）。基準と結果の大きい方を全幅にする。負の値は 0 として描く（数字は凡例にそのまま出す）
 function ucBar(base,result,baseLabel,resultLabel){
@@ -4093,12 +4123,12 @@ function ucHero(o){
     +(o.barHtml||'')+(o.moreHtml||'')+`</div>`;
 }
 // コンパクトな明細の行（台帳の1行：入出金明細・交通費で共通）。タップで展開
-// o:{main,sub,amount(数),amountClass?,amountNote?,markHtml?,bodyHtml?,actionsHtml?,attrs?}
+// o:{main,sub,amount(数),amountClass?,amountNote?,markHtml?,tagsHtml?(種別・予定/実績のバッジ),bodyHtml?,actionsHtml?,attrs?}
 function ucRow(o){
   return`<details class="uc-row"${o.attrs||''}><summary>`
     +`<span class="uc-row-main">${o.markHtml||''}${escAttr(o.main)}</span>`
     +`<span class="uc-row-amt${o.amountClass?' '+o.amountClass:''}">${fmt(o.amount)}${o.amountNote?`<small>${escAttr(o.amountNote)}</small>`:''}</span>`
-    +`<span class="uc-row-sub">${escAttr(o.sub||'')}</span></summary>`
+    +`<span class="uc-row-sub">${o.tagsHtml||''}${escAttr(o.sub||'')}</span></summary>`
     +`<div class="uc-row-body">${o.bodyHtml||''}${o.actionsHtml?`<div class="uc-row-actions">${o.actionsHtml}</div>`:''}</div></details>`;
 }
 // 項目別の進捗行。max が 0 以下ならバーは 0%（ゼロ除算を出さない）
