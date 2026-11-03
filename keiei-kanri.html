@@ -396,7 +396,7 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 .dv2-kpi{position:relative;padding:12px;cursor:pointer;transition:transform 120ms ease}
 .dash-v2 .dv2-kpi:active{transform:scale(.98)}
 .dash-v2 .dv2-kpi:focus-visible{outline:2px solid var(--ui-accent);outline-offset:2px}
-.dash-v2 .dv2-kpi.tint-blue{background:var(--ui-tint-blue)}.dash-v2 .dv2-kpi.tint-purple{background:var(--ui-tint-purple)}
+.dash-v2 .dv2-kpi{background:var(--ui-bg);display:flex;flex-direction:column}
 .dash-v2 .dv2-kpi .dv2-note,.dash-v2 .dv2-kpi .dv2-delta.none{color:var(--ui-muted-strong)}
 .dash-v2 .dv2-kpi-top{display:flex;align-items:center;gap:6px;padding-right:30px;min-height:24px}
 .dash-v2 .dv2-kpi-icon{width:24px;height:24px;flex:none;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--ui-bg);color:var(--ui-accent-text)}
@@ -405,7 +405,8 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 .dv2-kpi-val{font-size:22px;line-height:1.2;margin:6px 0 2px;white-space:normal;overflow-wrap:anywhere}
 .dash-v2 .dv2-kpi-val.fit-1{font-size:20px}.dash-v2 .dv2-kpi-val.fit-2{font-size:18px}.dash-v2 .dv2-kpi-val.fit-3{font-size:16px}
 .dash-v2 .dv2-kpi-val.is-null{font-size:14px;color:var(--ui-muted-strong)}
-.dash-v2 .dv2-kpi-sub{min-height:18px}
+.dash-v2 .dv2-kpi-sub{min-height:18px;font-size:12px;color:var(--ui-muted-strong);overflow-wrap:anywhere}
+.dash-v2 .dv2-kpi .dv2-basis .dv2-sparkline{display:block;width:100%;margin-top:4px}
 .dash-v2 .dv2-kpi-big2{display:flex;align-items:baseline;gap:6px;margin-bottom:2px}
 .dash-v2 .dv2-kpi-big2 b{font-size:18px;color:var(--ui-text)}
 .dash-v2 .dv2-ring-wrap{position:relative;width:84px;height:84px;margin:4px auto 0}
@@ -13978,7 +13979,10 @@ function dv2Ring(rate,landing,level){
     <circle cx="38" cy="38" r="26" class="fg" stroke-dasharray="${(C1*r/100).toFixed(1)} ${C1.toFixed(1)}" transform="rotate(-90 38 38)"/>${land}</svg>`;
 }
 
-// KPIカード（2列。カードごとに役割に合った見せ方。淡い色は青と紫を交互）
+/* KPIカード（2列×2段。構造をそろえる：指標名／大きな数値／補足1行。長い説明はⓘの中）
+   月間売上・営業利益・現預金残高・月次締め。★ 達成率のリングのカードはトップから外した（確定達成率・着地見込みは山のカード。dv2Ring は使わないだけで残す）
+   前月比は中立の色（補足のグレー）＋▲▼と数字。背景は白。赤は警告（入金遅延・同期エラー・要確認）だけに使う */
+function dv2Mom(d){return d===null||d===undefined?'前月比 比較なし':d===0?'前月比 ±0.0%（横ばい）':`前月比 ${d>0?'▲':'▼'}${Math.abs(d).toFixed(1)}%`;}
 function renderDv2Kpis(D){
   const el=document.getElementById('dv2-kpis');
   const nums=[5,4,3,2,1,0].map(i=>dashMonthNumbers(D.abs-i));
@@ -13986,39 +13990,35 @@ function renderDv2Kpis(D){
   const mom=monthOverMonth(D.month.sales,D.prev.sales);
   const pmom=D.prev.profit!==0?Math.round((D.month.profit-D.prev.profit)/Math.abs(D.prev.profit)*1000)/10:null;
   const margin=D.month.sales>0?D.month.profit/D.month.sales*100:null;
-  // 対象月が当月なら、経費は入力済みの分だけ（月途中）。営業利益の前月比は色と矢印を控えめにする
+  // 対象月が当月なら、経費は入力済みの分だけ（月途中）→ 営業利益は「暫定」
   const mid=D.abs===D.curAbs;
-  const pl=D.rate!==null&&D.elapsedRate!==null?paceLevel(D.rate,D.elapsedRate):null;
-  const rateStatus=D.rate===null?['none','未設定']:D.rate>=100?['good','達成']:pl?[pl.level,pl.label]:['none','判定なし'];
+  // 月次締めの解決率：経営ミッションと同じ（解決＝全体−未解決。全体が0なら100%）
+  const closeOk=D.closeTotal-D.closeOpen,closeRate=D.closeTotal>0?Math.round(closeOk/D.closeTotal*1000)/10:100;
   const cards=[
-    {key:'sales',icon:'¥',label:'月間売上',value:D.month.sales,fmt:'yen',sub:dv2Delta(mom,'前月比'),
-      status:mom===null?['none','比較なし']:mom>0?['good','増加']:mom===0?['none','横ばい']:['warn','減少'],
-      extra:dv2Spark(nums.map(n=>n.sales)),go:"showPage('projects',document.querySelectorAll('.nav-btn')[1])",
-      basis:`${ym}の売上（案件ベース）。詳細指標の「売上」と同じ（salesAtMonth）。前月比は${dv2YmLabel(D.abs-1)}と比較。推移は直近6か月`},
-    {key:'profit',icon:'↗',label:'営業利益',value:D.month.profit,fmt:'yen',
-      sub:`<div class="dv2-kpi-big2"><span class="dv2-note">営業利益率</span> <b class="dv2-num">${margin===null?'－':margin.toFixed(1)+'%'}</b></div>`
-        +dv2Delta(pmom,'前月比',mid)+(mid?'<div class="dv2-note dv2-mid">月途中（経費は入力済みの分のみ）</div>':''),
-      status:mid?['none','月途中']:D.month.profit>=0?['good','黒字']:['warn','赤字'],extra:'',go:"showPage('ledger',document.querySelectorAll('.nav-btn')[3])",
-      basis:`${ym}の営業利益＝売上 −（経費合計＋役員報酬＋税金・公課）。営業利益率＝営業利益÷売上。経費などはCF管理の実績。詳細指標の「営業利益」「営業利益率」と同じ`},
-    {key:'rate',icon:'⛰',label:'達成率（確定）',value:D.rate,fmt:'pct',ring:true,
-      sub:D.target>0?`<span class="dv2-delta none">外側の点線＝着地見込み ${D.hero.landing.toFixed(1)}%</span>`:'<span class="dv2-delta none">目標未設定</span>',
-      status:rateStatus,extra:'',go:'dv2GoForecast()',
-      basis:D.fy?`${escAttr(D.fy.name)}の確定の実績（期首〜当月）÷ 売上目標 ${dv2Yen(D.target)}。判定は経営コンディションと同じ（確定達成率−期の経過率）。着地見込みは確定＋予測 ÷ 目標（期間サマリーの達成率と同じ）`:'期が未登録'},
-    {key:'cash',icon:'▣',label:'現預金残高',value:D.cash,fmt:'yen',nullText:'未設定（または0円）',
-      sub:D.cash===null?'<button class="dv2-link dv2-tap" onclick="event.stopPropagation();dv2GoCash()">残高を入れる ›</button>':'<span class="dv2-delta none">前月比：推移データなし</span>',
-      status:D.cash===null?['none','未設定']:['none','登録済み'],extra:'',go:'dv2GoCash()',
-      basis:'CF管理の口座残高（設定の財務情報と共通の1つの値）。履歴が無いので推移・前月比は出しません。未設定と0円は区別できません'}
+    {key:'sales',label:'月間売上',value:D.month.sales,fmt:'yen',sub:escAttr(dv2Mom(mom)),
+      go:"showPage('projects',document.querySelectorAll('.nav-btn')[1])",
+      basis:`${ym}の売上（案件ベース。契約額の発生主義）。詳細指標の「売上」と同じ（salesAtMonth）。前月比は${dv2YmLabel(D.abs-1)}（${dv2Yen(D.prev.sales)}）と比較。
+        増減に良し悪しの色は付けていません。直近6か月の推移：${dv2Spark(nums.map(n=>n.sales))}`},
+    {key:'profit',label:'営業利益',value:D.month.profit,fmt:'yen',
+      sub:`利益率 ${margin===null?'－':margin.toFixed(1)+'%'}${mid?' <span class="dv2-mid">・暫定</span>':''}`,
+      go:"showPage('ledger',document.querySelectorAll('.nav-btn')[3])",
+      basis:`${ym}の営業利益＝売上 −（経費合計＋役員報酬＋税金・公課）。営業利益率＝営業利益÷売上。経費などはCF管理の実績。詳細指標の「営業利益」「営業利益率」と同じ。
+        ${mid?'当月は月途中（経費は入力済みの分のみ）なので「暫定」。':''}前月比 ${pmom===null?'比較なし':(pmom>0?'▲':'▼')+Math.abs(pmom).toFixed(1)+'%'}${mid?'（参考）':''}`},
+    {key:'cash',label:'現預金残高',value:D.cash,fmt:'yen',nullText:'未設定',
+      sub:D.cash===null?'<button class="dv2-link dv2-tap" onclick="event.stopPropagation();dv2GoCash()">残高を入れる ›</button>':'登録済み',
+      go:'dv2GoCash()',
+      basis:'CF管理の口座残高（設定の財務情報と共通の1つの値）。履歴が無いので推移・前月比は出しません。未設定と0円は区別できません（0は「未設定（または0円）」）'},
+    {key:'close',label:'月次締め',value:closeRate,fmt:'pct',
+      sub:`${closeOk}／${D.closeTotal} 件`,go:'openClosePage()',
+      basis:`${invYmJp(D.closeYm)}分の月次締めのチェック（参考を除く ${D.closeTotal}項目）のうち、解決済みの割合。未解決 ${D.closeOpen}件はアクションセンター、解決率は経営ミッションと同じ`}
   ];
-  el.innerHTML=cards.map((c,i)=>{
+  el.innerHTML=cards.map(c=>{
     const val=c.value===null?(c.nullText||'未設定'):c.fmt==='pct'?c.value.toFixed(1)+'%':dv2Yen(c.value);
-    const valEl=`<div class="dv2-num dv2-kpi-val ${c.value===null?'is-null':dv2FitClass(val)}" ${c.value===null?'':`data-count="${c.value}" data-fmt="${c.fmt}" data-key="kpi-${c.key}"`}>${val}</div>`;
-    return`<article class="dv2-card dv2-kpi kpi-${c.key} ${i%2?'tint-purple':'tint-blue'}" role="link" tabindex="0" onclick="${c.go}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${c.go}}">
-      <div class="dv2-kpi-top"><span class="dv2-kpi-icon" aria-hidden="true">${c.icon}</span><span class="dv2-kpi-label">${c.label}</span>
+    return`<article class="dv2-card dv2-kpi kpi-${c.key}" role="link" tabindex="0" onclick="${c.go}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${c.go}}">
+      <div class="dv2-kpi-top"><span class="dv2-kpi-label">${c.label}</span>
         <button class="dv2-info" aria-label="${c.label}の計算根拠" aria-expanded="${!!dv2Open['kpi-'+c.key]}" onclick="event.stopPropagation();dv2Toggle('kpi-${c.key}')">ⓘ</button></div>
-      ${c.ring&&c.value!==null?`<div class="dv2-ring-wrap">${dv2Ring(D.rate,D.hero.landing,rateStatus[0])}${valEl.replace('dv2-kpi-val','dv2-kpi-val dv2-ring-num')}</div>
-        <div class="dv2-ring-label ${rateStatus[0]}">${rateStatus[1]}</div>`:valEl}
+      <div class="dv2-num dv2-kpi-val ${c.value===null?'is-null':dv2FitClass(val)}" ${c.value===null?'':`data-count="${c.value}" data-fmt="${c.fmt}" data-key="kpi-${c.key}"`}>${val}</div>
       <div class="dv2-kpi-sub">${c.sub}</div>
-      ${c.ring&&c.value!==null?'':`<div class="dv2-kpi-foot"><span class="dv2-status ${c.status[0]}">${c.status[1]}</span>${c.extra}</div>`}
       ${dv2Open['kpi-'+c.key]?`<div class="dv2-basis" onclick="event.stopPropagation()">${c.basis}</div>`:''}
     </article>`;
   }).join('');

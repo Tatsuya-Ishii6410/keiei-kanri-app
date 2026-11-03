@@ -71,7 +71,7 @@ function run(){
       check('現預金残高（設定の値＝新KPI）',w.bankBalance(),kpi('cash'));
       // 残高0（未設定と区別できない）は「未設定（または0円）」と出し、¥0 にしない
       const keepCash=S.bankBalance;S.bankBalance=0;w.updateDashboard();
-      check('残高0は「未設定（または0円）」',/未設定/.test(d.querySelector('#dv2-kpis .dv2-kpi:nth-child(4) .dv2-kpi-val').textContent),true);
+      check('残高0は「未設定（または0円）」',/未設定/.test(d.querySelector('#dv2-kpis .kpi-cash .dv2-kpi-val').textContent),true);
       S.bankBalance=keepCash;w.updateDashboard();
       const fs=d.getElementById('fiscal-summary').querySelectorAll('tbody tr')[0].querySelectorAll('td');
       const fy=w.dashboardFiscalYear();
@@ -82,7 +82,8 @@ function run(){
       check('確定の実績（山登り）＝期首〜当月の案件ベースの売上',heroConfirmed,w.fiscalAbsMonths(fy).filter(a=>a<=w.dashV2Data().curAbs).reduce((t,a)=>t+w.projectSalesAtAbsTotal(a),0));
       // ★ 達成率は確定だけ：pct(確定の累計, 期の売上目標)。ヒーロー＝KPI
       check('達成率（確定）＝pct(確定, 目標)（ヒーロー）',w.pct(fcConfirmed,fy.salesTarget),num(d.querySelector('#dv2-hero .dv2-big').textContent));
-      check('達成率（確定）＝KPIカード',num(d.querySelector('#dv2-hero .dv2-big').textContent),kpi('rate'));
+      // 達成率のカードはトップのKPIから外した（確定達成率は山の値で突き合わせる）。代わりの「月次締め」＝ミッションの解決率
+      check('月次締め（KPI）＝ミッションの解決率',kpi('close'),num(d.querySelector('#dv2-missions [data-key="close"] .dv2-m-title').textContent.replace(/^[^\d]*/,'')));
       // 予測込みは着地見込み＝期間サマリーの達成率
       check('着地見込み＝期間サマリーの達成率（予測込み）',num(fs[3].textContent),num(d.querySelector('#dv2-hero .dv2-landing .dv2-chip').textContent));
       check('確定＋予測（着地見込みの金額）＝期間サマリーの売上（同じ関数）',yen(fs[2].textContent),fcTotal);
