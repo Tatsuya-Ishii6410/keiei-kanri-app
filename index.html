@@ -695,6 +695,8 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
   .list-toolbar.tl-tb .btn{padding-left:6px;padding-right:6px}
 }
 .q-hero-alert{margin-top:8px}
+.uc-row[data-cancelled]>summary{opacity:.6}
+.uc-dl dd.q-overdue{color:#DC2626;font-weight:700}
 .pj-hero{display:flex;gap:12px 24px;flex-wrap:wrap;align-items:stretch}
 .pj-hero-main{flex:1 1 220px;min-width:0}
 .pj-hero-fc{flex:1 1 220px;min-width:0;padding:10px 14px;border:1px dashed var(--ui-caution,#F59E0B);border-radius:16px;background:rgba(255,255,255,.7)}
@@ -5129,7 +5131,7 @@ function renderQuoteTable(type,prefix){
       <td><div style="display:flex;gap:4px;flex-wrap:wrap">${quoteActionsHtml(q)}</div></td>
     </tr>`;
   }).join('');
-  cards.innerHTML=list.map(q=>quoteCardHtml(q,isInvoice,nowYmd)).join('');
+  cards.innerHTML=`<div class="uc-rows ui-scope">${list.map(q=>quoteRowHtml(q,isInvoice,nowYmd)).join('')}</div>`;
 }
 
 function switchQuoteTab(name,btn){
@@ -11705,24 +11707,27 @@ function billingCardsHtml(p){
 
 /* ---- 見積・請求 ---- */
 
-function quoteCardHtml(q,isInvoice,nowYmd){
+// スマホの見積・請求の一覧：コンパクトな行（ucRow）。閉じた行＝宛名・件名・発行日・金額・状態（請求書の 下書き／発行済／取消・訂正版）と期限超過の印。
+// 展開で番号・支払期限・区分・取消理由と操作（主な1つ＋「その他 ▾」は mobActions のまま）。表示する項目・条件は従来のカードと同じ
+function quoteRowHtml(q,isInvoice,nowYmd){
   const due=q.due||q.expire||'';
   const overdue=isInvoice&&docStatusOf(q)==='issued'&&due&&due<nowYmd;
-  return mobCard(
-    `<div class="mob-card-header">
-      <span style="font-size:12px;color:var(--text-muted)">${isInvoice?invoiceDisplayNo(q):q.id}</span>
-      <span><span class="badge ${isInvoice?'badge-blue':'badge-gray'}">${isInvoice?'💴 請求書':'📄 見積書'}</span>${isInvoice?' '+invoiceStateBadges(q):''}</span>
-    </div>`
-    +`<div style="font-weight:600">${q.client||'-'}</div>`
-    +`<div class="mob-sub">${q.subject}</div>`
-    +`<div class="mob-amount">${fmt(q.amount)}</div>`
-    +mobRow('発行日',q.date||'-')
-    +(isInvoice
-      ?mobRow('支払期限',`<span style="${overdue?'color:#E24B4A;font-weight:600':''}">${due||'-'}${overdue?' ⚠ 期限超過':''}</span>`)
-      :'')
-    +mobRow('区分',`<span class="badge ${q.source==='drive_sync'?'badge-blue':'badge-gray'}" style="font-size:10px">${q.source==='drive_sync'?'ドライブ':'手動'}</span>`)
-    +(isInvoice&&docStatusOf(q)==='cancelled'&&q.cancelReason?mobRow('取消理由',q.cancelReason):'')
-    +mobActions(quoteActionsHtml(q)));
+  const no=isInvoice?invoiceDisplayNo(q):q.id;
+  return ucRow({
+    main:q.client||'-',
+    sub:(q.subject||'')+(q.date?'・'+q.date:''),
+    tagsHtml:isInvoice?invoiceStateBadges(q)+' ':'',
+    amount:q.amount,
+    markHtml:overdue?'<span class="uc-badge-alert uc-mark">期限超過</span>':'',
+    attrs:` data-quote-id="${escAttr(q.id)}"${isInvoice&&docStatusOf(q)==='cancelled'?' data-cancelled':''}`,
+    bodyHtml:`<dl class="uc-dl">`
+      +`<dt>番号</dt><dd>${escAttr(no||'（下書きは発行時に付番）')}</dd>`
+      +`<dt>発行日</dt><dd>${escAttr(q.date||'-')}</dd>`
+      +(isInvoice?`<dt>支払期限</dt><dd${overdue?' class="q-overdue"':''}>${escAttr(due||'-')}${overdue?' 期限超過':''}</dd>`:'')
+      +`<dt>区分</dt><dd><span class="badge ${q.source==='drive_sync'?'badge-blue':'badge-gray'}">${q.source==='drive_sync'?'ドライブ':'手動'}</span></dd>`
+      +(isInvoice&&docStatusOf(q)==='cancelled'&&q.cancelReason?`<dt>取消理由</dt><dd>${escAttr(q.cancelReason)}</dd>`:'')
+      +`</dl>`+mobActions(quoteActionsHtml(q))
+  });
 }
 
 /* ---- CF管理（キャッシュフロー一覧） ---- */

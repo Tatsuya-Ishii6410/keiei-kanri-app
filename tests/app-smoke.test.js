@@ -226,6 +226,18 @@ const SCENARIO = String.raw`(async () => {
     ok(hv('estimate-hero') === sum('見積書', () => true), '見積の合計が従来の計算と違う：' + hv('estimate-hero'));
     ok(hv('invoice-hero') === sum('請求書', q => docStatusOf(q) === 'issued'), '請求の合計が従来の計算と違う：' + hv('invoice-hero'));
     ok(!/NaN|Infinity/.test(document.getElementById('q-invoice').textContent), '見積・請求に NaN');
+    // スマホの行：表の行と同じ数。展開で 表示・削除（確認つき）
+    ok(document.querySelectorAll('#estimate-cards .uc-row').length === document.querySelectorAll('#estimate-list > tr').length, '見積の行の数が表と違う');
+    const est = S.quotes.find(q => !isInvoiceDoc(q));
+    const r = document.querySelector('#estimate-cards .uc-row[data-quote-id="' + est.id + '"]');
+    ok(r && /株式会社テスト商事/.test(r.querySelector('summary').textContent), '見積の行に宛名がない'); if (!r) return;
+    r.querySelector('summary').click(); ok(r.open, 'タップで展開されない');
+    const bs = [...r.querySelectorAll('.uc-row-body button')].map(b => b.textContent.trim());
+    ok(bs.some(t => /表示/.test(t)) && bs.some(t => /削除/.test(t)), '展開に 表示・削除 がない：' + bs);
+    const n0 = S.quotes.length, conf = window.confirm; let asked = false;
+    window.confirm = () => { asked = true; return false; };
+    [...r.querySelectorAll('.uc-row-body button')].find(b => /削除/.test(b.textContent)).click(); window.confirm = conf;
+    ok(asked && S.quotes.length === n0, '見積の削除に確認が出ない');
   });
   // ドライブの請求書同期：候補1件は自動、0件・2件以上は保留（請求書・請求レコード・入金予定を作らない）、保留から選ぶと自動と同じ結果
   await step('ドライブの請求書同期（保留・確定）', async () => {
