@@ -9640,9 +9640,8 @@ async function syncInvoices(){
   const btn=document.getElementById('inv-sync-btn');
   btn.disabled=true;
 
-  let added=0,skipExact=0,skipUser=0,updated=0,billed=0,planned=0,amountUpdated=0;
+  const cnt=invSyncCounters();
   const errors=[];
-  const noProject=[];
 
   for(let n=0;n<idx.length;n++){
     const f=invFiles[idx[n]];
@@ -9655,78 +9654,93 @@ async function syncInvoices(){
 
     const p=parseInvoiceText(json.contentSnippet);
     const client=p.client||f.client;
-    const id=p.id||makeDocNumber('請求書');
-    const sub=p.sub||Math.round((p.total||0)/1.1);
-    const incoming={
-      id,
-      subject:`${y}年${mi+1}月分 ご請求`,
-      client:client+' 御中',
-      amount:p.total||0,
-      type:'請求書',
-      date:p.date||`${ym}-01`,
-      expire:p.due||'',
-      due:p.due||'',
-      contractStart:'',contractEnd:'',paymentMethod:'',isMonthly:false,
-      items:[{name:`${y}年${mi+1}月分`,qty:1,unit:sub,total:sub}],
-      note:'',
-      source:'drive_sync',
-      driveFileId:f.id,
-      status:'issued',billingMonth:ym
-    };
-
-    // 読み取った番号も含めて、もう一度重なりを調べる
-    const dup=invDupCheck(client,ym,f.id,id);
-    let target=null;
-    if(dup.type==='exact'){skipExact++;continue;}
-    if(dup.type==='similar'){
-      const choice=await askConflict(dup.existing,incoming);
-      if(choice==='keep'){skipUser++;continue;}
-      if(choice==='overwrite'){
-        Object.assign(dup.existing,incoming);
-        target=dup.existing;updated++;
-      }else{
-        S.quotes.push(incoming);target=incoming;added++;
-      }
-    }else{
-      S.quotes.push(incoming);target=incoming;added++;
-    }
-
-    // 顧客名が一致する案件の、その月の請求レコードを請求済にする
-    const sameClient=x=>x.client&&client&&
-      (x.client.indexOf(client)>=0||client.indexOf(x.client)>=0);
-    const proj=S.projects.find(sameClient);
-    if(proj&&target){
-      const b=ensureBilling(proj,ym);
-      if(b.invoiceStatus==='uninvoiced'){b.invoiceStatus='invoiced';billed++;}
-      b.invoiceId=target.id;
-      if(p.due)b.expectedPayDate=p.due;
-      // PDFの小計（税抜）を請求レコードの金額にする。
-      // 同じ顧客の案件が複数あると1枚の金額を案件ごとに分けられないので触らない
-      const clientProjects=S.projects.filter(x=>x.status!=='失注'&&sameClient(x));
-      if(sub>0&&clientProjects.length===1&&b.amount!==sub){
-        b.amount=sub;amountUpdated++;
-        syncPlannedInAmount(b);
-      }
-      if(addPlannedInForBilling(b))planned++;
-    }else if(!proj){
-      noProject.push(client||f.name);
-    }
+    const it={f:{id:f.id,name:f.name},client,ym,y,mi,p};
+    // 同じPDF・同じ番号で同期済みなら、保留にせず従来どおりスキップ
+    if(invDupCheck(client,ym,f.id,p.id||'').type==='exact'){cnt.skipExact++;continue;}
+    // 付ける案件：同じ取引先（完全一致）・受注済み・その月が契約期間内（invoiceProjectCandidates）
+    const cands=invoiceProjectCandidates(S.projects,client,ymToAbs(ym),projectMonthRange);
+    if(cands.length===1){await invSyncApply(it,cands[0],cnt,{updateAmount:true});continue;}
+    // 0件・2件以上は保留：案件を選んで確定するまで、請求書・請求レコード・請求済み・入金予定を作らない
+    it.cands=cands.map(c=>c.id);
+    invPending=invPending.filter(x=>x.f.id!==f.id);
+    invPending.push(it);cnt.pending++;
   }
 
   saveState();
   btn.disabled=false;
   closeModal('modal-invoice-sync');
   refreshAll();
-  alert(`${added+updated}件の請求書を同期しました\n`
-    +`・${added}件を新規追加（ドライブPDF）\n`
-    +`・${skipExact}件をスキップ（番号一致・登録済み）\n`
-    +`・${skipUser}件をスキップ（既存データを選択）\n`
-    +`・${updated}件を上書き更新\n`
-    +`・${billed}件のmonthlyBillingを請求済みに更新\n`
-    +`・${amountUpdated}件のmonthlyBillingの金額をPDFの小計（税抜）に更新\n`
-    +`・${planned}件の入金予定をCF管理に追加`
-    +(noProject.length?`\n\n顧客名が一致する案件が無かった請求書:\n`+noProject.join('\n'):'')
+  alert(invSyncSummary(cnt)
     +(errors.length?`\n\n読み取れなかったファイル:\n`+errors.join('\n'):''));
+}
+
+/* ===== ドライブの請求書同期：案件を決めて反映する（自動・保留から確定のどちらも同じ処理） =====
+   invPending：案件を決められなかった請求書（このセッションだけ。ファイル・宛名・金額・日付など読み取った内容だけを持つ。
+   請求書・請求レコード・請求済みの状態・入金予定はまだ作らない。次の同期でも同じPDFは改めて保留になる） */
+let invPending=[];
+function invSyncCounters(){return{added:0,skipExact:0,skipUser:0,updated:0,billed:0,planned:0,amountUpdated:0,pending:0,unlinked:0};}
+function invSyncSummary(c){
+  return`${c.added+c.updated}件の請求書を同期しました\n`
+    +`・${c.added}件を新規追加（ドライブPDF）\n`
+    +`・${c.skipExact}件をスキップ（番号一致・登録済み）\n`
+    +`・${c.skipUser}件をスキップ（既存データを選択）\n`
+    +`・${c.updated}件を上書き更新\n`
+    +`・${c.billed}件のmonthlyBillingを請求済みに更新\n`
+    +`・${c.amountUpdated}件のmonthlyBillingの金額をPDFの小計（税抜）に更新\n`
+    +`・${c.planned}件の入金予定をCF管理に追加`
+    +(c.unlinked?`\n・${c.unlinked}件は案件に付けずに請求書だけ登録`:'')
+    +(c.pending?`\n\n案件を決められない請求書 ${c.pending}件を保留にしました（請求書・請求レコード・入金予定はまだ作っていません）。\n同期の画面で案件を選んで確定してください。`:'');
+}
+/* 請求書を登録し、案件 proj のその月の請求レコードを請求済みにして入金予定を作る（以前の同期と同じ処理）。
+   proj が null なら請求書だけ登録（案件に付けない）。opt.updateAmount：請求レコードの金額をPDFの小計（税抜）に合わせる（候補が1件のときだけ） */
+async function invSyncApply(it,proj,cnt,opt){
+  const {f,client,ym,y,mi,p}=it;
+  const id=p.id||makeDocNumber('請求書');
+  const sub=p.sub||Math.round((p.total||0)/1.1);
+  const incoming={
+    id,
+    subject:`${y}年${mi+1}月分 ご請求`,
+    client:client+' 御中',
+    amount:p.total||0,
+    type:'請求書',
+    date:p.date||`${ym}-01`,
+    expire:p.due||'',
+    due:p.due||'',
+    contractStart:'',contractEnd:'',paymentMethod:'',isMonthly:false,
+    items:[{name:`${y}年${mi+1}月分`,qty:1,unit:sub,total:sub}],
+    note:'',
+    source:'drive_sync',
+    driveFileId:f.id,
+    status:'issued',billingMonth:ym
+  };
+  // 読み取った番号も含めて、もう一度重なりを調べる
+  const dup=invDupCheck(client,ym,f.id,id);
+  let target=null;
+  if(dup.type==='exact'){cnt.skipExact++;return;}
+  if(dup.type==='similar'){
+    const choice=await askConflict(dup.existing,incoming);
+    if(choice==='keep'){cnt.skipUser++;return;}
+    if(choice==='overwrite'){
+      Object.assign(dup.existing,incoming);
+      target=dup.existing;cnt.updated++;
+    }else{
+      S.quotes.push(incoming);target=incoming;cnt.added++;
+    }
+  }else{
+    S.quotes.push(incoming);target=incoming;cnt.added++;
+  }
+  if(!proj){cnt.unlinked++;return;}
+  // 案件のその月の請求レコードを請求済にする
+  const b=ensureBilling(proj,ym);
+  if(b.invoiceStatus==='uninvoiced'){b.invoiceStatus='invoiced';cnt.billed++;}
+  b.invoiceId=target.id;
+  if(p.due)b.expectedPayDate=p.due;
+  // PDFの小計（税抜）を請求レコードの金額にする。候補が1件のときだけ（複数の案件に1枚の金額を分けられないので、選んで確定したときは触らない）
+  if(opt&&opt.updateAmount&&sub>0&&b.amount!==sub){
+    b.amount=sub;cnt.amountUpdated++;
+    syncPlannedInAmount(b);
+  }
+  if(addPlannedInForBilling(b))cnt.planned++;
 }
 
 /* ===== 月次請求レコード ==============================================
