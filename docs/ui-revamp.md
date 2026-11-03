@@ -25,6 +25,26 @@
 4. 見積・請求
 5. そのほかの画面（月次レポート、融資力診断、月次締め、設定、CSV取込など）：監査して報告のみ
 
+## 共通部品（段階0で追加・7b1de8c。keiei-kanri.html の fmt の直後と、CSS の .app-toast の直後）
+- 表示だけの関数。計算・データ・S は触らない。文字は escAttr で escape（…Html の引数は呼び出し側で安全にする）。テスト：tests/ui-common.test.js
+- `ucHero({label,value,sub,barHtml,moreHtml})`：value を最も大きく（負は #DC2626）
+- `ucBar(基準,結果,基準の名前,結果の名前)`：1本の横棒（灰＝基準、青＝増え、斜線＝減り）。負は幅0で描き、凡例は元の数字
+- `ucMore(見出し,[[項目,値]],extraHtml)`：<details> の展開（内訳など）
+- `ucKpis([{icon,label,value|valueHtml,id}])`：スマホ2列・PC（1024px〜）4列。アイコンは項目名の横に1つまで（UC_ICONS の線画SVG）
+- `ucRow({main,sub,amount,amountClass,amountNote,markHtml,bodyHtml,actionsHtml,attrs})`：台帳の1行（入出金明細・交通費で共通）。<details> でタップ展開。summary は高さ44px以上
+- `ucProgress(label,value,max,rightText)`：max≦0 は 0%（ゼロ除算なし）
+- `ucBadge(text,tone)`：tone なし／'alert' は赤 #DC2626、ほかは既存の .badge-*
+- `ucDiff(実績,計画)`：中立の色＋▲▼＋金額。計画ゼロでは率を出さない
+- 動き：transition は付けていない。prefers-reduced-motion の指定も入れてある
+
+## 現状の調査（段階0）
+- CF管理（#cf-pane-main・renderLedger）：残高入力 #cf-balance（type=number）、月末予測 #cf-forecast（式＝口座残高＋実績入金−実績出金＋入金予定−出金予定）、metric-grid の4枚（実績入金・実績出金・入金予定・出金予定）、計画vs実績の表（差異を緑・赤で色分け → ucDiff に置き換える）、明細は PC の表 #ledger-list ＋スマホのカード cfCardHtml
+- 交通費台帳（renderTravelLedger）：#tl-summary（合計・件数・要編集の件数・精算状況）、PC の表 travelDayRowsHtml ＋スマホ travelDayCardsHtml。全期間は月ごとの見出し＋小計
+- 案件管理（renderProjects・projectCardHtml）：状態は 商談中→契約済→進行中→完了（失注は分岐）。ステップ表示は 商談中〜完了 の4つに限り、失注はバッジ
+- 見積・請求（renderQuotes・renderQuoteTable・quoteCardHtml）：請求の状態 INVOICE_STATES は 未請求→請求済→入金済（入金済（手動）は入金済と同じ段）
+- 絵文字が多い（ボタン・タブの lt-emoji、🔁 など）。各段階で、その画面の分だけ線画SVGか文字にする
+- 元の「CF管理・案件管理の指示書」の本文は未受領。受け取ったら、この節の下に要点を足す
+
 ## 確認
 - 各段階：375px と 1440px の前後のスクリーンショット、一覧部分の縦の長さの前後の数値
 - 横スクロールなし。npm test（静的チェック・画面の実行テスト）が通る

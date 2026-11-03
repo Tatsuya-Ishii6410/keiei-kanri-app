@@ -37,4 +37,5 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - [docs/ops.md](docs/ops.md)：週次バックアップ、入金遅延、月次締め、ログイン
 - [docs/dashboard.md](docs/dashboard.md)：新ダッシュボード（第1〜4次）、朝日凛子、アプリのアイコン
 - [docs/ui.md](docs/ui.md)：レイアウト、レスポンシブ、フォント、共通ナビ、一覧の上の操作エリア、スマホの横長ルール
+- [docs/ui-revamp.md](docs/ui-revamp.md)：UI改修（共通部品 uc-：ヒーロー・KPI 2列・明細の行・進捗行・バッジ・差額。新しい画面の部品はこれを使う）
 - 進行中の作業：[PROGRESS.md](PROGRESS.md)
