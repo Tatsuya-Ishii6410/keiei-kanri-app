@@ -457,7 +457,7 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 .dv2-done-all{padding:10px 12px;border-radius:var(--ui-radius-item);background:var(--ui-good-soft);color:var(--ui-good-text);font-weight:700;font-size:13px}
 .dash-v2 .dv2-done-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .dash-v2 .dv2-done-chip{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--ui-good-soft);color:var(--ui-good-text)}
-.dash-v2 #dv2-status-box summary,.dash-v2 .dv2-more summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--ui-accent-text);min-height:44px;display:flex;align-items:center}
+.dash-v2 #dv2-status-box summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--ui-accent-text);min-height:44px;display:flex;align-items:center}
 .dash-v2 #dv-status{display:flex;flex-direction:column}
 .dash-v2 #dv-status>div{margin:0!important;padding:6px 0;border-bottom:1px solid var(--ui-line)}
 .dash-v2 #dv-status>div:empty{display:none}
@@ -520,8 +520,17 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 .dv2-ins .dv2-note{color:var(--ui-muted-strong)}
 .dash-v2 .dv2-ins ul{margin:4px 0 0;padding-left:18px;font-size:13px;line-height:1.7}
 .dash-v2 .dv2-ins .dv2-act-btn{margin-top:6px}
-.dash-v2 .dv2-more{margin-top:16px;background:var(--ui-bg);border:1px solid var(--ui-border-solid);border-radius:var(--ui-radius-card);padding:0 16px}
-.dash-v2 .dv2-more[open]{padding-bottom:16px}
+/* 折りたたみの行：見出し（タイトル・1行の要約・シェブロン）。開くと中身。開閉は250ms */
+.dash-v2 .dv2-card.dv2-fold{padding:0 16px}
+.dash-v2 .dv2-fold-head{display:flex;align-items:center;gap:8px;width:100%;min-height:52px;padding:0;border:0;background:none;font:inherit;color:var(--ui-text);cursor:pointer;text-align:left;-webkit-appearance:none}
+.dash-v2 .dv2-fold-t{font-size:14px;font-weight:700;flex:none}
+.dash-v2 .dv2-fold-sum{flex:1;min-width:0;font-size:12px;color:var(--ui-muted-strong);text-align:right;overflow-wrap:anywhere}
+.dash-v2 .dv2-fold-chev{flex:none;color:var(--ui-muted-strong);transition:transform 250ms ease}
+.dash-v2 .dv2-fold-head[aria-expanded="true"] .dv2-fold-chev{transform:rotate(180deg)}
+.dash-v2 .dv2-fold-body{padding-bottom:16px}
+.dash-v2 .dv2-fold-body.is-opening{animation:dv2-fade 250ms ease-out 1}
+.dash-v2 .dv2-more{margin-top:16px}
+.dash-v2 .dv2-m-hist{margin-top:8px}
 .dash-v2 #dv-metrics .metric-card{border-radius:var(--ui-radius-item)}
 /* 読み込み中（高さは実際のカードに合わせる。動かさない） */
 .dash-v2 .dv2-skel{border-radius:var(--ui-radius-item);background:var(--ui-accent-soft)}
@@ -1091,14 +1100,19 @@ body.bs-docview{overflow:hidden}
       </div>
       <div class="dv2-right">
         <section class="dv2-card dv2-hl" id="dv2-hl" hidden></section>
-        <section class="dv2-card" id="dv2-missions"><div class="dv2-skel h-miss"></div></section>
-        <section class="dv2-card" id="dv2-insights" hidden></section>
+        <!-- 折りたたみの行（初期は閉じた1行＋要約。開くと従来の内容） -->
+        <section class="dv2-card dv2-fold" id="dv2-missions"><div class="dv2-skel" style="height:44px"></div></section>
+        <section class="dv2-card dv2-fold" id="dv2-insights"><div class="dv2-skel" style="height:44px"></div></section>
       </div>
     </div>
-    <details class="dv2-more" id="dv2-more" ontoggle="if(this.open)drawMonthlyChart()">
-      <summary>詳細データ（詳細指標・期間サマリー・計画差異・月次推移・進行中の案件・更新アラート）</summary>
-      <div id="dv2-slot-metrics"></div><div id="dv2-slot-summary"></div><div id="dv2-slot-rest"></div>
-    </details>
+    <section class="dv2-card dv2-fold dv2-more" id="dv2-more">
+      <button type="button" class="dv2-fold-head" id="dv2-more-btn" aria-expanded="false" aria-controls="dv2-more-body" onclick="dv2FoldMore()">
+        <span class="dv2-fold-t">詳細データ</span><span class="dv2-fold-sum">詳細指標・期間サマリーほか</span><svg class="dv2-fold-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="dv2-fold-body" id="dv2-more-body" hidden>
+        <div class="dv2-note">詳細指標・期間サマリー・計画差異・月次推移・進行中の案件・更新アラート</div>
+        <div id="dv2-slot-metrics"></div><div id="dv2-slot-summary"></div><div id="dv2-slot-rest"></div>
+      </div>
+    </section>
   </div>
   <div class="section-header" id="dash-v1-head">
     <h1 class="section-title">経営ダッシュボード</h1>
@@ -13713,6 +13727,29 @@ function dv2GoCash(){
   setTimeout(()=>{const el=document.getElementById('cf-balance');if(el){el.scrollIntoView({block:'center'});el.focus();}},50);
 }
 function dv2Toggle(k){dv2Open[k]=!dv2Open[k];renderDashV2();}
+/* 折りたたみの行（経営ミッション・気をつけたい変化・詳細データ）。初期は閉じた1行＋1行の要約。開閉は250ms（開いた直後だけ is-opening）。
+   見出しは button（Enter・Space で開閉、aria-expanded）。内容・機能は従来のまま中に入れる */
+let dv2FoldJust='';
+const DV2_CHEV='<svg class="dv2-fold-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+function dv2Fold(k){dv2Open['f-'+k]=!dv2Open['f-'+k];dv2FoldJust=dv2Open['f-'+k]?k:'';renderDashV2();dv2FoldJust='';
+  const b=document.querySelector('#dv2-'+k+' .dv2-fold-head');if(b)b.focus({preventScroll:true});}
+function dv2FoldHead(k,title,sum){
+  const open=!!dv2Open['f-'+k];
+  return`<button type="button" class="dv2-fold-head" aria-expanded="${open}" aria-controls="dv2-${k}-body" onclick="dv2Fold('${k}')">
+    <span class="dv2-fold-t">${title}</span><span class="dv2-fold-sum">${sum}</span>${DV2_CHEV}</button>`;
+}
+function dv2FoldBody(k,html){
+  const open=!!dv2Open['f-'+k];
+  return`<div class="dv2-fold-body${dv2FoldJust===k?' is-opening':''}" id="dv2-${k}-body"${open?'':' hidden'}>${html}</div>`;
+}
+// 詳細データ（旧の表示項目の枠。描き直さないので、開閉だけを切り替える。開いたら月次推移のグラフを描く）
+function dv2FoldMore(){
+  const b=document.getElementById('dv2-more-btn'),body=document.getElementById('dv2-more-body');
+  const open=body.hidden;
+  body.hidden=!open;b.setAttribute('aria-expanded',String(open));
+  body.classList.toggle('is-opening',open);
+  if(open)drawMonthlyChart();
+}
 function dv2Scroll(id){const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:dv2ReducedMotion()?'auto':'smooth',block:'start'});}
 
 /* 朝日凛子の表示（設定ページの「凛子を表示する」。このブラウザの localStorage。読めなければオン） */
@@ -14070,10 +14107,12 @@ function renderDv2Highlights(D){
 function renderDv2Insights(D){
   const el=document.getElementById('dv2-insights');
   const cards=dashInsights({salesThis:D.month.sales,salesPrev:D.prev.sales,rate:D.rate,elapsed:D.elapsedRate});
-  el.hidden=!cards.length;
-  el.innerHTML=cards.length?`<h3 class="dv2-h3">気をつけたい変化</h3>`+cards.map(c=>`<div class="dv2-ins ins-${c.kind}"><div class="dv2-ins-head"><span aria-hidden="true">${c.icon}</span>
+  const n=cards.reduce((a,c)=>a+c.lines.length,0);
+  el.innerHTML=dv2FoldHead('insights','気をつけたい変化',n?`${n}件（自動判定）`:'該当なし（自動判定）')
+    +dv2FoldBody('insights',cards.length?cards.map(c=>`<div class="dv2-ins ins-${c.kind}"><div class="dv2-ins-head"><span aria-hidden="true">${c.icon}</span>
       <span class="dv2-note">自動判定（AI分析ではありません）</span></div>
-      <ul>${c.lines.map(t=>`<li>${escAttr(t)}</li>`).join('')}</ul></div>`).join(''):'';
+      <ul>${c.lines.map(t=>`<li>${escAttr(t)}</li>`).join('')}</ul></div>`).join('')
+      :'<div class="dv2-note">数字の大きな変化はありません。自動判定（AI分析ではありません）</div>');
 }
 
 // 経営ミッション（目標への進捗）
@@ -14094,16 +14133,27 @@ function renderDv2Missions(D){
   const just=dv2PrevDone?M.list.filter(m=>m.done&&dv2PrevDone[m.key]===false).map(m=>m.key):[];
   dv2PrevDone=now;
   const noTarget=kpis.filter(k=>!(k.target>0));
-  el.innerHTML=`<div class="dv2-card-head"><h3 class="dv2-h3">経営ミッション <span class="dv2-sub">目標への進捗</span></h3>
-      <span class="dv2-chip">今月の達成 ${M.done}／${M.total}</span></div>
-    <ul class="dv2-m-list">${M.list.map(m=>`<li class="${m.done?'done':''}${just.indexOf(m.key)>=0?' just':''}" data-key="${m.key}">
-      <span class="dv2-m-icon" aria-hidden="true">${m.done?'✓':m.icon}</span>
+  const row=m=>`<li class="${m.done?'done':''}${just.indexOf(m.key)>=0?' just':''}" data-key="${m.key}">
+      <span class="dv2-m-icon" aria-hidden="true">${m.done?'✓':''}</span>
       <span class="dv2-m-body"><span class="dv2-m-title">${escAttr(m.title)}</span>
         <span class="dv2-m-bar" role="progressbar" aria-valuenow="${m.progress}" aria-valuemin="0" aria-valuemax="100"><span style="transform:scaleX(${m.progress/100})"></span></span>
         <span class="dv2-note">${m.done?'完了':'未完了'}・進捗 ${m.progress.toFixed(m.progress%1?1:0)}%・重要度 ${m.importance}
-          ${m.deadline?`・<b class="${m.deadline.overdue?'dv2-over':''}">${m.deadline.text}</b>`:''}</span></span></li>`).join('')}</ul>
+          ${m.deadline?`・<b class="${m.deadline.overdue?'dv2-over':''}">${m.deadline.text}</b>`:''}</span></span></li>`;
+  const open=M.list.filter(m=>!m.done),done=M.list.filter(m=>m.done);
+  // 達成の履歴：確定で届いたマイルストーン（このブラウザの記録。届いた日が分かるものだけ日付を出す）
+  const msReached=fy?(dv2LS(ls=>JSON.parse(ls.getItem('bizapp_dash_ms_v2_'+fy.id)||'[]'))||[]):[];
+  const msDates=fy?(dv2LS(ls=>JSON.parse(ls.getItem('bizapp_dash_msdate_v3_'+fy.id)||'{}'))||{}):{};
+  const hist=msReached.slice().sort((a,b)=>b-a).map(p=>`<li><span class="dv2-m-icon" aria-hidden="true">✓</span><span class="dv2-m-body"><span class="dv2-m-title">売上目標の ${p}% に到達（確定）</span>
+    ${msDates[p]?`<span class="dv2-note">${+msDates[p].slice(5,7)}/${+msDates[p].slice(8,10)}</span>`:''}</span></li>`).join('');
+  const nDone=done.length+msReached.length;
+  el.innerHTML=dv2FoldHead('missions','経営ミッション',`今月の達成 ${M.done}／${M.total}`)
+    +dv2FoldBody('missions',`
+    ${open.length?`<ul class="dv2-m-list">${open.map(row).join('')}</ul>`:'<div class="dv2-note">未完了のミッションはありません</div>'}
+    ${nDone?`<button class="dv2-link dv2-tap" onclick="dv2Toggle('mDone')" aria-expanded="${!!dv2Open.mDone}">達成済み ${nDone}件 ${dv2Open.mDone?'▲':'▼'}</button>`:''}
+    <div class="dv2-m-done"${dv2Open.mDone?'':' hidden'}>${done.length?`<ul class="dv2-m-list">${done.map(row).join('')}</ul>`:''}
+      ${hist?`<ul class="dv2-m-list dv2-m-hist">${hist}</ul>`:''}</div>
     ${noTarget.length&&fy?`<div class="dv2-kpi-rest"><span class="dv2-note">目標未設定のKPI：</span>${noTarget.map(k=>`<span class="dv2-kpi-chip">${k.label} ${k.value===null?'データ不足':(k.unit==='%'?k.value.toFixed(1)+'%':k.value+k.unit)}</span>`).join('')}
-      <button class="dv2-link dv2-tap" onclick="dv2GoFiscal()">期の設定で目標を入れる ›</button></div>`:''}`;
+      <button class="dv2-link dv2-tap" onclick="dv2GoFiscal()">期の設定で目標を入れる ›</button></div>`:''}`);
 }
 
 
