@@ -103,14 +103,14 @@ const PAGES = {
     open: `showPage('ledger',[...document.querySelectorAll('.nav-btn')].find(b=>(b.getAttribute('onclick')||'').includes("'ledger'")));
       document.getElementById('ledger-month').value=String(new Date().getMonth());renderLedger();`,
     root: '#page-ledger',
-    parts: { '明細': '#ledger-list-title', '計画対実績': '#plan-month-label', '資金状況': '#cf-balance', 'KPI': '#cf-actual-in' },
+    parts: { '明細': '#ledger-list-title', '計画対実績': '#plan-month-label', '資金状況': '#cf-balance', 'KPI': '#cf-actual-in', 'ヘッダー': '#ledger-month' },
     valueRoot: '#cf-pane-main',
   },
 };
 // 測る：その要素を含む一番近い .card（または .uc-hero / .metric-grid / .uc-kpis）の高さ
 const MEASURE = (p) => `(() => {
   const P=${JSON.stringify(p)};
-  const box=sel=>{const el=document.querySelector(sel);if(!el)return null;const c=el.closest('.card,.uc-hero,.metric-grid,.uc-kpis')||el;return c};
+  const box=sel=>{const el=document.querySelector(sel);if(!el)return null;const c=el.closest('.card,.uc-hero,.metric-grid,.uc-kpis,.list-toolbar')||el;return c};
   const h={};for(const [k,sel] of Object.entries(P.parts)){const c=box(sel);h[k]=c&&c.offsetParent!==null?Math.round(c.getBoundingClientRect().height):0;}
   const root=document.querySelector(P.root);
   h['画面全体']=Math.round(root.getBoundingClientRect().height);

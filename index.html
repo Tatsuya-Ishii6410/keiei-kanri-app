@@ -664,6 +664,14 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .cf-plan-row .uc-prog>span:first-child{font-weight:700}
 .cf-plan-row .uc-prog>span:nth-child(2){font-size:12px;font-variant-numeric:tabular-nums;color:var(--ui-muted,#64748B)}
 .cf-plan-diff{font-size:12px;color:var(--ui-muted,#64748B);text-align:right}
+/* CF管理の操作エリア（スマホ）：2行に詰める［月｜+実績入力］［+入金予定｜+出金予定｜その他▾］。領収書から登録は「その他」の中へ（PCはボタンのまま） */
+@media(max-width:480px){
+  .list-toolbar.lt-flat.cf-tb{grid-template-columns:repeat(6,minmax(0,1fr))!important}
+  .cf-tb .lt-o1,.cf-tb .lt-o2{grid-column:span 3}
+  .cf-tb .lt-o3,.cf-tb .lt-o4,.cf-tb .lt-o6{grid-column:span 2}
+  .list-toolbar.cf-tb .lt-o5{display:none!important}
+  .list-toolbar.cf-tb .btn{padding-left:6px;padding-right:6px}
+}
 .uc-fixed{display:inline-block;font-size:10px;font-weight:700;color:var(--ui-muted,#64748B);border:1px solid var(--ui-border-solid,#E3E7EF);border-radius:6px;padding:0 5px;margin-right:6px;vertical-align:1px}
 .uc-row[open]>summary{background:var(--ui-line,#EEF1F6)}
 .uc-prog{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:8px 0;font-size:13px}
@@ -1471,11 +1479,11 @@ body.bs-docview{overflow:hidden}
     <h1 class="section-title title-dup">キャッシュフロー管理</h1>
   </div>
   <div class="tab-group">
-    <button class="tab active" onclick="switchCfTab('cf',this)"><span class="lt-emoji" aria-hidden="true">💰 </span>キャッシュフロー</button>
-    <button class="tab" onclick="switchCfTab('travel',this)"><span class="lt-emoji" aria-hidden="true">🚃 </span>交通費台帳</button>
+    <button class="tab active" onclick="switchCfTab('cf',this)">キャッシュフロー</button>
+    <button class="tab" onclick="switchCfTab('travel',this)">交通費台帳</button>
   </div>
   <div id="cf-pane-main">
-  <div class="section-header list-toolbar lt-flat" style="flex-wrap:wrap;gap:10px">
+  <div class="section-header list-toolbar lt-flat cf-tb" style="flex-wrap:wrap;gap:10px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <span class="lt-select lt-o1"><select id="ledger-month" onchange="renderLedger()" style="width:auto;font-size:13px" aria-label="月で絞り込む">
         <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
@@ -1483,17 +1491,18 @@ body.bs-docview{overflow:hidden}
       <span id="ledger-summary" class="lt-o9" style="font-size:12px;color:var(--text-secondary);white-space:nowrap"></span>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn lt-wide" onclick="openDriveImportModal()">☁️ ドライブから取込</button>
-      <button class="btn lt-o5" onclick="startReceiptImport()"><span class="lt-emoji" aria-hidden="true">📷 </span>領収書から登録</button>
-      <button class="btn lt-wide" onclick="openInboxList()">📥 取込待ち</button>
-      <button class="btn lt-wide" onclick="openDebitImportModal()">📧 デビット通知から取込</button>
-      <button class="btn lt-wide" onclick="openFixedCostsModal()">🔁 固定費管理</button>
+      <button class="btn lt-wide" onclick="openDriveImportModal()">ドライブから取込</button>
+      <button class="btn lt-o5" onclick="startReceiptImport()">領収書から登録</button>
+      <button class="btn lt-wide" onclick="openInboxList()">取込待ち</button>
+      <button class="btn lt-wide" onclick="openDebitImportModal()">デビット通知から取込</button>
+      <button class="btn lt-wide" onclick="openFixedCostsModal()">固定費管理</button>
       <button class="btn primary lt-primary lt-o2" onclick="openLedgerModal(null,'actual')">+ 実績入力</button>
       <button class="btn lt-o3" onclick="openLedgerModal(null,'planned_in')">+ 入金予定</button>
       <button class="btn lt-o4" onclick="openLedgerModal(null,'planned_out')">+ 出金予定</button>
       <div class="lt-menu-wrap lt-o6">
         <button class="btn lt-menu-btn" id="cf-more-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="cf-more-menu" onclick="ltMenu(this)">その他 ▾<span class="lt-count" data-inbox-count hidden></span></button>
         <div class="lt-menu" id="cf-more-menu" role="menu" aria-labelledby="cf-more-btn" hidden>
+          <button role="menuitem" tabindex="-1" onclick="ltMenu(null);startReceiptImport()">領収書から登録</button>
           <button role="menuitem" tabindex="-1" onclick="ltMenu(null);openDriveImportModal()">ドライブから取込</button>
           <button role="menuitem" tabindex="-1" onclick="ltMenu(null);openInboxList()">取込待ち<span class="lt-count" data-inbox-count data-suffix="件" hidden></span></button>
           <button role="menuitem" tabindex="-1" onclick="ltMenu(null);openDebitImportModal()">デビット通知から取込</button>
@@ -1514,12 +1523,8 @@ body.bs-docview{overflow:hidden}
       <button class="btn" onclick="createPlannedFromInvoiced()">前月の請求済み案件を入金予定にする</button>
     </div>
   </div>
-  <div class="metric-grid">
-    <div class="metric-card"><div class="metric-label">実績入金</div><div class="metric-value green" id="cf-actual-in">¥0</div></div>
-    <div class="metric-card"><div class="metric-label">実績出金</div><div class="metric-value red" id="cf-actual-out">¥0</div></div>
-    <div class="metric-card"><div class="metric-label">入金予定</div><div class="metric-value blue" id="cf-plan-in">¥0</div></div>
-    <div class="metric-card"><div class="metric-label">出金予定</div><div class="metric-value" style="color:var(--amber)" id="cf-plan-out">¥0</div></div>
-  </div>
+  <!-- 入出金KPI（1-3）：2列×2行（PCは4列）。中身は renderLedger が初回に ucKpis で作り、以後は金額だけ更新（タップで明細へ移る機能は無い） -->
+  <div id="cf-kpis" class="ui-scope"></div>
   <div style="font-size:11px;color:var(--text-muted);margin:-8px 0 16px">
     ※CF管理は口座の実際の入出金ベースです。案件の発生売上はダッシュボードをご確認ください。
   </div>
@@ -1528,7 +1533,7 @@ body.bs-docview{overflow:hidden}
     <div class="card">
       <div class="card-header">
         <span class="card-title">計画 vs 実績（<span id="plan-month-label">今月</span>）／ 実績は口座ベース</span>
-        <button class="btn sm" onclick="openPlanModal()">✏️ 計画編集</button>
+        <button class="btn sm" onclick="openPlanModal()">計画編集</button>
       </div>
       <div class="table-wrap mob-table"><table>
         <thead><tr><th>区分</th><th>計画</th><th>実績</th><th>差異</th></tr></thead>
@@ -1537,7 +1542,7 @@ body.bs-docview{overflow:hidden}
       <div id="plan-cards" class="mob-cards"></div>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title" id="ledger-list-title">キャッシュフロー</span><button class="btn sm" onclick="exportLedgerCsv()">📥 CSV出力</button></div>
+      <div class="card-header"><span class="card-title" id="ledger-list-title">キャッシュフロー</span><button class="btn sm" onclick="exportLedgerCsv()">CSV出力</button></div>
       <div class="table-wrap mob-table"><table>
         <thead><tr><th>日付</th><th>区分</th><th>摘要</th><th style="text-align:right">入金</th><th style="text-align:right">出金</th><th>状態</th><th>操作</th></tr></thead>
         <tbody id="ledger-list"></tbody>
@@ -6493,10 +6498,16 @@ function renderLedger(){
 
   renderSettleNotice();
   renderTravelNote(mi);
-  document.getElementById('cf-actual-in').textContent=fmt(t.actualIn);
-  document.getElementById('cf-actual-out').textContent=fmt(t.actualOut);
-  document.getElementById('cf-plan-in').textContent=fmt(t.planIn);
-  document.getElementById('cf-plan-out').textContent=fmt(t.planOut);
+  const kp=document.getElementById('cf-kpis');
+  if(!kp.firstChild)kp.innerHTML=ucKpis([
+    {icon:'in',label:'実績入金',value:fmt(0),id:'cf-actual-in'},
+    {icon:'out',label:'実績出金',value:fmt(0),id:'cf-actual-out'},
+    {icon:'calendar',label:'入金予定',value:fmt(0),id:'cf-plan-in'},
+    {icon:'clock',label:'出金予定',value:fmt(0),id:'cf-plan-out'}]);
+  ucCountUp(document.getElementById('cf-actual-in'),t.actualIn);
+  ucCountUp(document.getElementById('cf-actual-out'),t.actualOut);
+  ucCountUp(document.getElementById('cf-plan-in'),t.planIn);
+  ucCountUp(document.getElementById('cf-plan-out'),t.planOut);
 
   // 計画 vs 実績（実績は口座に入った分だけ。案件ベースの売上は含めない）
   const lt=all?sumLedgerYear():sumLedger(mi);
@@ -6528,10 +6539,10 @@ function renderLedger(){
       <td style="font-size:12px">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}${receiptLinkHtml(l)}${expenseExtraText(l)?`<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">${escAttr(expenseExtraText(l))}</div>`:''}${l.memo?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${l.memo}</div>`:''}</td>
       <td style="text-align:right;font-weight:500;color:${inflow?'var(--green)':'var(--text-muted)'}">${inflow?fmt(l.amount):'-'}</td>
       <td style="text-align:right;font-weight:500;color:${inflow?'var(--text-muted)':'var(--red)'}">${inflow?'-':fmt(l.amount)}</td>
-      <td><span class="badge ${LEDGER_STATES[st].cls}">${LEDGER_STATES[st].label}</span></td>
+      <td><span class="badge ${LEDGER_STATES[st].cls}">${LEDGER_STATES[st].label.replace(/^📅\s*/,'')}</span></td>
       <td><div style="display:flex;gap:4px;flex-wrap:wrap">
-        ${st==='planned_in'?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">✓ 実績に変換</button>`:''}
-        <button class="btn sm" onclick="openLedgerModal(${l.id})">✏️ 編集</button>
+        ${st==='planned_in'?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">実績に変換</button>`:''}
+        <button class="btn sm" onclick="openLedgerModal(${l.id})">編集</button>
         <button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button>
       </div></td>
     </tr>`;
@@ -8255,7 +8266,7 @@ function renderTravelNote(mi){
     ?`${ledgerDateOf(done)} に精算予定として登録済み`
     :`${nextMonth25Of(mi)} に一括精算予定`;
   el.innerHTML=`<div class="alert alert-info" style="margin-bottom:16px">
-    🚃 ${mi+1}月の交通費：<strong>${fmt(total)}</strong>（${tail}）
+    ${mi+1}月の交通費：<strong>${fmt(total)}</strong>（${tail}）
     <span style="font-size:11px;color:var(--text-secondary)">※個別の交通費は口座残高に含めていません</span>
   </div>`;
 }

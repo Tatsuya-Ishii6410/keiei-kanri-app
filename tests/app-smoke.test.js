@@ -275,6 +275,8 @@ const SCENARIO = String.raw`(async () => {
     ok(v && document.querySelector('#cf-forecast .uc-more'), 'ヒーロー（月末予測・内訳）がない');
     change('cf-balance', String(b0));
     ok(S.bankBalance === b0, '残高を戻せない');
+    ok([...document.querySelectorAll('#cf-more-menu [role=menuitem]')].some(b => /startReceiptImport/.test(b.getAttribute('onclick'))), '「その他」に 領収書から登録 がない');
+    ok(['cf-actual-in', 'cf-actual-out', 'cf-plan-in', 'cf-plan-out'].every(id => /^¥/.test((document.getElementById(id) || {}).textContent || '')), 'KPIの4つの金額がない');
     const pr = document.querySelectorAll('#plan-cards .cf-plan-row');
     ok(pr.length === 4 && !/NaN|Infinity/.test(document.getElementById('plan-cards').textContent + document.getElementById('plan-table').textContent), '計画対実績の4項目がない、または NaN・Infinity が出た');
   });
