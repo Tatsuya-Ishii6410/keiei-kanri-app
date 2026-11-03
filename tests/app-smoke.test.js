@@ -184,6 +184,48 @@ const SCENARIO = String.raw`(async () => {
     change('quote-month', '');
     previewQuoteById(S.quotes.find(q => !isInvoiceDoc(q)).id); closeDocViewer();
   });
+  // ドライブの請求書同期：候補1件は自動、0件・2件以上は保留（請求書・請求レコード・入金予定を作らない）、保留から選ぶと自動と同じ結果
+  await step('ドライブの請求書同期（保留・確定）', async () => {
+    const pad = n => String(n).padStart(2, '0'), now = new Date(), mi = now.getMonth(), ym = monthYear(mi) + '-' + pad(mi + 1);
+    const y0 = now.getFullYear();
+    const P = (id, client, start, end, status) => ({ id, name: '同期' + id, client, amount: 100000, status: status || '進行中', start, end, contract: 'monthly', invoiceStatus: 'uninvoiced' });
+    S.projects.push(P(901, '株式会社旧新', (y0 - 3) + '-01-01', (y0 - 2) + '-12-31', '完了'), P(902, '株式会社旧新', (y0 - 1) + '-01-01', (y0 + 1) + '-12-31'),
+      P(903, 'C社', (y0 - 1) + '-01-01', (y0 + 1) + '-12-31'), P(904, 'C社', (y0 - 1) + '-06-01', (y0 + 1) + '-12-31'),
+      P(905, 'テスト商事', (y0 - 1) + '-01-01', (y0 + 1) + '-12-31'), P(906, 'E社', (y0 - 1) + '-01-01', (y0 + 1) + '-12-31', '商談中'));
+    syncMonthlyBillings();
+    const files = [['sf1', '株式会社旧新'], ['sf2', 'C社'], ['sf3', 'テスト'], ['sf4', 'E社']], map = {};
+    files.forEach(x => { map[x[0]] = x[1]; });
+    const keepCall = window.gasCall, keepParse = window.parseInvoiceText;
+    window.gasCall = async b => ({ ok: true, contentSnippet: b.fileId });
+    window.parseInvoiceText = t => ({ client: map[t], id: 'INV-SMOKE-' + t, total: 110000, sub: 100000, date: ym + '-28', due: ym + '-28' });
+    try {
+      invPending = [];
+      openInvoiceSyncModal(); document.getElementById('inv-month').value = String(mi);
+      invFiles = files.map(x => ({ id: x[0], name: x[0] + '.pdf', client: x[1] }));
+      document.getElementById('inv-list').innerHTML = files.map((x, i) => '<input type="checkbox" class="inv-check" value="' + i + '" checked>').join('');
+      const recs0 = S.monthlyBillings.length, plan0 = S.ledger.filter(l => l.status === 'planned_in').length;
+      await syncInvoices();
+      const rec = pid => S.monthlyBillings.find(b => b.projectId === pid && b.billingMonth === ym);
+      ok(rec(902) && rec(902).invoiceStatus === 'invoiced' && rec(902).invoiceId === 'INV-SMOKE-sf1', '古い案件と今の案件 → 今の案件に付かない');
+      ok(!rec(901) || rec(901).invoiceStatus === 'uninvoiced', '古い（終わった）案件に付いた');
+      ok(invPending.map(x => x.f.id).join(',') === 'sf2,sf3,sf4', '保留が「候補2件・部分一致・商談中」の3件にならない（' + invPending.map(x => x.f.id) + '）');
+      ok(!S.quotes.some(q => /INV-SMOKE-sf[234]/.test(q.id)), '保留なのに請求書ができた');
+      ok(S.monthlyBillings.length === recs0 && S.ledger.filter(l => l.status === 'planned_in').length === plan0 + 1, '保留なのに請求レコード・入金予定ができた');
+      ok(rec(906) === undefined || rec(906).invoiceStatus === 'uninvoiced', '商談中に付いた');
+      ok(/案件を決められない請求書 3件/.test(document.getElementById('inv-pending').textContent), '保留の件数が画面に出ない');
+      // 保留から C社 の案件（903）を選んで確定 → 自動と同じ（請求済み・請求書番号・支払期限・入金予定）
+      const i = invPending.findIndex(x => x.f.id === 'sf2');
+      document.getElementById('inv-pend-sel-' + i).value = '903';
+      await confirmInvPending(i);
+      const b = rec(903), a = rec(902), pl = id => S.ledger.find(l => l.status === 'planned_in' && l.projectId === id && l.billingMonth === ym);
+      ok(b && b.invoiceStatus === 'invoiced' && b.invoiceId === 'INV-SMOKE-sf2' && b.expectedPayDate === a.expectedPayDate && b.amount === a.amount, '確定の結果が自動の同期と違う（請求レコード）');
+      ok(pl(903) && pl(902) && pl(903).amount === pl(902).amount && (pl(903).expectedDate || pl(903).date) === (pl(902).expectedDate || pl(902).date), '確定の結果が自動の同期と違う（入金予定）');
+      ok(invPending.length === 2, '確定した請求書が保留に残る');
+    } finally {
+      window.gasCall = keepCall; window.parseInvoiceText = keepParse;
+      invPending = []; closeModal('modal-invoice-sync');
+    }
+  });
   await step('CF管理', async () => { nav('ledger'); switchCfTab('cf', document.querySelector('[onclick*="switchCfTab(\'cf\'"]')); });
   await step('ドライブから取込', async () => {
     openDriveImportModal(); await wait(200);
