@@ -294,10 +294,10 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dv2-menu{position:absolute;right:0;top:48px;z-index:130;min-width:220px;background:#FFFFFF;border:1px solid #E3E7EF;border-radius:14px;box-shadow:0 10px 30px rgba(23,35,61,.14);padding:6px}
 .dv2-menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:12px;min-height:44px;font-size:13px;border-radius:10px;cursor:pointer;color:#17233D;font-family:inherit}
 .dv2-menu button:hover,.dv2-menu button:active{background:#F1F5FB}
-/* 配置：スマホは縦1列（コンディション→山登り→KPI→アクションセンター→推移→ミッション→インサイト）、PCは12列（左8・右4） */
+/* 配置：スマホは縦1列（コンディション＋最重要アクション→山登り→KPI→ハイライト→推移→ミッション→インサイト）、PCは12列（左8・右4） */
 .dash-v2 .dv2-layout{display:flex;flex-direction:column;gap:12px}
 .dash-v2 .dv2-left,.dash-v2 .dv2-right{display:contents}
-.dash-v2 #dv2-cond{order:1}.dash-v2 #dv2-hero{order:2}.dash-v2 #dv2-kpis{order:3}.dash-v2 #dv2-actions{order:4}
+.dash-v2 #dv2-actions{order:1}.dash-v2 #dv2-hero{order:2}.dash-v2 #dv2-kpis{order:3}
 .dash-v2 #dv2-hl{order:5}.dash-v2 #dv2-trend{order:6}.dash-v2 #dv2-missions{order:7}.dash-v2 #dv2-insights{order:8}
 .dash-v2 [hidden]{display:none!important}
 @media (min-width:1024px){
@@ -309,8 +309,12 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 :is(button,a,select,summary,[tabindex]):focus-visible{outline:2px solid #3976F6;outline-offset:2px}
 .dash-v2 .dv2-kpi:focus-visible{outline-offset:2px}
 /* 経営コンディション */
-.dash-v2 .dv2-cond{padding:12px 16px;border-left:0;box-shadow:inset 4px 0 0 var(--lv),var(--ui-shadow-card)}
-.dash-v2 .dv2-cond.lv-good{--lv:var(--ui-good)}.dash-v2 .dv2-cond.lv-caution{--lv:var(--ui-caution)}.dash-v2 .dv2-cond.lv-warn{--lv:var(--ui-warn)}.dash-v2 .dv2-cond.lv-none{--lv:var(--ui-muted)}
+/* 統合カード（経営コンディション＋最重要アクション）。左の帯の色は経営コンディションの段階 */
+.dash-v2 .dv2-cockpit{padding:12px 16px;border-left:0;box-shadow:inset 4px 0 0 var(--lv),var(--ui-shadow-card)}
+.dash-v2 .lv-good{--lv:var(--ui-good)}.dash-v2 .lv-caution{--lv:var(--ui-caution)}.dash-v2 .lv-warn{--lv:var(--ui-warn)}.dash-v2 .lv-none{--lv:var(--ui-muted)}
+.dash-v2 .dv2-cock-act{margin-top:10px;padding-top:10px;border-top:1px solid var(--ui-line)}
+.dash-v2 .dv2-cock-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.dash-v2 .dv2-cock-act>.dv2-tap,.dash-v2 #dv2-actions-list>.dv2-tap{margin-top:4px}
 .dash-v2 .dv2-cond-main{display:flex;align-items:center;gap:10px}
 .dash-v2 .dv2-cond-main>div{flex:1;min-width:0}
 .dash-v2 .dv2-cond-icon{width:32px;height:32px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;background:var(--lv)}
@@ -437,6 +441,7 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 .dv2-act-top.sev-orange{border-color:var(--ui-caution-soft);box-shadow:inset 4px 0 0 var(--ui-caution-text)}
 .dash-v2 .dv2-act-top .dv2-act-title{font-size:16px}
 .dash-v2 .dv2-act-top .dv2-act-dot{width:32px;height:32px;font-size:15px}
+.dash-v2 .dv2-cockpit .dv2-act-top{padding:10px 12px}
 .dash-v2 #dv2-actions-n.is-todo{background:var(--ui-warn-soft);color:var(--ui-warn-text)}
 .dash-v2 #dv2-actions-n.is-done{background:var(--ui-good-soft);color:var(--ui-good-text)}
 .dash-v2 .dv2-done-all{padding:10px 12px;border-radius:var(--ui-radius-item);background:var(--ui-good-soft);color:var(--ui-good-text);font-weight:700;font-size:13px}
@@ -1060,19 +1065,22 @@ body.bs-docview{overflow:hidden}
     </header>
     <div class="dv2-layout">
       <div class="dv2-left">
-        <section class="dv2-card dv2-cond" id="dv2-cond"><div class="dv2-skel" style="height:44px"></div></section>
+        <!-- 経営コンディション＋最重要アクション（1枚。アクションセンターはこのカード。通知ベルの移動先も #dv2-actions） -->
+        <section class="dv2-card dv2-cockpit" id="dv2-actions" aria-label="経営コンディションと今すぐやること">
+          <div class="dv2-cond" id="dv2-cond"><div class="dv2-skel" style="height:44px"></div></div>
+          <div class="dv2-cock-act">
+            <div class="dv2-cock-head"><span class="dv2-kicker">今すぐやること</span><span class="dv2-chip" id="dv2-actions-n"></span></div>
+            <div id="dv2-actions-list"><div class="dv2-skel" style="height:72px"></div></div>
+            <div id="dv2-actions-more" hidden>
+              <details id="dv2-status-box"><summary>状態の詳細</summary><div id="dv2-slot-status"></div></details>
+            </div>
+          </div>
+        </section>
         <section class="dv2-card dv2-hero" id="dv2-hero"><div class="dv2-skel h-hero"></div></section>
         <section class="dv2-kpis" id="dv2-kpis"><div class="dv2-skel h-kpi"></div><div class="dv2-skel h-kpi"></div><div class="dv2-skel h-kpi"></div><div class="dv2-skel h-kpi"></div></section>
         <section class="dv2-card" id="dv2-trend"><div class="dv2-skel h-trend"></div></section>
       </div>
       <div class="dv2-right">
-        <section class="dv2-card dv2-actions" id="dv2-actions">
-          <div class="dv2-card-head"><h3 class="dv2-h3">アクションセンター <span class="dv2-sub">今すぐやること</span></h3><span class="dv2-chip" id="dv2-actions-n"></span></div>
-          <div id="dv2-actions-list"><div class="dv2-skel" style="height:180px"></div></div>
-          <div id="dv2-actions-more" hidden>
-            <details id="dv2-status-box"><summary>状態の詳細</summary><div id="dv2-slot-status"></div></details>
-          </div>
-        </section>
         <section class="dv2-card dv2-hl" id="dv2-hl" hidden></section>
         <section class="dv2-card" id="dv2-missions"><div class="dv2-skel h-miss"></div></section>
         <section class="dv2-card" id="dv2-insights" hidden></section>
@@ -13488,14 +13496,15 @@ function initDashVersion(){
   dv2Arrange();
   if(window.matchMedia){const mq=window.matchMedia('(min-width:1024px)');(mq.addEventListener?mq.addEventListener('change',dv2Arrange):mq.addListener(dv2Arrange));}
 }
-/* スマホ（1列）では、アクションセンターとハイライトを KPI のすぐ後ろに置く（DOMの順＝見た目の順＝Tab の順）。PCは右の列へ戻す */
+/* スマホ（1列）では、ハイライトを KPI のすぐ後ろに置く（DOMの順＝見た目の順＝Tab の順）。PCは右の列へ戻す。
+   アクションセンターは経営コンディションと1枚（統合カード #dv2-actions）にしたので動かさない */
 function dv2Arrange(){
   const wide=!!(window.matchMedia&&window.matchMedia('(min-width:1024px)').matches);
   const left=document.querySelector('#dash-v2 .dv2-left'),right=document.querySelector('#dash-v2 .dv2-right');
-  const act=document.getElementById('dv2-actions'),hl=document.getElementById('dv2-hl'),kpis=document.getElementById('dv2-kpis');
-  if(!left||!right||!act||!hl||!kpis)return;
-  if(wide){right.insertBefore(hl,right.firstChild);right.insertBefore(act,hl);}
-  else{kpis.after(act);act.after(hl);}
+  const hl=document.getElementById('dv2-hl'),kpis=document.getElementById('dv2-kpis');
+  if(!left||!right||!hl||!kpis)return;
+  if(wide)right.insertBefore(hl,right.firstChild);
+  else kpis.after(hl);
 }
 // Esc でアバターのメニューを閉じる
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){const m=document.getElementById('dv2-menu');if(m&&!m.hidden){dv2Menu(false);const a=document.getElementById('dv2-avatar');if(a)a.focus();}}});
@@ -13717,7 +13726,8 @@ function renderDv2Condition(D){
   const nx=D.split?nextMilestone(D.rate,D.split.confirmed,D.target):null;
   const rv={不足:D.cash!==null?dv2Yen(D.outSoon.total-D.cash):'',件数:D.od.length,金額:dv2Yen(D.overdueTotal),
     差:c.diff===null||c.diff===undefined?'':Math.abs(c.diff).toFixed(1),地点:nx?nx.p:'',あと:nx?dv2Yen(nx.left):''};
-  el.className='dv2-card dv2-cond lv-'+c.level+(rk?' has-rinko':'');
+  el.className='dv2-cond lv-'+c.level+(rk?' has-rinko':'');
+  document.getElementById('dv2-actions').className='dv2-card dv2-cockpit lv-'+c.level;
   el.dataset.key=c.key;
   el.dataset.rinko=rk?rk.face:'';
   el.innerHTML=`<div class="dv2-cond-main">${rk?rinkoAvatar(rk.face,c.icon):`<span class="dv2-cond-icon" aria-hidden="true">${c.icon}</span>`}
