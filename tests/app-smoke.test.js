@@ -301,6 +301,9 @@ const SCENARIO = String.raw`(async () => {
   await step('交通費台帳', async () => {
     nav('ledger'); switchCfTab('travel', document.querySelector('[onclick*="switchCfTab(\'travel\'"]'));
     change('tl-month', '');
+    // 要約カード：合計（カウントアップの最終値）は従来の集計と同じ
+    const hv = document.querySelector('#tl-summary .uc-hero-value');
+    ok(hv && hv.dataset.ucV === String(travelLedgerRows(null).reduce((a, l) => a + l.amount, 0)), '交通費の要約の合計が集計と違う');
     // スマホの行（ucRow）：件数・展開・編集・削除の確認（取り消すと消えない）
     const tRows = [...document.querySelectorAll('#tl-cards .uc-row')];
     ok(tRows.length === travelLedgerRows(null).length && tRows.length > 0, '交通費の行の数が一覧と違う：' + tRows.length);

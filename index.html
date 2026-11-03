@@ -672,6 +672,9 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
   .list-toolbar.cf-tb .lt-o5{display:none!important}
   .list-toolbar.cf-tb .btn{padding-left:6px;padding-right:6px}
 }
+#tl-hero .uc-kpis{margin:12px 0 0}
+#tl-hero .uc-kpi{background:rgba(255,255,255,.8);box-shadow:none}
+#tl-hero .uc-kpi-value{font-size:15px}
 .uc-day{display:flex;justify-content:space-between;gap:8px;padding:6px 14px;font-size:12px;font-weight:600;color:var(--ui-muted,#64748B);background:var(--ui-page,#F8FAFF);border-top:1px solid var(--ui-border-solid,#E3E7EF);font-variant-numeric:tabular-nums}
 .uc-rows>.uc-day:first-child{border-top:0}
 .uc-day+.uc-row{border-top:1px solid var(--ui-border-solid,#E3E7EF)}
@@ -1580,7 +1583,8 @@ body.bs-docview{overflow:hidden}
         </div>
       </div>
     </div>
-    <div class="card"><div id="tl-summary"></div></div>
+    <!-- 交通費の要約カード（2-b）：合計を最大に、件数・精算状況・精算予定日・要編集は2列。中身は renderTravelLedger -->
+    <div class="uc-hero ui-scope" id="tl-hero"><div id="tl-summary"></div></div>
     <div class="card">
       <div class="card-header"><span class="card-title">交通費一覧</span>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:500">
@@ -7197,6 +7201,7 @@ function travelRowHtml(l,g){
   </tr>`;
 }
 
+let tlPrevTotal=null;   // 交通費合計のカウントアップの起点（表示だけ）
 function renderTravelLedger(){
   const mi=currentTravelMonth();
   const all=travelLedgerRows(mi);
@@ -7205,19 +7210,21 @@ function renderTravelLedger(){
   const onlyEdit=document.getElementById('tl-needs-edit').checked;
   const rows=onlyEdit?all.filter(needsTravelEdit):all;
 
-  // サマリー
-  let status='';
+  // 要約カード（精算の判定・日付は従来の settlementFor・nextMonth25Of のまま。全期間は精算の欄を出さない）
+  const items=[{icon:'list',label:'件数',value:all.length+'件'}];
   if(mi!==null){
     const done=settlementFor(ymOfMonth(mi));
-    status=done
-      ?`<span class="badge badge-green">${ledgerDateOf(done)} に精算予定として登録済み</span>`
-      :`<span class="badge badge-amber">未登録</span>（${nextMonth25Of(mi)} に精算予定）`;
+    items.push(
+      {icon:'check',label:'精算状況',valueHtml:done?'<span class="badge badge-green">精算予定に登録済み</span>':'<span class="badge badge-amber">未登録</span>'},
+      {icon:'calendar',label:'精算予定日',value:done?ledgerDateOf(done):nextMonth25Of(mi)});
   }
+  items.push({icon:'alert',label:'要編集の行',valueHtml:needEdit?`<span class="uc-badge-alert">${needEdit}件</span>`:'なし'});
   document.getElementById('tl-summary').innerHTML=
-    `<div style="font-size:14px">${mi===null?'全期間':(mi+1)+'月'}の交通費合計：`
-    +`<strong style="font-size:18px">${fmt(total)}</strong>（${all.length}件）</div>`
-    +(needEdit?`<div style="font-size:12px;margin-top:4px">${TRAVEL_EDIT_BADGE} 到着か金額が未入力の行が ${needEdit}件 あります</div>`:'')
-    +(status?`<div style="font-size:12px;margin-top:4px">精算状況：${status}</div>`:'');
+    ucHeroInner({label:`${mi===null?'全期間':(mi+1)+'月'}の交通費合計`,value:total,
+      sub:'交通費はCFの実績に含めず、翌月25日にまとめて精算します'})
+    +ucKpis(items);
+  ucCountUp(document.querySelector('#tl-summary .uc-hero-value'),total,tlPrevTotal);
+  tlPrevTotal=total;
 
   const tb=document.getElementById('tl-list');
   const cards=document.getElementById('tl-cards');
