@@ -1100,5 +1100,8 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   ・繰越：選択月より前の請求レコードが請求済み・未入金（invoiced）なら、期間外でも「繰越（○月分 請求済・未入金）」の印で出す（表示だけ。合計には足さない）
   ・期間外の請求レコード（未請求など）は、出す理由にしない（以前は「その月の請求レコードがあれば出す」だった）
 - 合計カード（表示だけ）：選んだ月は、期間内の案件のその月の売上（projectSalesAtAbs＝ダッシュボードと同じ）。全期間は従来どおり projectMonthAmount
-- projectHasMonth は消していない（ほかの処理が使っている。一括請求書作成・一括ステータス変更は b で projectInMonth にそろえる）
+- projectHasMonth は消していない（融資力診断の安定売上がまだ使っている）
+- 一括請求書作成（bulkInvoiceTargets。年は bulkInvoiceYm と同じ billingYear）・一括ステータス変更の「未請求→請求済」（bulkStatusTargets。年は billingYm と同じ今の期）の対象も、
+  年＋月で契約期間に入る案件だけ（projectInMonth）。期間外の請求レコードがあっても対象にしない（以前はそれが入口になって、期間外の月に請求レコード・請求書・入金予定ができた）。
+  以前の判定なら対象だった案件の数を「期間外の案件 N件は対象外」と一覧の上に小さく出す（bulkInvoiceExcluded／bulkStatusExcluded）
 

@@ -593,6 +593,7 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 /* 案件管理：一覧の印・スイッチ */
 .pj-marks{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;font-weight:400}
 .pj-marks .badge{white-space:normal;text-align:left}
+.pj-out-note{font-size:12px;color:var(--text-secondary);margin:0 0 8px}
 
 /* ===== 書類の全画面表示（#doc-viewer）。上部の固定バー：56px＋セーフエリア・白・薄い境界線 ===== */
 #doc-viewer{position:fixed;inset:0;z-index:3000;display:flex;flex-direction:column;background:#E9EDF3}
@@ -9062,7 +9063,15 @@ function bulkStatusTargets(){
     // 突合しないので未請求・請求済のどちらも対象にする
     return S.projects.filter(p=>alive(p)&&['uninvoiced','invoiced'].indexOf(invoiceStatusOf(p))>=0);
   }
-  return S.projects.filter(p=>alive(p)&&invoiceStatusOf(p)==='uninvoiced'&&projectHasMonth(p,mi));
+  // 年＋月（年は billingYm と同じ今の期）で、その月が契約期間に入る案件だけ（projectInMonth）
+  const abs=monthYear(mi)*12+mi;
+  return S.projects.filter(p=>alive(p)&&invoiceStatusOf(p)==='uninvoiced'&&projectInMonth(projectMonthRange(p),abs));
+}
+// 未請求→請求済で、以前の判定（月だけ）では対象だったが、期間外なので外した案件の数
+function bulkStatusExcluded(){
+  const mi=bulkStatusMonth(),abs=monthYear(mi)*12+mi;
+  return S.projects.filter(p=>(p.status==='進行中'||p.status==='完了')&&invoiceStatusOf(p)==='uninvoiced'
+    &&projectHasMonth(p,mi)&&!projectInMonth(projectMonthRange(p),abs)).length;
 }
 
 function renderBulkStatusList(){
@@ -9080,8 +9089,9 @@ function renderBulkStatusList(){
     'to-paid-manual':'未請求・請求済の案件がありません。'
   }[mode];
 
+  const note=mode==='to-invoiced'?outOfRangeNote(bulkStatusExcluded()):'';
   if(list.length===0){
-    el.innerHTML='<div class="empty-state">'+emptyMsg+'</div>';
+    el.innerHTML=note+'<div class="empty-state">'+emptyMsg+'</div>';
     btn.disabled=true;
     document.getElementById('bs-count').textContent='';
     return;
@@ -9098,7 +9108,7 @@ function renderBulkStatusList(){
     :mode==='to-invoiced'?'<th style="min-width:150px">入金予定日</th>'
     :'<th>請求書</th>';
 
-  el.innerHTML=notice
+  el.innerHTML=note+notice
     +'<div class="table-wrap"><table><thead><tr>'
     +'<th style="width:36px"></th><th>顧客名</th><th>案件名</th><th>現在</th>'+lastCol
     +'</tr></thead><tbody>'
@@ -11879,14 +11889,21 @@ function bulkInvoiceYm(mi){
   return billingYear()+'-'+String(mi+1).padStart(2,'0');
 }
 
-// その月の請求対象案件（進行中・完了）
-// 契約期間の月に入っていなくても、その月の請求レコードがあれば対象にする
+// その月の請求対象案件（進行中・完了）。その月（年＋月。年は bulkInvoiceYm と同じ）が契約期間に入る案件だけ（projectInMonth）
+// ★ 以前は月だけで比べ、期間外でもその月の請求レコードがあれば対象にしていた（去年の同じ月に掛かる終了案件・単発が入っていた）
 function bulkInvoiceTargets(){
   const mi=parseInt(document.getElementById('bulk-month').value)||0;
-  const ym=bulkInvoiceYm(mi);
-  return S.projects.filter(p=>(p.status==='進行中'||p.status==='完了')
-    &&(projectHasMonth(p,mi)||getBillingForMonth(p.id,ym)));
+  const abs=billingYear()*12+mi;
+  return S.projects.filter(p=>(p.status==='進行中'||p.status==='完了')&&projectInMonth(projectMonthRange(p),abs));
 }
+// 以前の判定では対象だったが、期間外なので外した案件の数（一覧の上に小さく出す）
+function bulkInvoiceExcluded(){
+  const mi=parseInt(document.getElementById('bulk-month').value)||0;
+  const abs=billingYear()*12+mi,ym=bulkInvoiceYm(mi);
+  return S.projects.filter(p=>(p.status==='進行中'||p.status==='完了')
+    &&(projectHasMonth(p,mi)||getBillingForMonth(p.id,ym))&&!projectInMonth(projectMonthRange(p),abs)).length;
+}
+function outOfRangeNote(n){return n?`<div class="pj-out-note">期間外の案件 ${n}件は対象外（契約期間を年＋月で判定）</div>`:'';}
 
 // value属性に入れる文字列をエスケープする
 function escAttr(v){
@@ -11902,13 +11919,14 @@ function renderBulkInvoiceList(){
   const mi=parseInt(document.getElementById('bulk-month').value)||0;
   const list=bulkInvoiceTargets();
   const el=document.getElementById('bulk-list');
+  const note=outOfRangeNote(bulkInvoiceExcluded());
   if(list.length===0){
-    el.innerHTML='<div class="empty-state">'+(mi+1)+'月に請求できる案件がありません。<br><span style="font-size:12px">対象は「進行中」「完了」の案件です。</span></div>';
+    el.innerHTML=note+'<div class="empty-state">'+(mi+1)+'月に請求できる案件がありません。<br><span style="font-size:12px">対象は「進行中」「完了」の案件です。</span></div>';
     document.getElementById('bulk-submit').disabled=true;
     document.getElementById('bulk-count').textContent='';
     return;
   }
-  el.innerHTML='<div class="table-wrap"><table><thead><tr>'
+  el.innerHTML=note+'<div class="table-wrap"><table><thead><tr>'
     +'<th style="width:36px"></th><th>顧客名</th><th>案件名</th><th style="min-width:200px">品名・件名</th><th style="text-align:right">金額</th>'
     +'</tr></thead><tbody>'
     +list.map(p=>`<tr>
