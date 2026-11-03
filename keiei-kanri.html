@@ -344,7 +344,7 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 .dv2-rules{margin:0 0 6px;padding-left:18px}.dash-v2 .dv2-rules li{margin-bottom:4px}
 .dash-v2 .dv2-rule-st{font-size:11px;font-weight:700;margin-left:6px}.dash-v2 .st-hit .dv2-rule-st{color:var(--ui-warn-text)}.dash-v2 .st-skip .dv2-rule-st,.dash-v2 .st-miss .dv2-rule-st{color:var(--ui-muted)}
 /* 山登り */
-.dash-v2 .dv2-hero{display:grid;grid-template-columns:minmax(260px,.9fr) minmax(0,1.1fr);gap:16px;align-items:center;padding:20px;
+.dash-v2 .dv2-hero{display:grid;grid-template-columns:minmax(260px,.9fr) minmax(0,1.1fr);grid-template-areas:"text mtn" "nums mtn";gap:8px 16px;align-items:center;padding:20px;
   background:linear-gradient(135deg,var(--ui-bg) 35%,var(--ui-tint-blue) 70%,var(--ui-tint-purple))}
 .dash-v2 .dv2-hero-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:-10px 0 -8px}
 .dash-v2 .dv2-next{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px;padding:6px 10px;border-radius:var(--ui-radius-item);background:var(--ui-bg);
@@ -359,16 +359,25 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 .dv2-hero-rate{display:flex;align-items:baseline;gap:6px;margin:2px 0}
 .dash-v2 .dv2-big{font-size:40px;line-height:1.1;color:var(--ui-accent-text)}
 .dash-v2 .dv2-unit{color:var(--ui-muted);font-weight:700;font-size:12px}
-.dash-v2 .dv2-hero-nums{margin:6px 0 0;display:flex;flex-wrap:wrap;gap:4px 16px}
-.dash-v2 .dv2-hero-nums>div{display:flex;flex-direction:column;min-width:0;max-width:100%}
+/* 山の配置：文字（達成率・次の地点・着地見込み）／山／目標・確定・予測の1行。PCは文字と数字の行が左、山が右。スマホは縦に並べる */
+.dash-v2 .dv2-hero-text{grid-area:text;min-width:0}.dash-v2 .dv2-hero .dv2-mtn{grid-area:mtn}
+.dash-v2 .dv2-hero-nums{grid-area:nums;align-self:start;display:flex;flex-wrap:wrap;gap:2px 14px;font-size:12px}
+.dash-v2 .dv2-hero-nums>span{min-width:0;max-width:100%;white-space:nowrap}
 .dash-v2 .dv2-hero-nums b{overflow-wrap:anywhere}
 .dash-v2 .dv2-hero-nums .k{font-size:11px;color:var(--ui-muted-strong)}
 .dash-v2 .dv2-hero .dv2-kicker,.dash-v2 .dv2-hero .dv2-unit,.dash-v2 .dv2-hero .dv2-note,.dash-v2 .dv2-hero .dv2-muted{color:var(--ui-muted-strong)}
-.dash-v2 .dv2-hero-nums b{font-size:14px}
-.dash-v2 .dv2-hero-nums .dv2-hn-main b{font-size:17px}.dash-v2 .dv2-hero-nums .plan b{color:var(--ui-plan-text)}
+.dash-v2 .dv2-hero-nums b{font-size:12px}.dash-v2 .dv2-hero-nums .plan b{color:var(--ui-plan-text)}
 .dash-v2 .dv2-hero-rate .dv2-unit{line-height:1.2}
-.dash-v2 .dv2-hero-rate .dv2-landing{margin:0 0 0 auto}
-.dash-v2 .dv2-landing{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.dash-v2 .dv2-landing{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.dash-v2 .dv2-celeb{display:flex;align-items:center;gap:8px;margin-top:8px}
+.dash-v2 .dv2-celeb .rinko-av,.dash-v2 .dv2-celeb .rinko-av img{width:32px;height:32px}
+/* 進捗の線（ルートの始点から現在地まで）と、初回だけのアニメーション */
+.dash-v2 .dv2-route-done{fill:none;stroke:#fff;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.dash-v2 .dv2-mtn.is-intro>path{animation:dv2-fade 250ms ease-out both}
+.dash-v2 .dv2-mtn.is-intro .dv2-route-done{stroke-dasharray:1;stroke-dashoffset:1;animation:dv2-draw 350ms ease-out 150ms forwards}
+.dash-v2 .dv2-mtn.is-intro .dv2-me>circle:first-child{transform-box:fill-box;transform-origin:center;animation:dv2-glow 300ms ease-out 500ms both}
+@keyframes dv2-draw{to{stroke-dashoffset:0}}
+@keyframes dv2-glow{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.25);opacity:1}100%{transform:scale(1);opacity:1}}
 .dash-v2 .dv2-mtn{width:100%;height:auto;max-height:260px;overflow:visible;filter:drop-shadow(0 6px 10px rgba(23,35,61,.10))}
 .dash-v2 .dv2-route{fill:none;stroke:#fff;stroke-width:2.5;stroke-dasharray:5 4;opacity:.9}
 .dash-v2 .dv2-ms{fill:var(--ui-bg);stroke:var(--ui-muted);stroke-width:1.5}
@@ -520,8 +529,8 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 @media (max-width:768px){.dash-v2 .dv2-skel.h-hero{height:306px}.dash-v2 .dv2-skel.h-trend{height:349px}.dash-v2 .dv2-skel.h-kpi{height:205px}}
 @media (max-width:768px){
   .dash-v2{margin:-16px -12px;padding:12px 16px 32px}
-  .dash-v2 .dv2-hero{grid-template-columns:minmax(0,1fr)}
-  .dash-v2 .dv2-mtn{max-height:140px}
+  .dash-v2 .dv2-hero{grid-template-columns:minmax(0,1fr);grid-template-areas:"text" "mtn" "nums"}
+  .dash-v2 .dv2-mtn{max-height:200px}
   body.bs-nav2 .tb-menu{display:inline-flex!important}
   body.bs-nav2 .topbar{padding-left:4px;padding-right:4px}
 }
@@ -530,9 +539,8 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
   .dash-v2 .dv2-card{padding:12px}
   .dash-v2 .dv2-hello{font-size:19px}
   .dash-v2 .dv2-big{font-size:32px}
-  .dash-v2 .dv2-hero{grid-template-columns:minmax(0,1fr);gap:4px;padding:14px 12px 8px}
-  .dash-v2 .dv2-hero-nums{gap:2px 12px}
-  .dash-v2 .dv2-hero-nums .dv2-hn-main b{font-size:15px}.dash-v2 .dv2-hero-nums b{font-size:13px}
+  .dash-v2 .dv2-hero{gap:4px;padding:12px 12px 10px}
+  .dash-v2 .dv2-hero-nums{gap:2px 10px;font-size:11px}.dash-v2 .dv2-hero-nums b{font-size:11px}
   .dash-v2 .dv2-kpi-val{font-size:18px}
   .dash-v2 .dv2-kpi-val.fit-1{font-size:17px}.dash-v2 .dv2-kpi-val.fit-2,.dash-v2 .dv2-kpi-val.fit-3{font-size:16px}
   .dash-v2 .kpi-cash .dv2-kpi-val:not([class*="fit-"]){font-size:20px}
@@ -13474,7 +13482,9 @@ let dv2TrendMonths=null;       // 12 / 6（null は画面幅で決める：ス�
 const dv2Counted={};           // カウントアップ済み（読み込みにつき1回）
 const dv2Open={};              // 開いている根拠など
 let dv2LastPos=null;           // 現在地の前の位置（滑らかに動かす）
-let dv2PrevDone=null;          // ミッションの前の完了状態（未完了→完了の瞬間だけチェックの演出）
+let dv2PrevDone=null;
+let dv2HeroIntro=false;        // 山の初回のアニメーションを再生したか（読み込みにつき1回）
+let dv2CelebrateP=null;        // このセッションで祝福したマイルストーン（凛子の一言を出す）          // ミッションの前の完了状態（未完了→完了の瞬間だけチェックの演出）
 let dv2TrendRows=[];
 const DASH_PARTS=['summary','metrics','status','rest'];
 const DV2_ROUTE=[[34,160],[110,146],[92,126],[168,108],[150,88],[214,70],[198,50],[250,24]];
@@ -13769,8 +13779,8 @@ function dv2CountUp(root){
     dv2Counted[key]=true;
     const to=parseFloat(el.dataset.count),f=el.dataset.fmt;
     if(isNaN(to))return;
-    const t0=performance.now(),out=v=>f==='pct'?v.toFixed(1)+'%':dv2Yen(v);
-    const step=t=>{const k=Math.min(1,(t-t0)/DV2_MS.count);el.textContent=out(k<1?to*(1-Math.pow(1-k,3)):to);if(k<1)requestAnimationFrame(step);};
+    const t0=performance.now()+(parseInt(el.dataset.delay)||0),out=v=>f==='pct'?v.toFixed(1)+'%':dv2Yen(v);
+    const step=t=>{const k=Math.max(0,Math.min(1,(t-t0)/DV2_MS.count));el.textContent=out(k<1?to*(1-Math.pow(1-k,3)):to);if(k<1)requestAnimationFrame(step);};
     requestAnimationFrame(step);
   });
 }
@@ -13883,24 +13893,24 @@ function renderDv2Hero(D){
       +(m.done?`<path d="M${pt[0]-3} ${pt[1]} l2 2.5 l4 -4.5" class="dv2-ms-check"/>`:'')
       +`<text x="${lb.x}" y="${lb.y}" text-anchor="${lb.anchor}" class="dv2-ms-t${next?' is-next':''}">${next?'次 ':''}${m.p}%</text></g>`;
   }).join('');
+  // 初回の表示だけ：山 → 進捗の線が現在地まで伸びる → 現在地が軽く光る → 数字（合わせて0.8秒以内。描き直しでは再生しない）
+  const intro=!dv2HeroIntro&&!dv2ReducedMotion()&&st.showMarkers;dv2HeroIntro=true;
+  if(fresh.length)dv2CelebrateP=Math.max(...fresh);
+  const celeb=dv2CelebrateP&&rinkoOn()?`<div class="dv2-celeb">${rinkoAvatar('smile')}${rinkoLine('celebrate',{地点:dv2CelebrateP})}</div>`:'';
   el.innerHTML=`
     <div class="dv2-hero-text">
       <div class="dv2-hero-top"><span class="dv2-kicker">${escAttr(fy.name)}の売上目標（山頂）</span>
         <button class="dv2-link dv2-tap" onclick="dv2Toggle('hero')" aria-expanded="${!!dv2Open.hero}">前提 ${dv2Open.hero?'▲':'▼'}</button></div>
       ${D.target>0?`
-        <div class="dv2-hero-rate"><span class="dv2-num dv2-big" data-count="${rate}" data-fmt="pct" data-key="hero-rate">${rate.toFixed(1)}%</span>
-          <span class="dv2-unit">達成<br>（確定）</span>
-          <span class="dv2-landing"><span class="dv2-chip dv2-plan">着地見込み ${landing.toFixed(1)}%</span></span></div>
-        <div class="dv2-hero-nums" data-total="${sp.total}">
-          <div class="dv2-hn-main dv2-hero-row"><span class="k">確定実績</span><b class="dv2-num">${dv2Yen(sp.confirmed)}</b></div>
-          <div><span class="k">目標</span><b class="dv2-num">${dv2Yen(D.target)}</b></div>
-          <div class="plan" title="翌月から期末の契約にもとづく予定額"><span class="k">予測</span><b class="dv2-num">${dv2Yen(sp.planned)}</b></div>
-        </div>
-        ${nx?`<div class="dv2-next" title="次の目標地点（確定ベース）"><span class="dv2-next-dot" aria-hidden="true"></span>次の地点 <b>${nx.p}%</b>：あと <b class="dv2-num">${dv2Yen(nx.left)}</b><span class="dv2-note">（確定）</span></div>`
-          :`<div class="dv2-next is-done">✓ 目標達成（確定で年間目標に到達しました）</div>`}`
+        <div class="dv2-hero-rate"><span class="dv2-num dv2-big" data-count="${rate}" data-fmt="pct" data-key="hero-rate"${intro?' data-delay="200"':''}>${rate.toFixed(1)}%</span>
+          <span class="dv2-unit">達成（確定）</span></div>
+        ${nx?`<div class="dv2-next" title="次の目標地点（確定ベース）"><span class="dv2-next-dot" aria-hidden="true"></span>次の地点 <b>${nx.p}%</b>：あと <b class="dv2-num">${dv2Yen(nx.left)}</b></div>`
+          :`<div class="dv2-next is-done">✓ 目標達成（確定で年間目標に到達しました）</div>`}
+        <div class="dv2-landing"><span class="dv2-chip dv2-plan">着地見込み ${landing.toFixed(1)}%</span><span class="dv2-note">確定＋予測 ÷ 目標</span></div>`
       :`<div class="dv2-h2">売上目標が未設定です</div>
         <div class="dv2-muted">確定の実績 <b class="dv2-num">${dv2Yen(sp.confirmed)}</b>（確定＋予測 ${dv2Yen(sp.total)}）</div>
         <button class="dv2-btn primary" onclick="dv2GoFiscal()">期の設定で目標を入れる</button>`}
+      ${celeb}
       ${dv2Open.hero?`<div class="dv2-basis">
         <div>集計期間：${escAttr(fiscalLabel(fy))}（${escAttr(fy.name)}）。売上は期間サマリーと同じ案件ベース（請求レコード、無ければ案件の月額）</div>
         <div>達成率・現在地・マイルストーン・次の目標地点＝確定の実績で計算（確定は期首から当月まで ${sp.confirmedMonths.length}か月。推移グラフの「実績」と同じ）。
@@ -13908,7 +13918,7 @@ function renderDv2Hero(D){
         <div>予測＝翌月から期末（${sp.plannedMonths.length}か月）の契約の予定額。着地見込み＝（確定＋予測 ${dv2Yen(sp.total)}）÷ 目標＝期間サマリーの達成率。入金予定は混ぜず、統計的な外挿もしません</div>
         <button class="dv2-link dv2-tap" onclick="dv2GoForecast()">案件予実を開く ›</button></div>`:''}
     </div>
-    <svg class="dv2-mtn is-${st.mode}" viewBox="0 0 320 170" role="img" aria-label="${st.mode==='unset'?'売上目標の山（目標未設定）':`売上目標の山。現在地は確定の達成率 ${rate.toFixed(1)}%${st.mode==='reached'?'（目標達成）':''}${nx?`、次の目標地点 ${nx.p}%`:''}${landing!==null?`、着地見込み ${st.landingText}`:''}`}">
+    <svg class="dv2-mtn is-${st.mode}${intro?' is-intro':''}" viewBox="0 0 320 170" role="img" aria-label="${st.mode==='unset'?'売上目標の山（目標未設定）':`売上目標の山。現在地は確定の達成率 ${rate.toFixed(1)}%${st.mode==='reached'?'（目標達成）':''}${nx?`、次の目標地点 ${nx.p}%`:''}${landing!==null?`、着地見込み ${st.landingText}`:''}`}">
       <defs>
         <linearGradient id="dv2gA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C7D6FF"/><stop offset="1" stop-color="#EEF3FF"/></linearGradient>
         <linearGradient id="dv2gB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A9BFFB"/><stop offset="1" stop-color="#C9B6FA"/></linearGradient>
@@ -13924,16 +13934,32 @@ function renderDv2Hero(D){
       <path d="M16 160 L250 18" stroke="#fff" stroke-opacity=".35" stroke-width="2" fill="none"/>
       <path d="M232 30 L250 18 L268 37 L258 34 L249 42 L241 34 Z" fill="#fff" opacity=".95"/>
       <polyline points="${DV2_ROUTE.map(p=>p.join(',')).join(' ')}" class="dv2-route"/>
+      ${st.showMarkers&&(st.meP||0)>0?`<polyline points="${dv2RouteUpTo(DV2_ROUTE,(st.meP||0)/100).map(p=>p.map(v=>v.toFixed(1)).join(',')).join(' ')}" pathLength="1" class="dv2-route-done"/>`:''}
       ${ms}
       <path d="M250 24 L250 4 L266 10 L250 16" class="dv2-flag"/>
       ${st.mode==='reached'?'<text x="244" y="12" text-anchor="end" class="dv2-goal-t">目標達成</text>':''}
       ${lpos?`<circle cx="${lpos[0]}" cy="${lpos[1]}" r="8" class="dv2-landing-mark"><title>着地見込み ${st.landingText}</title></circle>`:''}
       ${st.showMarkers?`<g class="dv2-me" id="dv2-me" style="transform:translate(${from[0]}px,${from[1]}px)">
         <circle r="18" fill="url(#dv2glow)"/><circle r="8"/><title>現在地（確定）${rate.toFixed(1)}%</title></g>`:''}
-    </svg>`;
+    </svg>
+    ${D.target>0?`<div class="dv2-hero-nums" data-total="${sp.total}">
+      <span><span class="k">目標</span> <b class="dv2-num">${dv2Yen(D.target)}</b></span>
+      <span class="dv2-hn-main dv2-hero-row"><span class="k">確定</span> <b class="dv2-num">${dv2Yen(sp.confirmed)}</b></span>
+      <span class="plan" title="翌月から期末の契約にもとづく予定額"><span class="k">予測</span> <b class="dv2-num">${dv2Yen(sp.planned)}</b></span></div>`:''}`;
   if(st.showMarkers&&(from[0]!==pos[0]||from[1]!==pos[1]))
     requestAnimationFrame(()=>requestAnimationFrame(()=>{const me=document.getElementById('dv2-me');if(me)me.style.transform=`translate(${pos[0]}px,${pos[1]}px)`;}));
   dv2CountUp(el);
+}
+
+// 登山ルートの始点から、割合 frac（0〜1）の位置までの点の列（進捗の線）
+function dv2RouteUpTo(points,frac){
+  const end=routePoint(points,frac),out=[points[0]];
+  let total=0;const seg=[];
+  for(let i=1;i<points.length;i++){const l=Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);seg.push(l);total+=l;}
+  let d=Math.max(0,Math.min(1,frac))*total;
+  for(let i=0;i<seg.length&&d>seg[i];i++){d-=seg[i];out.push(points[i+1]);}
+  out.push(end);
+  return out;
 }
 
 // 達成率のリング：内側＝確定（色は判定に連動）、外側の細い点線の弧＝着地見込み
