@@ -646,6 +646,8 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .uc-row-sub .badge,.uc-row-sub .uc-badge-alert{padding:1px 7px;margin-right:4px;vertical-align:1px}
 .uc-row[open] .uc-row-body,.uc-more[open]>:not(summary){animation:uc-open .2s ease}
 @keyframes uc-open{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.uc-row-foot{grid-column:1/-1;min-width:0}
+.uc-row-foot .pj-marks{margin-top:0}
 .uc-row-amt{grid-row:1/span 2;grid-column:2;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .uc-row-amt small{display:block;font-weight:500;font-size:11px}
 .uc-row-body{padding:4px 14px 12px;font-size:13px;color:var(--uc-muted)}
@@ -1366,8 +1368,8 @@ body.bs-docview{overflow:hidden}
       </select><svg class="lt-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
       </div>
       <div class="lt-actions">
-        <button class="btn lt-wide" onclick="openBulkInvoiceModal()">📄 一括請求書作成</button>
-        <button class="btn lt-wide" onclick="openBulkStatusModal()">📋 一括ステータス変更</button>
+        <button class="btn lt-wide" onclick="openBulkInvoiceModal()">一括請求書作成</button>
+        <button class="btn lt-wide" onclick="openBulkStatusModal()">一括ステータス変更</button>
         <button class="btn primary lt-primary" onclick="openProjectModal(null,'契約済')">+ 案件追加</button>
         <div class="lt-menu-wrap">
           <button class="btn lt-menu-btn" id="proj-bulk-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="proj-bulk-menu" onclick="ltMenu(this)">一括操作 ▾</button>
@@ -4168,12 +4170,12 @@ function ucHeroInner(o){
     +(o.barHtml||'')+(o.moreHtml||'');
 }
 // コンパクトな明細の行（台帳の1行：入出金明細・交通費で共通）。タップで展開
-// o:{main,sub,amount(数),amountClass?,amountNote?,markHtml?,tagsHtml?(種別・予定/実績のバッジ),bodyHtml?,actionsHtml?,attrs?}
+// o:{main,sub,amount(数),amountClass?,amountNote?,markHtml?,tagsHtml?(種別・予定/実績のバッジ),footHtml?(閉じても見せる印。行の幅いっぱい),bodyHtml?,actionsHtml?,attrs?}
 function ucRow(o){
   return`<details class="uc-row"${o.attrs||''}><summary>`
     +`<span class="uc-row-main">${o.markHtml||''}${escAttr(o.main)}</span>`
     +`<span class="uc-row-amt${o.amountClass?' '+o.amountClass:''}">${fmt(o.amount)}${o.amountNote?`<small>${escAttr(o.amountNote)}</small>`:''}</span>`
-    +`<span class="uc-row-sub">${o.tagsHtml||''}${escAttr(o.sub||'')}</span></summary>`
+    +`<span class="uc-row-sub">${o.tagsHtml||''}${escAttr(o.sub||'')}</span>${o.footHtml?`<span class="uc-row-foot">${o.footHtml}</span>`:''}</summary>`
     +`<div class="uc-row-body">${o.bodyHtml||''}${o.actionsHtml?`<div class="uc-row-actions">${o.actionsHtml}</div>`:''}</div></details>`;
 }
 // 項目別の進捗行。max が 0 以下ならバーは 0%（ゼロ除算を出さない）
@@ -4753,14 +4755,14 @@ function renderProjects(){
     <td>${invoiceBadge(p)}${p.paidMonth?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${p.paidMonth}</div>`:''}</td>
     <td style="font-size:12px"><div>${p.start} 〜 ${p.end}</div><span class="badge badge-gray" style="margin-top:3px">${{single:'単発',monthly:'月次継続',annual:'年次継続'}[p.contract]||p.contract}</span></td>
     <td><div style="display:flex;gap:4px;flex-wrap:wrap">
-      ${invoiceStatusOf(p)==='invoiced'?`<button class="btn sm success" onclick="openPaymentModal(${p.id})">💴 入金確認</button>`:''}
-      <button class="btn sm" onclick="openProjectModal(${p.id})">✏️ 編集</button>
-      <button class="btn sm" onclick="openRenewModal(${p.id})" ${p.contract==='single'?'disabled':''}>🔄 更新</button>
-      <button class="btn sm" onclick="quickQuote(${p.id})">📄 見積</button>
+      ${invoiceStatusOf(p)==='invoiced'?`<button class="btn sm success" onclick="openPaymentModal(${p.id})">入金確認</button>`:''}
+      <button class="btn sm" onclick="openProjectModal(${p.id})">編集</button>
+      <button class="btn sm" onclick="openRenewModal(${p.id})" ${p.contract==='single'?'disabled':''}>更新</button>
+      <button class="btn sm" onclick="quickQuote(${p.id})">見積</button>
       <button class="btn sm danger" onclick="deleteProject(${p.id})">削除</button>
     </div></td>
   </tr>`+billingRowsHtml(p,8)).join('');
-  cards.innerHTML=list.map(p=>projectCardHtml(p,marks[p.id])).join('');
+  cards.innerHTML=`<div class="uc-rows ui-scope">${list.map(p=>projectRowHtml(p,marks[p.id])).join('')}</div>`;
 }
 /* ===== 見込みタブ（状態＝商談中）=====
    一覧・合計は表示だけ。操作は既存の案件の編集（openProjectModal → saveProject）をそのまま使う：
@@ -11560,21 +11562,30 @@ function mobEmpty(msg){
 
 /* ---- 案件管理 ---- */
 
-function projectCardHtml(p,st){
-  return mobCard(
-    `<div class="mob-card-header"><span>${p.name}${projectMarksHtml(st)}</span>${statusBadge(p.status)}</div>`
-    +`<div class="mob-sub">${p.client||'-'}</div>`
-    +`<div class="mob-amount">${fmt(p.amount)}</div>`
-    +mobRow('期間',`${p.start} 〜 ${p.end}`)
-    +mobRow('種別',CONTRACT_LABELS[p.contract]||p.contract)
-    +mobRow('入金',invoiceBadge(p)+(p.paidMonth?` <span style="font-size:11px;color:var(--text-muted)">${p.paidMonth}</span>`:''))
-    +mobActions(`${invoiceStatusOf(p)==='invoiced'?`<button class="btn sm success" onclick="openPaymentModal(${p.id})">💴 入金確認</button>`:''}
-      <button class="btn sm" onclick="openProjectModal(${p.id})">✏️ 編集</button>
-      <button class="btn sm" onclick="toggleBillingRows(${p.id})">${expandedProjects[p.id]?'▼':'▶'} 月次請求</button>
-      <button class="btn sm" onclick="openRenewModal(${p.id})" ${p.contract==='single'?'disabled':''}>🔄 更新</button>
-      <button class="btn sm" onclick="quickQuote(${p.id})">📄 見積</button>
-      <button class="btn sm danger" onclick="deleteProject(${p.id})">削除</button>`)
-    +billingCardsHtml(p));
+
+// スマホの案件一覧：コンパクトな行（ucRow）。閉じた状態＝案件名・顧客・金額・状態（＋繰越・終了・終了日未設定の印）。
+// 展開で期間・種別・請求・入金と操作（主な1つ＋「その他 ▾」は mobActions のまま）、月次請求のレコード。月次請求を開いている案件は開いたまま描く
+function projectRowHtml(p,st){
+  const acts=`${invoiceStatusOf(p)==='invoiced'?`<button class="btn sm success" onclick="openPaymentModal(${p.id})">入金確認</button>`:''}
+      <button class="btn sm" onclick="openProjectModal(${p.id})">編集</button>
+      <button class="btn sm" onclick="toggleBillingRows(${p.id})">月次請求を${expandedProjects[p.id]?'閉じる':'表示'}</button>
+      <button class="btn sm" onclick="openRenewModal(${p.id})" ${p.contract==='single'?'disabled':''}>更新</button>
+      <button class="btn sm" onclick="quickQuote(${p.id})">見積</button>
+      <button class="btn sm danger" onclick="deleteProject(${p.id})">削除</button>`;
+  return ucRow({
+    main:p.name,
+    sub:p.client||'-',
+    tagsHtml:statusBadge(p.status),
+    amount:p.amount,
+    amountNote:CONTRACT_LABELS[p.contract]||p.contract||'',
+    footHtml:projectMarksHtml(st),
+    attrs:` data-project-id="${p.id}"${expandedProjects[p.id]?' open':''}`,
+    bodyHtml:`<dl class="uc-dl">`
+      +`<dt>期間</dt><dd>${escAttr(p.start||'')} 〜 ${escAttr(p.end||'')}</dd>`
+      +`<dt>種別</dt><dd>${escAttr(CONTRACT_LABELS[p.contract]||p.contract||'')}</dd>`
+      +`<dt>請求・入金</dt><dd>${invoiceBadge(p)}${p.paidMonth?` <span style="font-size:11px">${escAttr(p.paidMonth)}</span>`:''}</dd>`
+      +`</dl>`+mobActions(acts)+billingCardsHtml(p)
+  });
 }
 
 // カードを開いたときの月次請求レコード（縦並びリスト）
@@ -11590,7 +11601,7 @@ function billingCardsHtml(p){
         <span style="font-weight:600;white-space:nowrap">${fmt(b.amount)}</span>
         <span class="badge ${st?st.cls:'badge-gray'}">${st?st.label:'未請求'}</span>
         <span style="color:var(--text-muted);white-space:nowrap">${b.expectedPayDate||'-'}</span>
-        <button class="btn sm" style="margin-left:auto" onclick="openBillingModal(${b.id})">✏️</button>
+        <button class="btn sm" style="margin-left:auto" onclick="openBillingModal(${b.id})">編集</button>
       </div>`;
     }).join('')
     +mobTotal(`合計（${list.length}ヶ月）`,fmt(list.reduce((a,b)=>a+(b.amount||0),0)))

@@ -168,6 +168,24 @@ const SCENARIO = String.raw`(async () => {
     ok(document.getElementById('project-forecast').textContent === '¥0', '売上見込みが違う');
     ok(/確定/.test(hero.textContent) && /未確定/.test(hero.textContent), '確定と見込みの区別が無い');
     ok(!/NaN|Infinity/.test(hero.textContent), '営業サマリーに NaN');
+    // スマホの案件の行：表の行と同じ数。展開で操作（主な1つ＋その他）。月次請求を開いても行は開いたまま。削除は確認つき
+    const rows = () => [...document.querySelectorAll('#project-cards .uc-row')];
+    ok(rows().length > 0 && rows().length === document.querySelectorAll('#project-list > tr').length, '案件の行の数が表と違う');   // 月次請求はまだ開いていない
+    const r = document.querySelector('#project-cards .uc-row[data-project-id="1"]');
+    ok(r, '営業支援の行がない'); if (!r) return;
+    ok(/営業支援/.test(r.querySelector('summary').textContent) && /株式会社テスト商事/.test(r.querySelector('summary').textContent) && /進行中/.test(r.querySelector('summary').textContent), '閉じた行に 案件名・顧客・状態 がない');
+    r.querySelector('summary').click(); ok(r.open, 'タップで展開されない');
+    const items = [...r.querySelectorAll('.uc-row-body button')].map(b => b.textContent.trim());
+    ['編集', '月次請求を表示', '更新', '見積', '削除'].forEach(t => ok(items.includes(t), '展開に「' + t + '」がない'));
+    ok(items.includes('その他 ▾'), '「その他 ▾」がない');
+    toggleBillingRows(1);
+    const r2 = document.querySelector('#project-cards .uc-row[data-project-id="1"]');
+    ok(r2 && r2.open && r2.querySelector('.mob-billing'), '月次請求を開くと行が閉じる・レコードが出ない');
+    toggleBillingRows(1);
+    const n0 = S.projects.length, conf = window.confirm; let asked = false;
+    window.confirm = () => { asked = true; return false; };
+    deleteProject(1); window.confirm = conf;
+    ok(asked && S.projects.length === n0, '案件の削除に確認が出ない');
   });
   await step('請求書の下書き作成', async () => {
     syncMonthlyBillings();

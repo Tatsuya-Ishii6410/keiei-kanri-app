@@ -65,6 +65,10 @@ test('KPI：絞り込み処理を渡した時だけボタン（無い機能を�
 test('明細の行：種別・予定/実績のバッジ（tagsHtml）を補助の行に出す', () => {
   const r = A.ucRow({ main: '摘要', sub: '5/1', amount: 1000, tagsHtml: '<span class="badge badge-blue">予定</span>' });
   assert(r.includes('<span class="uc-row-sub"><span class="badge badge-blue">予定</span>5/1</span>'));
+  assert(!r.includes('uc-row-foot'));
+  // 閉じても見せる印（案件の繰越・終了日未設定）は summary の中、行の幅いっぱい
+  const f = A.ucRow({ main: '案件', amount: 1, footHtml: '<div class="pj-marks">繰越</div>' });
+  assert(/<span class="uc-row-foot"><div class="pj-marks">繰越<\/div><\/span><\/summary>/.test(f));
 });
 test('カウントアップ：初回・前の値が無い時は、すぐ最終値（入力や更新を待たせない）', () => {
   app.document = { hidden: false };
