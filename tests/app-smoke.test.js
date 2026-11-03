@@ -178,6 +178,15 @@ const SCENARIO = String.raw`(async () => {
     const items = [...r.querySelectorAll('.uc-row-body button')].map(b => b.textContent.trim());
     ['編集', '月次請求を表示', '更新', '見積', '削除'].forEach(t => ok(items.includes(t), '展開に「' + t + '」がない'));
     ok(items.includes('その他 ▾'), '「その他 ▾」がない');
+    // 状態のステップ（進行中が今の段）。請求・入金は別の行。状態が変わった時だけ動きの印
+    const cur = r.querySelector('.uc-steps [aria-current="step"]');
+    ok(cur && /進行中/.test(cur.textContent) && r.querySelectorAll('.uc-steps .is-done').length === 2, 'ステップの今の段が違う');
+    ok(r.querySelector('.pj-inv .badge') && !r.querySelector('.uc-steps').textContent.includes('請求'), '請求・入金がステップと別になっていない');
+    ok(!r.querySelector('.uc-steps.is-changed'), '状態が変わっていないのに動く');
+    const p1 = S.projects.find(p => p.id === 1), st0 = p1.status;
+    p1.status = '完了'; renderProjects();
+    ok(document.querySelector('#project-cards .uc-row[data-project-id="1"] .uc-steps.is-changed'), '状態の変化に動きの印がない');
+    p1.status = st0; renderProjects(); renderProjects();
     toggleBillingRows(1);
     const r2 = document.querySelector('#project-cards .uc-row[data-project-id="1"]');
     ok(r2 && r2.open && r2.querySelector('.mob-billing'), '月次請求を開くと行が閉じる・レコードが出ない');

@@ -15,7 +15,7 @@ function fnSource(name) {
 const iconsAt = html.indexOf('const UC_ICONS=');
 assert(iconsAt > 0, 'UC_ICONS が見つかりません');
 const iconsSrc = html.slice(iconsAt, html.indexOf('\n};', iconsAt) + 3);
-const names = ['fmt', 'escAttr', 'ucIcon', 'ucBadge', 'ucDiff', 'ucKpis', 'ucBar', 'ucMore', 'ucHero', 'ucHeroInner', 'ucRow', 'ucProgress'];
+const names = ['fmt', 'escAttr', 'ucIcon', 'ucBadge', 'ucDiff', 'ucKpis', 'ucBar', 'ucMore', 'ucHero', 'ucHeroInner', 'ucRow', 'ucProgress', 'ucSteps'];
 const app = {};
 vm.createContext(app);
 vm.runInContext(iconsSrc + '\n' + names.map(fnSource).join('\n') + `
@@ -61,6 +61,15 @@ test('KPI：絞り込み処理を渡した時だけボタン（無い機能を�
   assert(!plain.includes('<button') && !plain.includes('is-link'));
   const link = A.ucKpis([{ label: '実績入金', value: '¥1', onclickJs: 'f("a")' }]);
   assert(link.includes('<button type="button" class="uc-kpi is-link"') && link.includes('f(&quot;a&quot;)'));
+});
+test('ステップ：今の段・済んだ段。順序の外（失注）は空。達成率は出さない', () => {
+  const S4 = ['商談中', '契約済', '進行中', '完了'];
+  const h = A.ucSteps(S4, '進行中', '案件の状態');
+  assert.strictEqual((h.match(/is-done/g) || []).length, 2);
+  assert(/<li class="is-current" aria-current="step">.*進行中/.test(h));
+  assert(!/%/.test(h) && !h.includes('is-changed'));
+  assert.strictEqual(A.ucSteps(S4, '失注'), '');
+  assert(A.ucSteps(S4, '完了', 'x', true).includes('uc-steps is-changed'));
 });
 test('明細の行：種別・予定/実績のバッジ（tagsHtml）を補助の行に出す', () => {
   const r = A.ucRow({ main: '摘要', sub: '5/1', amount: 1000, tagsHtml: '<span class="badge badge-blue">予定</span>' });

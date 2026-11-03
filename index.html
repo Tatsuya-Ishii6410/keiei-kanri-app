@@ -646,6 +646,19 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .uc-row-sub .badge,.uc-row-sub .uc-badge-alert{padding:1px 7px;margin-right:4px;vertical-align:1px}
 .uc-row[open] .uc-row-body,.uc-more[open]>:not(summary){animation:uc-open .2s ease}
 @keyframes uc-open{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.uc-steps{display:flex;list-style:none;margin:4px 0 10px;padding:0;counter-reset:none}
+.uc-steps li{flex:1 1 0;position:relative;text-align:center;font-size:11px;color:var(--uc-muted,#64748B);min-width:0}
+.uc-steps li::before{content:"";position:absolute;top:7px;left:-50%;width:100%;height:2px;background:var(--ui-border-solid,#E3E7EF);z-index:0}
+.uc-steps li:first-child::before{display:none}
+.uc-steps li.is-done::before,.uc-steps li.is-current::before{background:var(--ui-accent,#3976F6)}
+.uc-step-dot{position:relative;z-index:1;display:block;width:16px;height:16px;margin:0 auto 3px;border-radius:50%;background:#FFFFFF;border:2px solid var(--ui-border-solid,#CBD5E1);box-sizing:border-box;transition:background-color .3s ease,border-color .3s ease}
+.uc-steps li.is-done .uc-step-dot{background:var(--ui-accent,#3976F6);border-color:var(--ui-accent,#3976F6)}
+.uc-steps li.is-current .uc-step-dot{border-color:var(--ui-accent,#3976F6);border-width:5px}
+.uc-steps li.is-current{color:var(--ui-accent-text,#1D4ED8);font-weight:700}
+.uc-steps.is-changed li.is-current .uc-step-dot,.uc-pop{animation:uc-pop .4s ease}
+@keyframes uc-pop{0%{transform:scale(.6)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
+.uc-pop{display:inline-block}
+@media (prefers-reduced-motion:reduce){.uc-step-dot{transition:none}.uc-steps.is-changed li.is-current .uc-step-dot,.uc-pop{animation:none}}
 .uc-row-foot{grid-column:1/-1;min-width:0}
 .uc-row-foot .pj-marks{margin-top:0}
 .uc-row-amt{grid-row:1/span 2;grid-column:2;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -4183,6 +4196,15 @@ function ucProgress(label,value,max,rightText){
   const p=max>0?Math.max(0,Math.min(100,Math.round(value/max*100))):0;
   return`<div class="uc-prog"><span>${escAttr(label)}</span><span>${escAttr(rightText!=null?rightText:(max>0?p+'%':'—'))}</span>`
     +`<div class="uc-prog-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p}" aria-label="${escAttr(label)}"><span style="width:${p}%"></span></div></div>`;
+}
+// 順序のある状態のステップ表示（達成率は出さない）。current が steps に無い時（失注など）は空 → 呼び出し側でバッジ。
+// changed＝前の描画から状態が変わった時だけ、今の段に軽い動き（reduced-motion では止める）
+function ucSteps(steps,current,label,changed){
+  const k=steps.indexOf(current);
+  if(k<0)return'';
+  return`<ol class="uc-steps${changed?' is-changed':''}" aria-label="${escAttr(label||'状態')}">`
+    +steps.map((s,i)=>`<li class="${i<k?'is-done':i===k?'is-current':''}"${i===k?' aria-current="step"':''}><span class="uc-step-dot" aria-hidden="true"></span><span class="uc-step-label">${escAttr(s)}</span></li>`).join('')
+    +'</ol>';
 }
 function today(){return new Date().toISOString().split('T')[0]}
 function getMonth(){return parseInt(document.getElementById('month-select').value)}
@@ -11565,7 +11587,12 @@ function mobEmpty(msg){
 
 // スマホの案件一覧：コンパクトな行（ucRow）。閉じた状態＝案件名・顧客・金額・状態（＋繰越・終了・終了日未設定の印）。
 // 展開で期間・種別・請求・入金と操作（主な1つ＋「その他 ▾」は mobActions のまま）、月次請求のレコード。月次請求を開いている案件は開いたまま描く
+// 状態のステップ（表示だけ。状態の意味・保存は変えない）。失注は順序の外なのでバッジだけ。前の描画の状態を覚えて、変わった時だけ軽く動かす
+const PROJECT_STEPS=['商談中','契約済','進行中','完了'];
+const pjSeenStatus={};
 function projectRowHtml(p,st){
+  const changed=pjSeenStatus[p.id]!==undefined&&pjSeenStatus[p.id]!==p.status;
+  pjSeenStatus[p.id]=p.status;
   const acts=`${invoiceStatusOf(p)==='invoiced'?`<button class="btn sm success" onclick="openPaymentModal(${p.id})">入金確認</button>`:''}
       <button class="btn sm" onclick="openProjectModal(${p.id})">編集</button>
       <button class="btn sm" onclick="toggleBillingRows(${p.id})">月次請求を${expandedProjects[p.id]?'閉じる':'表示'}</button>
@@ -11575,15 +11602,16 @@ function projectRowHtml(p,st){
   return ucRow({
     main:p.name,
     sub:p.client||'-',
-    tagsHtml:statusBadge(p.status),
+    tagsHtml:changed?`<span class="uc-pop">${statusBadge(p.status)}</span>`:statusBadge(p.status),
     amount:p.amount,
     amountNote:CONTRACT_LABELS[p.contract]||p.contract||'',
     footHtml:projectMarksHtml(st),
     attrs:` data-project-id="${p.id}"${expandedProjects[p.id]?' open':''}`,
-    bodyHtml:`<dl class="uc-dl">`
+    bodyHtml:ucSteps(PROJECT_STEPS,p.status,'案件の状態',changed)
+      +`<dl class="uc-dl">`
       +`<dt>期間</dt><dd>${escAttr(p.start||'')} 〜 ${escAttr(p.end||'')}</dd>`
       +`<dt>種別</dt><dd>${escAttr(CONTRACT_LABELS[p.contract]||p.contract||'')}</dd>`
-      +`<dt>請求・入金</dt><dd>${invoiceBadge(p)}${p.paidMonth?` <span style="font-size:11px">${escAttr(p.paidMonth)}</span>`:''}</dd>`
+      +`<dt>請求・入金</dt><dd class="pj-inv">${invoiceBadge(p)}${p.paidMonth?` <span style="font-size:11px">${escAttr(p.paidMonth)}</span>`:''}</dd>`
       +`</dl>`+mobActions(acts)+billingCardsHtml(p)
   });
 }

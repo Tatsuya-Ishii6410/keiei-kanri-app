@@ -146,6 +146,10 @@ const PAGES = {
     valueRoot: '#pj-tab-list',
   },
 };
+// 案件の行を1つ開いた状態（ステップ表示の確認用）
+PAGES.projectsOpen = Object.assign({}, PAGES.projects, {
+  open: PAGES.projects.open + `const r=document.querySelector('#project-cards .uc-row[data-project-id="1"]');if(r)r.open=true;`,
+});
 // 測る：その要素を含む一番近い .card（または .uc-hero / .metric-grid / .uc-kpis）の高さ
 const MEASURE = (p) => `(() => {
   const P=${JSON.stringify(p)};
