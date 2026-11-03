@@ -671,6 +671,13 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
   .cf-tb .lt-o3,.cf-tb .lt-o4,.cf-tb .lt-o6{grid-column:span 2}
   .list-toolbar.cf-tb .lt-o5{display:none!important}
   .list-toolbar.cf-tb .btn{padding-left:6px;padding-right:6px}
+  /* 交通費台帳：［月｜+交通費を追加（2列分）｜その他▾］［カレンダーから作成｜交通費精算を追加］ */
+  .list-toolbar.lt-flat.tl-tb{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+  .list-toolbar.tl-tb .lt-o2{grid-column:span 2}
+  .list-toolbar.tl-tb .lt-o5{order:3}
+  .list-toolbar.tl-tb .lt-o3{order:4;grid-column:span 2}
+  .list-toolbar.tl-tb .lt-o4{order:5;grid-column:span 2}
+  .list-toolbar.tl-tb .btn{padding-left:6px;padding-right:6px}
 }
 #tl-hero .uc-kpis{margin:12px 0 0}
 #tl-hero .uc-kpi{background:rgba(255,255,255,.8);box-shadow:none}
@@ -1562,20 +1569,20 @@ body.bs-docview{overflow:hidden}
   </div>
 
   <div id="cf-pane-travel" style="display:none">
-    <div class="section-header list-toolbar lt-flat" style="flex-wrap:wrap;gap:10px">
+    <div class="section-header list-toolbar lt-flat tl-tb" style="flex-wrap:wrap;gap:10px">
       <span class="lt-select lt-o1"><select id="tl-month" onchange="renderTravelLedger()" style="width:auto;font-size:13px" aria-label="月で絞り込む">
         <option value="">全期間</option><option value="0">1月</option><option value="1">2月</option><option value="2">3月</option><option value="3">4月</option><option value="4">5月</option><option value="5">6月</option><option value="6">7月</option><option value="7">8月</option><option value="8">9月</option><option value="9">10月</option><option value="10">11月</option><option value="11">12月</option>
       </select><svg class="lt-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn primary lt-primary lt-o2" onclick="openTravelEntry()">+ 交通費を追加</button>
-        <button class="btn lt-o3" onclick="openCalendarImport()"><span class="lt-emoji" aria-hidden="true">📅 </span>カレンダーから作成</button>
-        <button class="btn lt-o4" onclick="openSettleModal()"><span class="lt-emoji" aria-hidden="true">🚃 </span>交通費精算を追加</button>
-        <button class="btn lt-wide" onclick="openLegacyModeModal()">🔀 旧「電車・バス」の手段を整理</button>
-        <button class="btn lt-wide" onclick="exportTravelCsv()">📥 CSV出力</button>
-        <button class="btn lt-wide" onclick="printTravelLedger()">🖨️ PDF出力</button>
+        <button class="btn lt-o3" onclick="openCalendarImport()">カレンダーから作成</button>
+        <button class="btn lt-o4" onclick="openSettleModal()">交通費精算を追加</button>
+        <button class="btn lt-wide" onclick="openLegacyModeModal()">旧「電車・バス」の手段を整理</button>
+        <button class="btn lt-wide" onclick="exportTravelCsv()">CSV出力</button>
+        <button class="btn lt-wide" onclick="printTravelLedger()">PDF出力</button>
         <div class="lt-menu-wrap lt-o5">
           <button class="btn lt-menu-btn" id="tl-more-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="tl-more-menu" onclick="ltMenu(this)">その他 ▾</button>
-          <div class="lt-menu lt-menu-left" id="tl-more-menu" role="menu" aria-labelledby="tl-more-btn" hidden>
+          <div class="lt-menu" id="tl-more-menu" role="menu" aria-labelledby="tl-more-btn" hidden>
             <button role="menuitem" tabindex="-1" onclick="ltMenu(null);exportTravelCsv()">CSV出力</button>
             <button role="menuitem" tabindex="-1" onclick="ltMenu(null);printTravelLedger()">PDF出力</button>
             <button role="menuitem" tabindex="-1" onclick="ltMenu(null);openLegacyModeModal()">旧「電車・バス」の手段を整理</button>
@@ -1588,7 +1595,7 @@ body.bs-docview{overflow:hidden}
     <div class="card">
       <div class="card-header"><span class="card-title">交通費一覧</span>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:500">
-          <input id="tl-needs-edit" type="checkbox" onchange="renderTravelLedger()" style="width:auto"> ⚠ 要編集のみ表示
+          <input id="tl-needs-edit" type="checkbox" onchange="renderTravelLedger()" style="width:auto"> 要編集のみ表示
         </label>
       </div>
       <div class="table-wrap mob-table"><table>
@@ -7147,7 +7154,7 @@ function travelModeLabel(t){
 function needsTravelEdit(l){
   return !travelPartsOf(l).to||!(l.amount>0);
 }
-const TRAVEL_EDIT_BADGE='<span class="badge badge-amber" style="font-size:10px;white-space:nowrap">⚠要編集</span>';
+const TRAVEL_EDIT_BADGE='<span class="badge badge-amber" style="font-size:10px;white-space:nowrap">要編集</span>';
 
 // 日付昇順、同じ日は登録順（id昇順）
 function sortTravel(a,b){
@@ -7195,8 +7202,8 @@ function travelRowHtml(l,g){
     <td style="text-align:right;font-weight:500">${fmt(l.amount)}</td>
     <td style="font-size:11px;color:var(--text-secondary)">${l.memo||''}</td>
     <td><div style="display:flex;gap:4px">
-      <button class="btn sm" onclick="openTravelEntry(${l.id})">✏️ 編集</button>
-      <button class="btn sm danger" onclick="deleteLedger(${l.id})">🗑️ 削除</button>
+      <button class="btn sm" onclick="openTravelEntry(${l.id})">編集</button>
+      <button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button>
     </div></td>
   </tr>`;
 }

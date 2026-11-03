@@ -301,6 +301,8 @@ const SCENARIO = String.raw`(async () => {
   await step('交通費台帳', async () => {
     nav('ledger'); switchCfTab('travel', document.querySelector('[onclick*="switchCfTab(\'travel\'"]'));
     change('tl-month', '');
+    const tm = [...document.querySelectorAll('#tl-more-menu [role=menuitem]')].map(b => b.getAttribute('onclick'));
+    ok(['exportTravelCsv', 'printTravelLedger', 'openLegacyModeModal'].every(f => tm.some(o => o.includes(f))), '交通費の「その他」に CSV・PDF・旧手段の整理 がない');
     // 要約カード：合計（カウントアップの最終値）は従来の集計と同じ
     const hv = document.querySelector('#tl-summary .uc-hero-value');
     ok(hv && hv.dataset.ucV === String(travelLedgerRows(null).reduce((a, l) => a + l.amount, 0)), '交通費の要約の合計が集計と違う');
