@@ -68,6 +68,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - tests/travel-suggest.test.js：交通費の訪問先の候補（駅名・訪問先の正規化・自宅駅の除外・並び順）・用件の選択式・帰りの行の自動入力・同じ区間の過去の運賃のテスト
 - tests/dashboard-v2.test.js：新ダッシュボードの判定（達成率・コンディション・過去最高・大きな変化・アクション・ミッション・インサイト）と期のKPI目標の往復のテスト
 - tests/dashboard-v2-compare.html：新旧ダッシュボードの数字の突き合わせ（ブラウザで開く。手順は「新ダッシュボード」の節）
+- tests/project-list.test.js：案件管理の一覧の判定（projectListState・projectInMonth。年＋月・繰越・終了日なし・見込み／失注）のテスト
 - tests/no-undef.test.js：未定義の名前の静的チェック／tests/app-smoke.test.js：画面の実行テスト（ヘッドレスの Chrome）／
   tests/run-all.js：npm test の本体（「修正後の作業」の節）
 - .github/workflows/deploy.yml：GitHub Pagesへの自動デプロイ
@@ -1088,3 +1089,16 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - スマホは本文（794px）を画面の幅に縮小して表示（fitDocViewer の zoom。リサイズで計算し直す）。ピンチで拡大できる（viewport で拡大を禁止していない）
 - 合計の見出し（小計・消費税・合計金額（税込）・月額合計・契約期間合計）は white-space:nowrap。以前は紙でも「合計金額（税 / 込）」と折り返していた
 - 月次レポート・案件予実・融資力診断の印刷は、もともとアプリの画面のまま window.print() なので対象外（別ウィンドウを開かない）
+
+## 案件管理の一覧（表示する案件の判定）
+- ★ 判定は keiei-kanri.html の「@project-rules-begin〜end」の projectListState(p,abs,range,billings,opt)（表示だけ。tests/project-list.test.js が切り出して読む。DOM・S を触らない）
+  期間は売上と同じ projectMonthRange の結果（range）を受け取る。★ 売上・請求・予測の判定（projectMonthRange／projectCoversAbs／billableProject）は変えない
+- 年＋月で比べる（以前の projectHasMonth は月だけで比べていたので、去年の同じ月に掛かる終了案件・去年の単発が出ていた）。選んだ月の年は今の期から（monthYear。billingYm と同じ）
+  ・出すのは 契約済・進行中・完了 だけ（商談中＝見込み、失注は出さない）
+  ・月次・年次：開始月 ≦ 選択月 ≦ 終了月。終了日が空なら、売上と同じく開始月だけ
+  ・単発：開始月（＝売上月）だけ
+  ・繰越：選択月より前の請求レコードが請求済み・未入金（invoiced）なら、期間外でも「繰越（○月分 請求済・未入金）」の印で出す（表示だけ。合計には足さない）
+  ・期間外の請求レコード（未請求など）は、出す理由にしない（以前は「その月の請求レコードがあれば出す」だった）
+- 合計カード（表示だけ）：選んだ月は、期間内の案件のその月の売上（projectSalesAtAbs＝ダッシュボードと同じ）。全期間は従来どおり projectMonthAmount
+- projectHasMonth は消していない（ほかの処理が使っている。一括請求書作成・一括ステータス変更は b で projectInMonth にそろえる）
+

@@ -590,6 +590,10 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .req-mark{color:var(--red)}
 @media (max-width:768px){.rc-grid{grid-template-columns:1fr}.rc-photo{position:static}.rc-photo img{max-height:45vh}.rc-photo iframe{height:50vh}}
 .modal.doc{max-width:720px}
+/* 案件管理：一覧の印・スイッチ */
+.pj-marks{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;font-weight:400}
+.pj-marks .badge{white-space:normal;text-align:left}
+
 /* ===== 書類の全画面表示（#doc-viewer）。上部の固定バー：56px＋セーフエリア・白・薄い境界線 ===== */
 #doc-viewer{position:fixed;inset:0;z-index:3000;display:flex;flex-direction:column;background:#E9EDF3}
 #doc-viewer[hidden]{display:none}
@@ -2689,6 +2693,46 @@ const GAS_URL='https://script.google.com/macros/s/AKfycbypwiuWcOJQqLkJtEDHrew4ML
 const SHEET_URL='https://docs.google.com/spreadsheets/d/1gdtg7q3NwG3FQmWGc7lMpNEKROyvyRwuoIRKNSPsi4k/edit';
 
 const STORAGE_KEY='bizapp_v1';
+// ===== 案件管理の一覧の判定（表示だけ） ===== @project-rules-begin
+/* テスト（tests/project-list.test.js）が切り出して Node で読む。DOM や S を触らない。
+   ★ 売上・請求・予測の判定（projectMonthRange／projectCoversAbs／billableProject）は変えない。期間はその projectMonthRange の結果（range）を受け取る
+   p：案件／abs：選んだ月の絶対月（年*12＋月。null＝全期間）／range：projectMonthRange(p)（[開始,終了] の絶対月。開始日が無ければ null）
+   billings：請求レコード（全件でよい）／opt：{showEnded：終了した案件も表示, nowAbs：今月（全期間のときの「終了」の基準）}
+   ・案件のタブに出すのは 契約済・進行中・完了 だけ（商談中＝見込みタブ、失注は出さない）
+   ・月次・年次：開始月 ≦ 選択月 ≦ 終了月（年＋月で比べる）。終了日が空なら、売上と同じく開始月だけ（noEnd の印）
+   ・単発：開始月（＝売上月）だけ
+   ・繰越：選択月より前の請求レコードが、請求済み・未入金（invoiced）なら、期間外でも出す（carryMark の印。表示だけで、売上には足さない）
+   ・終了した案件も表示（初期はオフ）：選択月より前に期間が終わった案件も出す（ended の印）。
+     全期間では、今月より前に期間が終わった案件と、状態が「完了」の案件を、オンのときだけ出す（繰越があれば出す）
+   返り値 {show, inRange, carry:[請求月…], carryMark, noEnd, ended} */
+const PROJECT_LIST_STATUSES=['契約済','進行中','完了'];
+function absYm(a){return Math.floor(a/12)+'-'+String(a%12+1).padStart(2,'0');}
+function projectListState(p,abs,range,billings,opt){
+  const o=opt||{};
+  const out={show:false,inRange:false,carry:[],carryMark:false,noEnd:p.contract!=='single'&&!p.end&&!!range,ended:false};
+  if(PROJECT_LIST_STATUSES.indexOf(p.status)<0)return out;
+  const all=abs===null||abs===undefined;
+  const ref=all?o.nowAbs:abs;
+  const refYm=ref===null||ref===undefined?null:absYm(ref);
+  out.carry=refYm?(billings||[]).filter(b=>b.projectId===p.id&&b.invoiceStatus==='invoiced'&&String(b.billingMonth||'')<refYm)
+    .map(b=>b.billingMonth).sort():[];
+  if(all){
+    out.ended=p.status==='完了'||(!!range&&ref!==null&&ref!==undefined&&range[1]<ref);
+    out.inRange=true;
+    out.carryMark=out.ended&&out.carry.length>0;
+    out.show=!out.ended||out.carry.length>0||!!o.showEnded;
+    return out;
+  }
+  out.inRange=projectInMonth(range,abs);
+  out.ended=!!range&&range[1]<abs;
+  out.carryMark=!out.inRange&&out.carry.length>0;
+  out.show=out.inRange||out.carry.length>0||(out.ended&&!!o.showEnded);
+  return out;
+}
+// その月（年＋月）が契約期間に入るか。一括請求書作成・一括ステータス変更の対象もこれで決める（期間外の請求レコードは理由にしない）
+function projectInMonth(range,abs){return !!range&&abs>=range[0]&&abs<=range[1];}
+// ===== @project-rules-end
+
 // ===== 請求書の下書き・訂正の判定 ===== @invoice-rules-begin
 // tests/invoice-drafts.test.js がこの範囲を切り出して Node で読むので、
 // DOM や S を直接触らない（projects / monthlyBillings / quotes は引数で受け取る）。
@@ -4391,23 +4435,27 @@ function renderProjects(){
   syncMonthlyBillings();
   const tb=document.getElementById('project-list');
   const mi=currentProjectMonth();
-  // 失注の案件は一覧にも合計にも含めない
   const inv=currentInvoiceFilter();
-  // 選んだ月に売上が無くても、その月の請求レコードがあれば表示する
-  const ymSel=mi===null?null:billingYm(mi);
-  const list=S.projects.filter(p=>p.status!=='失注'
-    &&(projectHasMonth(p,mi)||(ymSel&&findBilling(p.id,ymSel)))
-    &&(!inv||invoiceStatusOf(p)===inv));
+  // 表示する案件は projectListState（@project-rules。年＋月で判定。商談中・失注は出さない）。選んだ月の年は今の期から（billingYm と同じ）
+  const abs=mi===null?null:monthYear(mi)*12+mi;
+  const now=new Date(),nowAbs=now.getFullYear()*12+now.getMonth();
+  const showEnded=!!(document.getElementById('project-show-ended')||{}).checked;
+  const marks={};
+  const list=S.projects.filter(p=>{
+    const st=projectListState(p,abs,projectMonthRange(p),billingList(),{showEnded,nowAbs});
+    marks[p.id]=st;
+    return st.show&&(!inv||invoiceStatusOf(p)===inv);
+  });
 
-  // 合計カード。確定売上（契約済・進行中・完了）と見込み（商談中）に分ける。
-  // 失注はどちらにも含めない（listの時点で除外済み）。
-  const confirmed=list.filter(p=>p.status!=='商談中');
-  const pipeline=list.filter(p=>p.status==='商談中');
-  const total=confirmed.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
-  const forecast=pipeline.reduce((a,p)=>a+projectMonthAmount(p,mi),0);
+  // 合計カード（表示だけ）：選んだ月は、期間内の案件のその月の売上（projectSalesAtAbs＝ダッシュボードと同じ）。繰越・終了の印の案件は足さない。
+  // 全期間は従来どおり projectMonthAmount。見込み（商談中）は見込みタブの案件で、その月に掛かるもの
+  const inMonth=list.filter(p=>marks[p.id].inRange);
+  const total=mi===null?list.reduce((a,p)=>a+projectMonthAmount(p,null),0):inMonth.reduce((a,p)=>a+projectSalesAtAbs(p,abs),0);
+  const pipeline=S.projects.filter(p=>p.status==='商談中'&&(mi===null||projectCoversAbs(p,abs)));
+  const forecast=pipeline.reduce((a,p)=>a+(mi===null?projectMonthAmount(p,null):projectDefaultMonthly(p)),0);
   document.getElementById('project-total-label').textContent=(mi===null?'全期間':(mi+1)+'月')+'の売上合計';
   document.getElementById('project-total').textContent=fmt(total);
-  document.getElementById('project-total-sub').textContent='対象: '+confirmed.length+'件（契約済・進行中・完了）';
+  document.getElementById('project-total-sub').textContent='対象: '+inMonth.length+'件（契約済・進行中・完了）';
   document.getElementById('project-forecast').textContent=fmt(forecast);
   document.getElementById('project-forecast-sub').textContent='（商談中 '+pipeline.length+'件）';
 
@@ -4418,13 +4466,14 @@ function renderProjects(){
     empty.style.display='';
     empty.textContent=S.projects.length===0
       ?'案件がありません。「案件追加」から登録してください。'
-      :(inv?'この条件に当てはまる案件はありません。':(mi===null?'表示できる案件がありません。':(mi+1)+'月に売上が発生する案件はありません。（失注は除いています）'));
+      :(inv?'この条件に当てはまる案件はありません。':(mi===null?'表示できる案件がありません。':(mi+1)+'月に売上が発生する案件はありません。'))
+        +'（商談中・失注の案件は出していません）';
     return;
   }
   document.getElementById('project-empty').style.display='none';
   tb.innerHTML=list.map(p=>`<tr>
     <td><button class="btn sm" onclick="toggleBillingRows(${p.id})" title="月次請求">${expandedProjects[p.id]?'▼':'▶'}</button></td>
-    <td style="font-weight:500">${p.name}</td>
+    <td style="font-weight:500">${p.name}${projectMarksHtml(marks[p.id])}</td>
     <td style="font-size:12px;color:var(--text-secondary)">${p.client||'-'}</td>
     <td>${fmt(p.amount)}</td>
     <td>${statusBadge(p.status)}</td>
@@ -4438,7 +4487,14 @@ function renderProjects(){
       <button class="btn sm danger" onclick="deleteProject(${p.id})">削除</button>
     </div></td>
   </tr>`+billingRowsHtml(p,8)).join('');
-  cards.innerHTML=list.map(projectCardHtml).join('');
+  cards.innerHTML=list.map(p=>projectCardHtml(p,marks[p.id])).join('');
+}
+// 一覧の印（表示だけ）：繰越（前の月の請求済み・未入金）
+function projectMarksHtml(st){
+  if(!st)return'';
+  const m=[];
+  if(st.carryMark)m.push(`<span class="badge badge-amber">繰越（${st.carry.map(ym=>+ym.slice(5,7)+'月').join('・')}分 請求済・未入金）</span>`);
+  return m.length?`<div class="pj-marks">${m.join('')}</div>`:'';
 }
 
 // id を渡すと編集、省略すると新規追加モードでモーダルを開く
@@ -10982,9 +11038,9 @@ function mobEmpty(msg){
 
 /* ---- 案件管理 ---- */
 
-function projectCardHtml(p){
+function projectCardHtml(p,st){
   return mobCard(
-    `<div class="mob-card-header"><span>${p.name}</span>${statusBadge(p.status)}</div>`
+    `<div class="mob-card-header"><span>${p.name}${projectMarksHtml(st)}</span>${statusBadge(p.status)}</div>`
     +`<div class="mob-sub">${p.client||'-'}</div>`
     +`<div class="mob-amount">${fmt(p.amount)}</div>`
     +mobRow('期間',`${p.start} 〜 ${p.end}`)
