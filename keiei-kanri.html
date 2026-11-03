@@ -330,8 +330,9 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
   font-size:10px;font-weight:700;color:#fff;background:var(--lv);box-shadow:0 0 0 2px var(--ui-surface,#fff)}
 /* 一言は1〜2行（行の高さ18px。折り返してよい）。アバターはタイトルの行の中（経営コンディション）／見出しの横（ハイライト）に置く。
    一言は判定の根拠のボタンの下まで使う（grid の2〜3列） */
-.dash-v2 .dv2-cond.has-rinko .dv2-cond-main{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:0 10px;align-items:center}
-.dash-v2 .dv2-cond.has-rinko .rinko-line{grid-column:2/4}
+.dash-v2 .dv2-cond.has-rinko .dv2-cond-main{display:grid;grid-template-columns:44px minmax(0,1fr);gap:0 10px;align-items:center}
+.dash-v2 .dv2-cond.has-rinko .rinko-line{grid-column:2/3}
+.dash-v2 .dv2-cock-tg{display:flex;flex-wrap:wrap;gap:0 16px;margin-top:2px}
 .dash-v2 .rinko-line{margin:0;font-size:13px;line-height:18px;color:var(--ui-muted-strong);overflow-wrap:anywhere}
 .dash-v2 .rinko-line .rk-l{display:block}
 /* ハイライト：1行のカード（押すと残りと凛子の一言） */
@@ -465,7 +466,8 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .dash-v2 .dv2-act-top.sev-orange{border-color:var(--ui-caution-soft);box-shadow:inset 4px 0 0 var(--ui-caution-text)}
 .dash-v2 .dv2-act-top .dv2-act-title{font-size:16px}
 .dash-v2 .dv2-act-top .dv2-act-dot{width:32px;height:32px;font-size:15px}
-.dash-v2 .dv2-cockpit .dv2-act-top{padding:10px 12px}
+.dash-v2 .dv2-cockpit .dv2-act-top{padding:8px 10px}
+.dash-v2 .dv2-cockpit .dv2-act-top .dv2-act-title{font-size:15px}
 .dash-v2 #dv2-actions-n.is-todo{background:var(--ui-warn-soft);color:var(--ui-warn-text)}
 .dash-v2 #dv2-actions-n.is-done{background:var(--ui-good-soft);color:var(--ui-good-text)}
 .dash-v2 .dv2-done-all{padding:10px 12px;border-radius:var(--ui-radius-item);background:var(--ui-good-soft);color:var(--ui-good-text);font-weight:700;font-size:13px}
@@ -13795,13 +13797,13 @@ function renderDv2Condition(D){
   el.dataset.key=c.key;
   el.dataset.rinko=rk?rk.face:'';
   el.innerHTML=`<div class="dv2-cond-main">${rk?rinkoAvatar(rk.face,c.icon):`<span class="dv2-cond-icon" aria-hidden="true">${c.icon}</span>`}
-      <div><div class="dv2-kicker">経営コンディション</div><div class="dv2-cond-title">${c.title}</div></div>
-      <button class="dv2-link dv2-tap" onclick="dv2Toggle('cond')" aria-expanded="${!!dv2Open.cond}">判定の根拠 ${dv2Open.cond?'▲':'▼'}</button>${rk?rinkoLine(rk.phrase,rv):''}</div>
-    ${dv2Open.cond?`<div class="dv2-basis${dv2Just('cond')}"><ol class="dv2-rules">${c.rules.map(r=>`<li class="st-${r.state}"><b>${r.name}</b>
+      <div><div class="dv2-kicker">経営コンディション</div><div class="dv2-cond-title">${c.title}</div></div>${rk?rinkoLine(rk.phrase,rv):''}</div>`;
+  // 判定の根拠（ボタンは統合カードのいちばん下の行。renderDv2Actions が「ほかの対応」と並べて出す）
+  D.condBasis=dv2Open.cond?`<div class="dv2-basis${dv2Just('cond')}"><ol class="dv2-rules">${c.rules.map(r=>`<li class="st-${r.state}"><b>${r.name}</b>
       <span class="dv2-rule-st">${r.state==='hit'?'該当':r.state==='skip'?'判定しない':'該当なし'}</span><br>${escAttr(r.detail)}</li>`).join('')}</ol>
       <div>優先順位：1.資金繰り → 2.入金遅延 → 3.目標ペース（−5pt以上＝順調・−5〜−15pt＝少し遅れ・−15pt未満＝遅れ） → 4.判定材料不足。最初に当てはまる1つを表示</div>
       <div class="dv2-note">出金予定：期限超過＋今日から30日以内（${D.outSoon.until}まで）${D.outSoon.count}件 ${dv2Yen(D.outSoon.total)}（うち期限超過 ${D.outSoon.overdue}件）。
-      参考：30日以内の入金予定 ${dv2Yen(D.inSoon.total)}（${D.inSoon.count}件。判定には使いません）</div></div>`:''}`;
+      参考：30日以内の入金予定 ${dv2Yen(D.inSoon.total)}（${D.inSoon.count}件。判定には使いません）</div></div>`:'';
 }
 
 // 小さな推移グラフ（SVG）
@@ -14095,7 +14097,9 @@ function renderDv2Actions(D){
   badge.textContent=todo.length?`未完了 ${todo.length}件`:'すべて完了';
   badge.className='dv2-chip '+(todo.length?'is-todo':'is-done');
   el.innerHTML=(top?`<ol class="dv2-act-list">${dv2ActionRow(top,false,true)}</ol>`:'<div class="dv2-done-all">✓ 対応が必要な項目はありません</div>')
-    +(rest.length||done.length?`<button class="dv2-link dv2-tap" onclick="dv2Toggle('actAll')" aria-expanded="${all}">${all?'閉じる ▲':rest.length?`ほかの対応 ${rest.length}件 ▼`:`完了した項目 ${done.length}件 ▼`}</button>`:'')
+    +`<div class="dv2-cock-tg"><button class="dv2-link dv2-tap" onclick="dv2Toggle('cond')" aria-expanded="${!!dv2Open.cond}">判定の根拠 ${dv2Open.cond?'▲':'▼'}</button>`
+    +(rest.length||done.length?`<button class="dv2-link dv2-tap" onclick="dv2Toggle('actAll')" aria-expanded="${all}">${all?'閉じる ▲':rest.length?`ほかの対応 ${rest.length}件 ▼`:`完了した項目 ${done.length}件 ▼`}</button>`:'')+'</div>'
+    +(D.condBasis||'')
     +(all&&rest.length?`<ol class="dv2-act-list">${rest.map(a=>dv2ActionRow(a)).join('')}</ol>`:'')
     +(all&&done.length?`<div class="dv2-done-row" aria-label="完了">${done.map(a=>`<span class="dv2-done-chip" data-key="${a.key}">✓ ${escAttr(a.title)}</span>`).join('')}</div>`:'')
     +(all?`<button class="dv2-link dv2-tap" onclick="dv2Toggle('sev')">重要度の見方 ${dv2Open.sev?'▲':'▼'}</button>`:'')
