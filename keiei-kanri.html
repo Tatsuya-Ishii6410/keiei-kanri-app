@@ -659,6 +659,11 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .cf-hero-foot input{font-variant-numeric:tabular-nums;min-height:44px}
 .cf-hero-foot .btn{min-height:44px}
 @media (max-width:480px){.cf-hero-foot .form-group,.cf-hero-foot .btn{flex:1 1 100%;width:100%;justify-content:center}}
+.cf-plan-row{padding:4px 0 10px;border-bottom:1px solid var(--ui-border-solid,#E3E7EF)}
+.cf-plan-row:last-child{border-bottom:0}
+.cf-plan-row .uc-prog>span:first-child{font-weight:700}
+.cf-plan-row .uc-prog>span:nth-child(2){font-size:12px;font-variant-numeric:tabular-nums;color:var(--ui-muted,#64748B)}
+.cf-plan-diff{font-size:12px;color:var(--ui-muted,#64748B);text-align:right}
 .uc-fixed{display:inline-block;font-size:10px;font-weight:700;color:var(--ui-muted,#64748B);border:1px solid var(--ui-border-solid,#E3E7EF);border-radius:6px;padding:0 5px;margin-right:6px;vertical-align:1px}
 .uc-row[open]>summary{background:var(--ui-line,#EEF1F6)}
 .uc-prog{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:8px 0;font-size:13px}
@@ -6504,11 +6509,10 @@ function renderLedger(){
     {k:'役員報酬',actual:lt.labor,plan:pl.labor},
     {k:'税金・公課',actual:lt.tax,plan:pl.tax||0}
   ];
-  document.getElementById('plan-table').innerHTML=planRows.map(r=>{
-    const d=r.actual-r.plan;const c=d>=0?'#1D9E75':'#E24B4A';
-    return`<tr><td>${r.k}</td><td style="color:var(--text-secondary)">${fmt(r.plan)}</td><td style="font-weight:500">${fmt(r.actual)}</td><td style="color:${c};font-weight:500">${d>=0?'+':''}${fmt(d)}</td></tr>`;
-  }).join('');
-  document.getElementById('plan-cards').innerHTML=planRows.map(planCardHtml).join('');
+  document.getElementById('plan-table').innerHTML=planRows.map(r=>
+    `<tr><td>${r.k}</td><td style="color:var(--text-secondary)">${fmt(r.plan)}</td><td style="font-weight:500">${fmt(r.actual)}</td><td>${ucDiff(r.actual,r.plan)}</td></tr>`
+  ).join('');
+  document.getElementById('plan-cards').innerHTML=`<div class="ui-scope">${planRows.map(planCardHtml).join('')}</div>`;
 
   // キャッシュフロー一覧
   document.getElementById('ledger-list-title').textContent=
@@ -11605,14 +11609,11 @@ function cfRowHtml(l){
 
 /* ---- CF管理（計画 vs 実績） ---- */
 
+// 計画対実績（スマホ）：項目別の進捗行。棒は実績÷計画（計画ゼロは 0%・率なし）。差額は中立の色＋▲▼（収入と支出で良し悪しが逆なので色で決めつけない）
 function planCardHtml(r){
-  const d=r.actual-r.plan;
-  const c=d>=0?'#1D9E75':'#E24B4A';
-  return mobCard(
-    `<div class="mob-card-header"><span>${r.k}</span>
-      <span style="color:${c}">${d>=0?'+':''}${fmt(d)}</span></div>`
-    +mobRow('計画',fmt(r.plan))
-    +mobRow('実績',`<strong>${fmt(r.actual)}</strong>`));
+  return`<div class="cf-plan-row">`
+    +ucProgress(r.k,r.actual,r.plan,`実績 ${fmt(r.actual)} ／ 計画 ${r.plan?fmt(r.plan):'なし'}`)
+    +`<div class="cf-plan-diff">差額 ${ucDiff(r.actual,r.plan)}</div></div>`;
 }
 
 /* ---- 交通費台帳 ---- */
