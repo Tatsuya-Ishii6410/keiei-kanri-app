@@ -241,6 +241,9 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   （売上の継続性／現預金水準／収益性／借入状況／事業計画の精度）
 - 現預金残高は bankBalance（CF管理の口座残高と共通の1つの値）。既存借入残高は
   設定ページの「財務情報」から入力し、finance.loan に保持（settingsシートは finance.loan）
+- 安定売上（recurringSalesOfMonth(mi,abs)）＝受注済み（billableProject）の月次・年次の案件の、今月（年＋月）の売上（projectSalesAtAbs。売上と同じ）。
+  ★ 2026-11 まで月だけで比べ（projectHasMonth＋projectMonthAmount）、去年の同じ月に掛かる終了案件も足していた。
+  影響するのは「安定売上」「継続案件比率」（安定売上÷今月の売上）と ①売上の継続性の点数だけ（ほかの4項目は変わらない）
 - AIアドバイスはGASの advise アクション経由（claude-sonnet-4-6）。
   ブラウザから直接Anthropic APIは呼ばない
 
@@ -1103,7 +1106,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
   「終了日が未設定（売上は開始月のみ）」（月次・年次で終了日が空。売上の計算は変えていない）
 - 「終了した案件も表示」（#project-show-ended。初期はオフ・保存しない）：オンで、選んだ月より前に期間が終わった案件も出す。全期間では、今月より前に終わった案件・「完了」の案件をオンのときだけ出す
 - 合計カード（表示だけ）：選んだ月は、期間内の案件のその月の売上（projectSalesAtAbs＝ダッシュボードと同じ）。全期間は従来どおり projectMonthAmount
-- projectHasMonth は消していない（融資力診断の安定売上がまだ使っている）
+- projectHasMonth は消していない（いまは使っていないが、残してある）
 - 一括請求書作成（bulkInvoiceTargets。年は bulkInvoiceYm と同じ billingYear）・一括ステータス変更の「未請求→請求済」（bulkStatusTargets。年は billingYm と同じ今の期）の対象も、
   年＋月で契約期間に入る案件だけ（projectInMonth）。期間外の請求レコードがあっても対象にしない（以前はそれが入口になって、期間外の月に請求レコード・請求書・入金予定ができた）。
   以前の判定なら対象だった案件の数を「期間外の案件 N件は対象外」と一覧の上に小さく出す（bulkInvoiceExcluded／bulkStatusExcluded）

@@ -10797,14 +10797,16 @@ function profitOfAbs(abs){
   return operatingProfit(projectSalesAtAbsTotal(abs),t.expense,t.labor,t.tax);
 }
 
-// その月の「安定売上」＝継続契約（月次・年次）から生まれる金額
-function recurringSalesOfMonth(mi){
+// その月（絶対月 abs＝年*12＋月）の「安定売上」＝継続契約（月次・年次）から生まれる売上
+// ★ 売上と同じ projectSalesAtAbs（年＋月・請求レコードの金額）で足す。以前は月だけで比べ（projectHasMonth）、
+//   去年の同じ月に掛かる終了案件まで足していた（2026-11 修正）。mi だけを渡されたときは今年のその月
+function recurringSalesOfMonth(mi,abs){
+  const a=abs!==undefined&&abs!==null?abs:new Date().getFullYear()*12+mi;
   let total=0;
   S.projects.forEach(p=>{
-    if(p.status!=='契約済'&&p.status!=='進行中'&&p.status!=='完了')return;
+    if(!billableProject(p))return;
     if(p.contract!=='monthly'&&p.contract!=='annual')return;
-    if(!projectHasMonth(p,mi))return;
-    total+=projectMonthAmount(p,mi);
+    total+=projectSalesAtAbs(p,a);
   });
   return total;
 }
@@ -10820,7 +10822,7 @@ function loanMetrics(){
   const profit3=absList.map(a=>profitOfAbs(a));
   const avgSales=Math.round(sales3.reduce((a,b)=>a+b,0)/absList.length);
   const avgProfit=Math.round(profit3.reduce((a,b)=>a+b,0)/absList.length);
-  const recurring=recurringSalesOfMonth(mi);
+  const recurring=recurringSalesOfMonth(mi,nowAbs);
   const monthSales=projectSalesAtAbsTotal(nowAbs);
 
   // 計画の入力状況と、計画に対する売上の乖離率
