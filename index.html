@@ -695,6 +695,8 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
   .list-toolbar.tl-tb .btn{padding-left:6px;padding-right:6px}
 }
 .q-hero-alert{margin-top:8px}
+.pc-dup-opt{display:flex;gap:8px;align-items:flex-start;min-height:44px;padding:8px 0;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border)}
+.pc-dup-opt input{width:auto;margin-top:3px}
 .uc-row[data-cancelled]>summary{opacity:.6}
 .uc-dl dd.q-overdue{color:#DC2626;font-weight:700}
 .pj-hero{display:flex;gap:12px 24px;flex-wrap:wrap;align-items:stretch}
@@ -2593,13 +2595,16 @@ body.bs-docview{overflow:hidden}
   <div class="modal-header"><span class="modal-title" id="pc-title">入金を実績にする</span><button class="btn sm" onclick="closeModal('modal-plan-confirm')">✕</button></div>
   <div id="pc-info" style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:14px"></div>
   <div class="form-row">
-    <div class="form-group"><label class="form-label" for="pc-date"><span class="pc-dir">入金</span>日</label><input id="pc-date" type="date"></div>
-    <div class="form-group"><label class="form-label" for="pc-amount"><span class="pc-dir">入金</span>金額</label><input id="pc-amount" type="number"></div>
+    <div class="form-group"><label class="form-label" for="pc-date"><span class="pc-dir">入金</span>日</label><input id="pc-date" type="date" onchange="renderSettleDups()"></div>
+    <div class="form-group"><label class="form-label" for="pc-amount"><span class="pc-dir">入金</span>金額</label><input id="pc-amount" type="number" onchange="renderSettleDups()"></div>
   </div>
   <div style="font-size:12px;color:var(--text-muted)" id="pc-note">案件に紐づいている場合は、その案件も「入金済」になります。</div>
+  <!-- 交通費精算を振込済みにする時だけ：説明と、同じ振込らしい実績の出金（二重の検知） -->
+  <div id="pc-settle" style="display:none;font-size:12px;color:var(--text-muted)">振込は CF の実績出金に1回だけ入ります。経費の集計には入りません（交通費は日々の実績で経費にしているため）。</div>
+  <div id="pc-dups" role="status"></div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-plan-confirm')">キャンセル</button>
-    <button class="btn success" onclick="confirmPlanned()">実績に変換</button>
+    <button class="btn success" id="pc-submit" onclick="confirmPlanned()">実績に変換</button>
   </div>
 </div>
 </div>
@@ -3796,9 +3801,14 @@ const LABOR_TYPES=['役員報酬','人件費'];
 // （operatingProfit を見ること）。
 const TAX_TYPES=['社会保険料','住民税（特別徴収）','消費税（納付）','源泉所得税（納付）','法人税・住民税・事業税（納付）','その他税金・公課'];
 
-// 区分を集計グループ（sales / expense / labor）に振り分ける
+// 交通費精算の支払い（振込済み）の区分。LEDGER_TYPES には入れない（入力では選ばせない。精算の出金予定を振込済みにした時だけ付く）
+// 交通費は日々の実績（区分 交通費）で経費にしているので、精算の支払いは経費の集計に入れない（グループ settle）。
+// CFでは実績出金に1回だけ入る（isCashRelevant が除くのは区分 交通費の実績だけ）
+const TRAVEL_SETTLE_TYPE='交通費精算';
+// 区分を集計グループ（sales / expense / labor / tax / settle）に振り分ける
 function ledgerGroup(type){
   if(type==='売上')return'sales';
+  if(type===TRAVEL_SETTLE_TYPE)return'settle';
   if(LABOR_TYPES.indexOf(type)>=0)return'labor';
   if(TAX_TYPES.indexOf(type)>=0)return'tax';
   return'expense'; // 経費系と、旧「経費」や未知の区分はまとめて経費に含める
@@ -6645,7 +6655,7 @@ function renderLedger(){
       <td style="text-align:right;font-weight:500;color:${inflow?'var(--text-muted)':'var(--red)'}">${inflow?'-':fmt(l.amount)}</td>
       <td><span class="badge ${LEDGER_STATES[st].cls}">${LEDGER_STATES[st].label.replace(/^📅\s*/,'')}</span></td>
       <td><div style="display:flex;gap:4px;flex-wrap:wrap">
-        ${canConvertPlan(l)?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">実績に変換</button>`:''}
+        ${canConvertPlan(l)?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">実績に変換</button>`:''}${canSettlePay(l)?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">振込済みにする</button>`:''}
         <button class="btn sm" onclick="openLedgerModal(${l.id})">編集</button>
         <button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button>
       </div></td>
@@ -6674,7 +6684,8 @@ function openLedgerModal(id,mode){
   fillRecentDatalists();
 
   // 入金予定は区分を「売上」に固定する
-  document.getElementById('l-type-group').style.display=ledgerMode==='planned_in'?'none':'';
+  // 精算の支払い（区分 交通費精算）は区分を選ばせない（保存でも区分を変えない）
+  document.getElementById('l-type-group').style.display=ledgerMode==='planned_in'||(l&&l.type===TRAVEL_SETTLE_TYPE)?'none':'';
   document.getElementById('l-date-label').textContent=planned?'予定日':'日付';
   document.getElementById('modal-ledger-title').textContent=
     l?(planned?'予定を編集':'収支を編集')
@@ -6693,7 +6704,8 @@ function openLedgerModal(id,mode){
 
 function saveLedger(){
   const date=document.getElementById('l-date').value;
-  const type=ledgerMode==='planned_in'?'売上':document.getElementById('l-type').value;
+  const editRow=editLedgerId!==null?S.ledger.find(x=>x.id===editLedgerId):null;
+  const type=ledgerMode==='planned_in'?'売上':editRow&&editRow.type===TRAVEL_SETTLE_TYPE?TRAVEL_SETTLE_TYPE:document.getElementById('l-type').value;
   const desc=document.getElementById('l-desc').value.trim();
   const amount=parseInt(document.getElementById('l-amount').value)||0;
   const memo=document.getElementById('l-memo').value.trim();
@@ -6737,10 +6749,28 @@ function openPlanConfirm(id){
   document.getElementById('pc-amount').value=l.amount;
   // 入金予定・出金予定で文言だけ変える（変換の処理は同じ：同じ行の状態を実績にする＝予定と実績が二重に残らない）
   const out=ledgerStatusOf(l)==='planned_out';
-  document.getElementById('pc-title').textContent=out?'出金を実績にする':'入金を実績にする';
-  document.querySelectorAll('#modal-plan-confirm .pc-dir').forEach(e=>e.textContent=out?'出金':'入金');
+  const settle=out&&!!l.settlementMonth;   // 交通費精算の出金予定 → 振込済みにする
+  document.getElementById('pc-title').textContent=settle?'交通費精算を振込済みにする':out?'出金を実績にする':'入金を実績にする';
+  document.querySelectorAll('#modal-plan-confirm .pc-dir').forEach(e=>e.textContent=settle?'振込':out?'出金':'入金');
   document.getElementById('pc-note').style.display=out?'none':'';
+  document.getElementById('pc-settle').style.display=settle?'':'none';
+  document.getElementById('pc-submit').textContent=settle?'振込済みにする':'実績に変換';
+  renderSettleDups();
   openModal('modal-plan-confirm');
+}
+// 振込済みにする画面：同じ振込らしい実績の出金（銀行CSV取込など）があれば警告し、紐付けの選択肢を出す
+function renderSettleDups(){
+  const box=document.getElementById('pc-dups');if(!box)return;
+  const l=S.ledger.find(x=>x.id===planConfirmId);
+  if(!l||ledgerStatusOf(l)!=='planned_out'||!l.settlementMonth){box.innerHTML='';return;}
+  const date=document.getElementById('pc-date').value,amount=parseInt(document.getElementById('pc-amount').value)||0;
+  const c=date&&amount?settlePayCandidates(S.ledger,date,amount):[];
+  if(!c.length){box.innerHTML='';return;}
+  const opt=(v,label,on)=>`<label class="pc-dup-opt"><input type="radio" name="pc-dup" value="${v}"${on?' checked':''}> <span>${label}</span></label>`;
+  box.innerHTML=`<div class="alert alert-warning" style="font-size:12px;margin-top:10px">同じ振込らしい実績の出金がすでにあります（振込日の前後7日・金額の差1,000円以内）。`
+    +`新しく実績を作ると、CFの出金が二重になります。</div>`
+    +c.map((x,i)=>opt(x.id,`この実績に紐付ける：${escAttr(x.date)}　${escAttr(x.desc)}　${fmt(x.amount)}（${escAttr(x.type)}）`,i===0)).join('')
+    +opt('new','どれも別の支払い（この精算の振込ではない）。この予定を新しく実績にする',false);
 }
 // 実績に変換できる予定：入金予定と出金予定。交通費精算の出金予定（settlementMonth）は除く
 // （交通費は日々の実績で経費にしているので、精算を実績にすると二重計上になる。銀行明細の突合 matchPlannedOut と同じ扱い）
@@ -6748,6 +6778,8 @@ function canConvertPlan(l){
   const st=ledgerStatusOf(l);
   return st==='planned_in'||(st==='planned_out'&&!l.settlementMonth);
 }
+// 交通費精算の出金予定は「振込済みにする」（区分 交通費精算の実績にする。経費には入れない）
+function canSettlePay(l){return ledgerStatusOf(l)==='planned_out'&&!!l.settlementMonth}
 
 function confirmPlanned(){
   const l=S.ledger.find(x=>x.id===planConfirmId);
@@ -6756,6 +6788,21 @@ function confirmPlanned(){
   const amount=parseInt(document.getElementById('pc-amount').value)||0;
   const wasIn=ledgerStatusOf(l)==='planned_in';
   if(!date||!amount){alert((wasIn?'入金日':'出金日')+'と金額を入力してください');return;}
+
+  // 交通費精算：振込済みにする（区分 交通費精算の実績。経費の集計には入れず、CFの実績出金に1回だけ）
+  if(ledgerStatusOf(l)==='planned_out'&&l.settlementMonth){
+    const pick=document.querySelector('#pc-dups input[name="pc-dup"]:checked');
+    const link=pick&&pick.value!=='new'?S.ledger.find(x=>x.id===Number(pick.value)):null;
+    if(link){
+      // 既存の実績に紐付ける：その行を精算の支払いにして、予定の行は消す（CFの出金は既存の1行だけ）
+      settleLinkRow(link,l);
+      S.ledger=S.ledger.filter(x=>x!==l);
+    }else settlePayRow(l,date,amount,'振込済み（'+date+'）');
+    planConfirmId=null;
+    saveState();closeModal('modal-plan-confirm');refreshAll();
+    alert(link?`✓ 既存の出金（${link.date}・${fmt(link.amount)}）を、この精算の振込として紐付けました`:`✓ 振込済みにしました（${date}）`);
+    return;
+  }
 
   l.status='actual';
   l.date=date;
@@ -7321,8 +7368,8 @@ function renderTravelLedger(){
   if(mi!==null){
     const done=settlementFor(ymOfMonth(mi));
     items.push(
-      {icon:'check',label:'精算状況',valueHtml:done?'<span class="badge badge-green">精算予定に登録済み</span>':'<span class="badge badge-amber">未登録</span>'},
-      {icon:'calendar',label:'精算予定日',value:done?ledgerDateOf(done):nextMonth25Of(mi)});
+      {icon:'check',label:'精算状況',valueHtml:done&&isSettlePaid(done)?'<span class="badge badge-blue">振込済み</span>':done?'<span class="badge badge-green">精算予定に登録済み</span>':'<span class="badge badge-amber">未登録</span>'},
+      {icon:'calendar',label:done&&isSettlePaid(done)?'振込日':'精算予定日',value:done?ledgerDateOf(done):nextMonth25Of(mi)});
   }
   items.push({icon:'alert',label:'要編集の行',valueHtml:needEdit?`<span class="uc-badge-alert">${needEdit}件</span>`:'なし'});
   document.getElementById('tl-summary').innerHTML=
@@ -8381,7 +8428,9 @@ function renderTravelNote(mi){
   const total=travelActualTotal(mi);
   if(total<=0){el.innerHTML='';return;}
   const done=settlementFor(ymOfMonth(mi));
-  const tail=done
+  const tail=done&&isSettlePaid(done)
+    ?`${ledgerDateOf(done)} に振込済み`
+    :done
     ?`${ledgerDateOf(done)} に精算予定として登録済み`
     :`${nextMonth25Of(mi)} に一括精算予定`;
   el.innerHTML=`<div class="alert alert-info" style="margin-bottom:16px">
@@ -11749,7 +11798,7 @@ function cfRowHtml(l){
       +`<div style="word-break:break-word">${escAttr(l.desc)}${receiptLinkHtml(l)}</div>`
       +(extra?`<div>${escAttr(extra)}</div>`:'')
       +(l.memo?`<div>${escAttr(l.memo)}</div>`:''),
-    actionsHtml:`${canConvertPlan(l)?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">実績に変換</button>`:''}`
+    actionsHtml:`${canConvertPlan(l)?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">実績に変換</button>`:''}${canSettlePay(l)?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">振込済みにする</button>`:''}`
       +`<button class="btn sm" onclick="openLedgerModal(${l.id})">編集</button>`
       +`<button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button>`
   });
@@ -13537,6 +13586,31 @@ function matchPlannedOut(ledger,date,amount,days){
   const at=l=>l.expectedDate||l.date;
   return(ledger||[]).filter(l=>l.status==='planned_out'&&!l.settlementMonth&&l.amount===amount&&Math.abs(dayDiff(date,at(l)))<=d)
     .sort((a,b)=>Math.abs(dayDiff(date,at(a)))-Math.abs(dayDiff(date,at(b))))[0]||null;
+}
+
+/* 交通費精算の支払い（振込済み）。区分 '交通費精算'（TRAVEL_SETTLE_TYPE と同じ文字。この範囲はテストが単独で読むので文字で書く）
+   精算の出金予定の行を、そのまま実績（区分 交通費精算）に変える。予定と実績が二重に残らない。精算月の印（settlementMonth）は残す */
+function isSettlePaid(l){return !!l&&(l.status||'actual')==='actual'&&l.type==='交通費精算'}
+function settlePayRow(l,date,amount,note){
+  l.status='actual';l.type='交通費精算';l.date=date;l.expectedDate='';l.amount=amount;
+  l.memo=[l.memo,note].filter(Boolean).join('／');
+  return l;
+}
+/* 振込済みにする時の二重の検知：振込日の前後 days 日（既定7日）・金額の差が tol 円（既定1,000円）以内の、実績の出金
+   （銀行CSV取込など）。入金・日々の交通費・精算の支払い・ほかの精算に紐付いた行は除く。近いものから */
+function settlePayCandidates(ledger,date,amount,days,tol){
+  const d=days==null?7:days,t=tol==null?1000:tol;
+  return(ledger||[]).filter(l=>(l.status||'actual')==='actual'&&l.type!=='売上'&&l.type!=='交通費'&&l.type!=='交通費精算'
+      &&!l.settlementMonth&&l.date&&Math.abs((l.amount||0)-amount)<=t&&Math.abs(dayDiff(date,l.date))<=d)
+    .sort((a,b)=>Math.abs(dayDiff(date,a.date))-Math.abs(dayDiff(date,b.date))||Math.abs(a.amount-amount)-Math.abs(b.amount-amount));
+}
+/* 既存の実績の出金に紐付ける：その行を精算の支払いにする（区分 交通費精算・精算月の印を移す。金額・日付は口座の実績のまま）。
+   元の区分はメモに残す。予定の行は呼び出し側で消す（CFの出金は既存の1行だけ） */
+function settleLinkRow(actual,plan){
+  const from=actual.type;
+  actual.type='交通費精算';actual.settlementMonth=plan.settlementMonth;
+  actual.memo=[actual.memo,(plan.desc||'交通費精算')+'の振込として紐付け（元の区分：'+from+'）'].filter(Boolean).join('／');
+  return actual;
 }
 // ===== @import-rules-end
 

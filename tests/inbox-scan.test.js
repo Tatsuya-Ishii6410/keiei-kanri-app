@@ -39,7 +39,7 @@ const app = {};
 vm.createContext(app);
 vm.runInContext(html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + `
 globalThis.exported = { INBOX_RECEIPT, INBOX_INVOICE, driveFolderIdFrom, payableFormFrom, inboxFormOf, inboxConfOf,
-  payableDupOf, inboxDupOf, inboxLedgerEntry, inboxEntryError, inboxBulkBlocker, matchPlannedOut, rcptExtId, mailExtId };`, app);
+  payableDupOf, inboxDupOf, inboxLedgerEntry, inboxEntryError, inboxBulkBlocker, matchPlannedOut, rcptExtId, mailExtId, isSettlePaid, settlePayRow, settlePayCandidates, settleLinkRow };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -357,6 +357,32 @@ test('出金予定は、同額で予定日の前後7日以内なら銀行CSVの�
   assert.strictEqual(A.matchPlannedOut(ledger, '2026-11-30', 54999), null);
 });
 
+test('交通費精算を振込済みにする：同じ行が実績（区分 交通費精算）になり、精算月の印は残る（実例：9月分 48,630円を 2026-11-03 に振込）', () => {
+  const l = { id: 7, type: '交通費', desc: '交通費精算 2026年9月分', amount: 48630, status: 'planned_out', date: '2026-11-03', expectedDate: '2026-11-03', settlementMonth: '2026-09', memo: '9月分交通費 12件の合計' };
+  A.settlePayRow(l, '2026-11-03', 48630, '振込済み（2026-11-03）');
+  assert.deepStrictEqual([l.status, l.type, l.date, l.expectedDate, l.amount, l.settlementMonth], ['actual', '交通費精算', '2026-11-03', '', 48630, '2026-09']);
+  assert(A.isSettlePaid(l) && l.memo.includes('振込済み'));
+  assert(!A.isSettlePaid({ type: '交通費精算', status: 'planned_out' }) && !A.isSettlePaid({ type: '交通費', status: 'actual' }));
+});
+test('振込済みにする時の二重の検知：前後7日・差1,000円以内の実績の出金。入金・日々の交通費・精算の支払いは除く', () => {
+  const ledger = [
+    { id: 1, type: 'その他経費', desc: 'ﾌﾘｺﾐ ｲｼｲ', amount: 48630, status: 'actual', date: '2026-11-04' },
+    { id: 2, type: 'その他経費', desc: '近い額', amount: 49200, status: 'actual', date: '2026-11-03' },
+    { id: 3, type: '売上', desc: '入金', amount: 48630, status: 'actual', date: '2026-11-03' },
+    { id: 4, type: '交通費', desc: '日々の交通費', amount: 48630, status: 'actual', date: '2026-11-03' },
+    { id: 5, type: '交通費精算', desc: '別の精算', amount: 48630, status: 'actual', date: '2026-11-03', settlementMonth: '2026-08' },
+    { id: 6, type: 'その他経費', desc: '遠い日', amount: 48630, status: 'actual', date: '2026-11-11' },
+    { id: 7, type: 'その他経費', desc: '予定', amount: 48630, status: 'planned_out', date: '2026-11-03' },
+  ];
+  assert.deepStrictEqual(A.settlePayCandidates(ledger, '2026-11-03', 48630).map(x => x.id), [2, 1]);
+  assert.deepStrictEqual(A.settlePayCandidates(ledger, '2026-11-20', 48630).map(x => x.id), []);
+});
+test('既存の実績に紐付ける：その行が精算の支払いになり、精算月の印が移る。金額・日付は口座の実績のまま', () => {
+  const bank = { id: 1, type: 'その他経費', desc: 'ﾌﾘｺﾐ', amount: 48630, status: 'actual', date: '2026-11-04' };
+  A.settleLinkRow(bank, { desc: '交通費精算 2026年9月分', settlementMonth: '2026-09' });
+  assert.deepStrictEqual([bank.type, bank.settlementMonth, bank.amount, bank.date], ['交通費精算', '2026-09', 48630, '2026-11-04']);
+  assert(bank.memo.includes('元の区分：その他経費'));
+});
 test('受信箱フォルダの URL から ID を取り出す', () => {
   assert.strictEqual(A.driveFolderIdFrom('https://drive.google.com/drive/folders/1AbC-def_GhIjKlMn?usp=sharing'), '1AbC-def_GhIjKlMn');
   assert.strictEqual(A.driveFolderIdFrom('https://drive.google.com/drive/u/0/folders/1AbCdefGhIjK'), '1AbCdefGhIjK');
