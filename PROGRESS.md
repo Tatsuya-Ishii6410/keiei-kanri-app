@@ -40,6 +40,8 @@
 - [x] ② 編集・追加の画面の3層（mfLayoutModals・docs/ui.md）：375×667・390×664 で保存が見える画面 22→28。設定ページは対象外（カードごとに保存が7つ）→ 直すかはユーザーの判断待ち
   - 実機の確認（ユーザー）：iPhone で 実績入力・案件の編集・見積書の作成 を開き、キーボードを出しても入力中の欄と保存ボタンが見えるか
 
+- [ ] ③ 交通費精算の出金予定を、支払い済みにする手段がない：調査済み・案を報告（推奨＝A＋C：振込済みにする操作と銀行CSVの突合を同じ表し方で。PLから外し、CFの実績に1回だけ）→ ユーザーの承認待ち。承認まで実装しない
+
 現在の段階：段階4.5
 次の一手：段階4.5 PC幅の微調整（1440px でヒーロー・要約カードを低く・横並びに：CF管理 #cf-hero、交通費 #tl-hero、案件 #pj-hero、見積・請求 #invoice-hero・#estimate-hero。撮影：node tests/ui-shot.js shot <名前> <scratchpad> [前のHTML] [ledger|travel|projects|projectsOpen|quotes|quotesEst]、比較：node tests/ui-shot.js combine <出力.png> <前> <後> <scratchpad>）
 
