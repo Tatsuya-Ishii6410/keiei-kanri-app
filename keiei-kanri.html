@@ -23,7 +23,7 @@
   --blue:#378ADD;--blue-bg:#E6F1FB;--blue-text:#185FA5;
   --green:#1D9E75;--green-bg:#EAF3DE;--green-text:#3B6D11;
   --amber:#EF9F27;--amber-bg:#FAEEDA;--amber-text:#854F0B;
-  --red:#E24B4A;--red-bg:#FCEBEB;--red-text:#A32D2D;
+  --red:#E24B4A;--red-ink:#DC2626;--red-bg:#FCEBEB;--red-text:#A32D2D;
   --gray-bg:#F1EFE8;--gray-text:#5F5E5A;
   --purple-bg:#EFE9FA;--purple-text:#6B3FA0;
   --font-body:'Inter','Noto Sans JP',-apple-system,BlinkMacSystemFont,'Hiragino Sans',Meiryo,sans-serif;
@@ -65,7 +65,7 @@ tbody tr[style*="font-weight:bold"] td,td[style*="font-weight:bold"],td[style*="
 .save-indicator{font-size:12px;color:var(--text-muted);display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:color 0.2s}
 .save-indicator.ok{color:var(--green)}
 .save-indicator.sync{color:var(--text-secondary)}
-.save-indicator.err{color:var(--red)}
+.save-indicator.err{color:var(--red-ink)}
 .sync-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;margin-bottom:12px}
 .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--text-muted);flex:none}
 .sync-dot.ok{background:var(--green)}
@@ -87,7 +87,7 @@ tbody tr[style*="font-weight:bold"] td,td[style*="font-weight:bold"],td[style*="
 .lt-menu [role=menuitem]:focus-visible,.list-toolbar .lt-menu-btn:focus-visible,.list-toolbar select:focus-visible,.list-toolbar .lt-primary:focus-visible{outline:2px solid #3976F6;outline-offset:2px}
 .lt-menu [role=menuitem][hidden]{display:none}
 #drive-old[hidden]{display:none}
-.lt-menu [role=menuitem].is-danger{color:var(--red)}
+.lt-menu [role=menuitem].is-danger{color:var(--red-ink)}
 .lt-menu [role=menuitem]:disabled{opacity:.45;cursor:default}
 .mob-card-actions .lt-menu-wrap{position:relative}
 /* スマホで隠す絵文字。PCは display:contents でボタンの文字とひと続きにする（flex の gap が入らないように） */
@@ -113,7 +113,7 @@ tbody tr[style*="font-weight:bold"] td,td[style*="font-weight:bold"],td[style*="
 .metric-value{font-family:var(--font-num);font-size:24px;font-weight:700;letter-spacing:-0.5px}
 .metric-value.blue{color:var(--blue)}
 .metric-value.green{color:var(--green)}
-.metric-value.red{color:var(--red)}
+.metric-value.red{color:var(--red-ink)}
 .metric-value.amber{color:var(--amber)}
 .metric-sub{font-size:11px;color:var(--text-muted);margin-top:4px}
 .btn{padding:8px 15px;font-size:13px;border:1px solid var(--navy);border-radius:8px;background:var(--bg-primary);color:var(--navy);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;font-family:inherit;white-space:nowrap;font-weight:500}
@@ -193,7 +193,7 @@ input[readonly]{background:var(--bg-secondary);color:var(--text-secondary)}
   --ui-page:#F8FAFF;--ui-purple:#8758F5;
   --ui-good:#10B981;--ui-good-soft:rgba(16,185,129,.12);--ui-good-text:#047857;
   --ui-caution:#F59E0B;--ui-caution-soft:rgba(245,158,11,.14);--ui-caution-text:#B45309;
-  --ui-warn:#F43F5E;--ui-warn-soft:rgba(244,63,94,.12);--ui-warn-text:#BE123C;--ui-warn-solid:#DC2626;
+  --ui-warn:#F43F5E;--ui-warn-soft:rgba(244,63,94,.12);--ui-warn-text:#DC2626;--ui-warn-solid:#DC2626;
   --ui-plan:#8758F5;--ui-plan-soft:rgba(135,88,245,.12);--ui-border-strong:rgba(23,35,61,.18);
   --ui-border-solid:#E3E7EF;--ui-line:#EEF1F6;
   /* 第2弾：淡い色のカード（青・紫）と、その上でも 4.5:1 以上になる文字色 */
@@ -587,7 +587,7 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 @media (max-width:768px){.sc-item{min-height:44px}.sc-chip{min-height:32px}}
 @media (prefers-reduced-motion:reduce){.sc-list,.sc-list.open{transition:none;transform:none}.ui-chip{transition:none}}
 .rc-warn{background:var(--amber-bg) !important;border-color:#e0a800 !important}
-.req-mark{color:var(--red)}
+.req-mark{color:var(--red-ink)}
 @media (max-width:768px){.rc-grid{grid-template-columns:1fr}.rc-photo{position:static}.rc-photo img{max-height:45vh}.rc-photo iframe{height:50vh}}
 .modal.doc{max-width:720px}
 /* 案件管理：一覧の印・スイッチ */
@@ -883,7 +883,7 @@ body.bs-docview{overflow:hidden}
 .login-btn{width:100%;padding:11px;border:none;border-radius:var(--radius-md);background:#1a2e4a;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter','Noto Sans JP',sans-serif;margin-top:6px}
 .login-btn:hover{opacity:0.9}
 .login-btn:disabled{opacity:0.5;cursor:not-allowed}
-.login-error{font-size:12px;color:var(--red);min-height:34px;margin-top:10px;line-height:1.6}
+.login-error{font-size:12px;color:var(--red-ink);min-height:34px;margin-top:10px;line-height:1.6}
 
 /* ===== レポートページのモバイル対応 ===== */
 @media(max-width:768px){
@@ -3957,7 +3957,7 @@ function operatingProfit(sales,expense,labor,tax){
 
 // 営業利益率の色分け（20%以上=緑 / 10〜19%=アンバー / 9%以下=赤）
 function marginClass(rate){return rate>=20?'green':rate>=10?'amber':'red'}
-function marginColor(rate){return rate>=20?'#1D9E75':rate>=10?'#EF9F27':'#E24B4A'}
+function marginColor(rate){return rate>=20?'#1D9E75':rate>=10?'#EF9F27':'#DC2626'}
 
 /* ===== 月次推移グラフ（Canvasの折れ線） ==============================
    売上・営業利益（左軸・円）と利益率（右軸・%）を12ヶ月ぶん描く。
@@ -4468,7 +4468,7 @@ async function copyReminder(id){
     await copyToClipboard(text);
     msg.innerHTML='<span style="color:var(--green)">✓ 催促文をコピーしました。メールなどに貼り付けてお使いください</span>';
   }catch(e){
-    msg.innerHTML='<span style="color:var(--red)">コピーできませんでした：'+escAttr(e.message)+'</span>';
+    msg.innerHTML='<span style="color:var(--red-ink)">コピーできませんでした：'+escAttr(e.message)+'</span>';
   }
 }
 
@@ -4556,7 +4556,7 @@ function renderClosePage(){
   document.getElementById('close-summary').innerHTML=`<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
       <div>
         <div style="font-size:12px;color:var(--text-secondary)">${invYmJp(ym)}分</div>
-        <div style="font-size:30px;font-weight:700;font-family:var(--font-num);color:${n?'var(--red)':'var(--green)'}">未解決 ${n}件</div>
+        <div style="font-size:30px;font-weight:700;font-family:var(--font-num);color:${n?'var(--red-ink)':'var(--green)'}">未解決 ${n}件</div>
       </div>
       <div style="margin-left:auto;text-align:right">
         ${done?`<div style="margin-bottom:6px"><span class="badge badge-green">確認済み（${escAttr(done)}）</span></div>`:''}
@@ -4793,7 +4793,7 @@ function renderDiffList(mi,yr,fy){
   document.getElementById('diff-list').innerHTML=diffs.map(it=>{
     const pct=it.plan>0?Math.min(100,Math.round(it.actual/it.plan*100)):0;
     const good=it.invert?(it.actual<=it.plan):(it.actual>=it.plan);
-    const color=good?'#1D9E75':'#E24B4A';
+    const color=good?'#1D9E75':'#DC2626';
     return`<div style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
         <span>${it.label}</span>
@@ -6056,7 +6056,7 @@ function renderInboxList(){
         <span style="font-size:11px;color:var(--text-muted);word-break:break-all">${escAttr(x.fileName)}・${escAttr(x.readAt)}</span>
       </div>
       <div style="font-size:13px;margin-top:4px">${escAttr(inboxSummary(x))||'<span style="color:var(--text-muted)">（読み取れた項目なし）</span>'}</div>
-      ${ready?'':`<div style="font-size:12px;color:var(--red);margin-top:2px">${escAttr(x.error)}${x.status==='failed'?`（読み直し ${x.retries||0}/${INBOX_MAX_RETRIES}回）`:''}</div>`}
+      ${ready?'':`<div style="font-size:12px;color:var(--red-ink);margin-top:2px">${escAttr(x.error)}${x.status==='failed'?`（読み直し ${x.retries||0}/${INBOX_MAX_RETRIES}回）`:''}</div>`}
       ${block?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">一括登録の対象外：${escAttr(block)}</div>`:''}
       <div class="actions-row" style="justify-content:flex-start;margin-top:6px;flex-wrap:wrap">
         <button class="btn sm primary" onclick="inboxOpen(${i},false)" ${dis}>${ready?'確認して登録':'手入力で登録'}</button>
@@ -6705,7 +6705,7 @@ function renderLedger(){
       <td>${ledgerBadge(l.type)}</td>
       <td style="font-size:12px">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}${receiptLinkHtml(l)}${expenseExtraText(l)?`<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">${escAttr(expenseExtraText(l))}</div>`:''}${l.memo?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${l.memo}</div>`:''}</td>
       <td style="text-align:right;font-weight:500;color:${inflow?'var(--green)':'var(--text-muted)'}">${inflow?fmt(l.amount):'-'}</td>
-      <td style="text-align:right;font-weight:500;color:${inflow?'var(--text-muted)':'var(--red)'}">${inflow?'-':fmt(l.amount)}</td>
+      <td style="text-align:right;font-weight:500;color:${inflow?'var(--text-muted)':'var(--red-ink)'}">${inflow?'-':fmt(l.amount)}</td>
       <td><span class="badge ${LEDGER_STATES[st].cls}">${LEDGER_STATES[st].label.replace(/^📅\s*/,'')}</span></td>
       <td><div style="display:flex;gap:4px;flex-wrap:wrap">
         ${canConvertPlan(l)?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">実績に変換</button>`:''}${canSettlePay(l)?`<button class="btn sm success" onclick="openPlanConfirm(${l.id})">振込済みにする</button>`:''}
@@ -8193,7 +8193,7 @@ function calRestore(i){
 }
 
 function calConfCell(r){
-  if(r.fareError)return`<span style="color:var(--red);font-size:11px" title="${escAttr(r.fareError)}">取得失敗</span>`;
+  if(r.fareError)return`<span style="color:var(--red-ink);font-size:11px" title="${escAttr(r.fareError)}">取得失敗</span>`;
   return r.conf?`<span style="font-size:11px">${CAL_CONF[r.conf]||r.conf}</span>`:'<span style="color:var(--text-muted)">-</span>';
 }
 
@@ -8954,7 +8954,7 @@ function renderTaxEstimate(){
     +taxRow('課税売上（税込換算・参考）',fmt(ct.grossSales),{indent:true})
     +taxRow('受け取り消費税（課税売上 × '+ct.rate+'%）',fmt(ct.received))
     +taxRow('支払消費税（仕入税額控除）','▲ '+fmt(ct.paid))
-    +taxRow('納付消費税',fmt(ct.due),{bold:true,top:true,color:'#E24B4A'})
+    +taxRow('納付消費税',fmt(ct.due),{bold:true,top:true,color:'#DC2626'})
     +(ct.filings>1?taxRow('1回あたり（年'+ct.filings+'回）',fmt(ct.perFiling),{indent:true}):'')
     +taxDateRow('tax-ct-date','tax-ct-on','納付予定日',due,ct.due>0),
     ct.basis+'<br>納付予定日の既定は「期末の2ヶ月後の末日」（原則の申告期限）です。実際の期限に合わせて直してください。'
@@ -8967,7 +8967,7 @@ function renderTaxEstimate(){
     +taxRow('健康保険料（折半後）',fmt(si.health),{indent:true})
     +taxRow('厚生年金保険料（折半後）',fmt(si.pension),{indent:true})
     +taxRow('介護保険料（折半後）',si.over40?fmt(si.care):'－（40歳未満）',{indent:true})
-    +taxRow('月額合計',fmt(si.monthly),{bold:true,top:true,color:'#E24B4A'})
+    +taxRow('月額合計',fmt(si.monthly),{bold:true,top:true,color:'#DC2626'})
     +taxRow('年額合計（12ヶ月）',fmt(si.yearly),{bold:true})
     +'<div class="form-row" style="margin-top:12px">'
     +'<div class="form-group"><label class="form-label">登録する月</label>'
@@ -8988,7 +8988,7 @@ function renderTaxEstimate(){
     +taxRow('法人住民税 法人税割',fmt(co.residentRate),{indent:true})
     +taxRow('法人住民税 均等割',fmt(co.perCapita),{indent:true})
     +taxRow('事業税',fmt(co.business))
-    +taxRow('法人税等 合計',fmt(co.total),{bold:true,top:true,color:'#E24B4A'})
+    +taxRow('法人税等 合計',fmt(co.total),{bold:true,top:true,color:'#DC2626'})
     +taxRow('実効税率（対 課税所得）',co.effective===null?'-':co.effective.toFixed(1)+'%',{bold:true})
     +taxDateRow('tax-co-date','tax-co-on','納付予定日',due,co.total>0),
     '課税所得は「売上 −（経費 ＋ 役員報酬）」の概算です。交際費の損金不算入・減価償却・繰越欠損金などは見ていません。'
@@ -9020,7 +9020,7 @@ function addTaxPlannedOut(x){
 function registerTaxPlans(){
   const c=taxEstimateCache;
   const msg=document.getElementById('tax-register-msg');
-  if(!c){msg.style.color='#E24B4A';msg.textContent='先に試算を表示してください';return;}
+  if(!c){msg.style.color='#DC2626';msg.textContent='先に試算を表示してください';return;}
   const name=fiscalTitle(c.fy)||c.fy.name||'';
   const on=id=>{const el=document.getElementById(id);return !!el&&el.value==='1'};
   const dateOf=id=>{const el=document.getElementById(id);return el?el.value:''};
@@ -9028,7 +9028,7 @@ function registerTaxPlans(){
   const plans=[];
   if(on('tax-ct-on')&&c.ct.due>0){
     const d=dateOf('tax-ct-date');
-    if(!d){msg.style.color='#E24B4A';msg.textContent='消費税の納付予定日を入れてください';return;}
+    if(!d){msg.style.color='#DC2626';msg.textContent='消費税の納付予定日を入れてください';return;}
     plans.push({date:d,type:'消費税（納付）',desc:'消費税確定申告 '+name+'分',
       amount:c.ct.due,memo:'試算（'+c.ct.basis+'）'});
   }
@@ -9042,13 +9042,13 @@ function registerTaxPlans(){
   }
   if(on('tax-co-on')&&c.co.total>0){
     const d=dateOf('tax-co-date');
-    if(!d){msg.style.color='#E24B4A';msg.textContent='法人税等の納付予定日を入れてください';return;}
+    if(!d){msg.style.color='#DC2626';msg.textContent='法人税等の納付予定日を入れてください';return;}
     plans.push({date:d,type:'法人税・住民税・事業税（納付）',desc:'法人税等 '+name+'分',
       amount:c.co.total,memo:'法人税・法人住民税・事業税の試算'});
   }
 
   if(plans.length===0){
-    msg.style.color='#E24B4A';msg.textContent='登録する項目がありません';return;
+    msg.style.color='#DC2626';msg.textContent='登録する項目がありません';return;
   }
 
   // 重複チェック（同じ摘要・同じ月の出金予定）
@@ -9490,7 +9490,7 @@ function renderFiscalSummary(){
     <td style="padding:9px 12px;border-bottom:0.5px solid var(--border);text-align:right;color:var(--text-secondary)">${target}</td>
     <td style="padding:9px 12px;border-bottom:0.5px solid var(--border);text-align:right;font-weight:600">${actual}</td>
     <td style="padding:9px 12px;border-bottom:0.5px solid var(--border);text-align:right;min-width:120px">
-      ${rate===null?'-':`<div style="font-weight:600;color:${rate>=100?'#1D9E75':rate>=70?'#EF9F27':'#E24B4A'}">${rateText(rate)}</div>${progressBar(rate)}`}
+      ${rate===null?'-':`<div style="font-weight:600;color:${rate>=100?'#1D9E75':rate>=70?'#EF9F27':'#DC2626'}">${rateText(rate)}</div>${progressBar(rate)}`}
     </td>
   </tr>`;
 
@@ -10823,7 +10823,7 @@ async function changePassword(){
   const cur=document.getElementById('pw-current').value;
   const np=document.getElementById('pw-new').value;
   const cf=document.getElementById('pw-confirm').value;
-  msg.style.color='var(--red)';
+  msg.style.color='var(--red-ink)';
   if(!cur||!np||!cf){msg.textContent='すべての欄を入力してください';return;}
   if(np!==cf){msg.textContent='新しいパスワードが一致しません';return;}
   if(np===cur){msg.textContent='現在のパスワードと同じです';return;}
@@ -11234,7 +11234,7 @@ function buildForecastHtml(fy){
     let mom='-';
     if(prev!==null&&prev>0){
       const d=Math.round((r.total-prev)/prev*1000)/10;
-      mom=`<span style="color:${d>=0?'#1D9E75':'#E24B4A'}">${d>=0?'+':''}${d}%</span>`;
+      mom=`<span style="color:${d>=0?'#1D9E75':'#DC2626'}">${d>=0?'+':''}${d}%</span>`;
     }
     prev=r.total;
     return mom;
@@ -11299,7 +11299,7 @@ function buildForecastHtml(fy){
         <div class="metric-value" style="font-size:20px">${fmt(planned)}</div>
         <div class="metric-sub">翌月〜期末の案件売上</div></div>
       <div class="metric-card"><div class="metric-label">達成率</div>
-        <div class="metric-value" style="font-size:20px;color:${rate===null?'':rate>=100?'#1D9E75':rate>=70?'#EF9F27':'#E24B4A'}">${rateText(rate)}</div>
+        <div class="metric-value" style="font-size:20px;color:${rate===null?'':rate>=100?'#1D9E75':rate>=70?'#EF9F27':'#DC2626'}">${rateText(rate)}</div>
         <div class="metric-sub">売上目標 ${fmt(fy.salesTarget)}</div></div>
     </div>
     ${rate===null?'<div style="font-size:11px;color:var(--text-muted);margin-top:8px">※ 売上目標が未設定です（設定ページの「期の管理」から入力できます）</div>':progressBar(rate)}`;
@@ -11471,7 +11471,7 @@ function loanScores(m){
   ];
 }
 
-function scoreColor(pct){return pct>=80?'#1D9E75':pct>=60?'#EF9F27':'#E24B4A'}
+function scoreColor(pct){return pct>=80?'#1D9E75':pct>=60?'#EF9F27':'#DC2626'}
 
 function scoreBadge(score){
   if(score>=16)return'<span class="badge badge-green">◎良好</span>';
@@ -11564,9 +11564,9 @@ function generateLoanReport(){
     ?'安定して黒字を確保できています。利益率も十分で、返済原資を説明しやすい状態です。'
     :'黒字は確保していますが利益率は高くありません。経費の見直しか単価の改善で利益率を上げたいところです。';
   const card3=loanCard('③ 収益性',scoreBadge(by.profit),
-    loanStat('営業利益（直近3ヶ月平均）',fmt(m.avgProfit),'',m.avgProfit>=0?'#1D9E75':'#E24B4A')
+    loanStat('営業利益（直近3ヶ月平均）',fmt(m.avgProfit),'',m.avgProfit>=0?'#1D9E75':'#DC2626')
     +loanStat('営業利益率',m.marginRate+'%')
-    +loanStat('判定',m.avgProfit>=0?'黒字':'赤字','',m.avgProfit>=0?'#1D9E75':'#E24B4A'),
+    +loanStat('判定',m.avgProfit>=0?'黒字':'赤字','',m.avgProfit>=0?'#1D9E75':'#DC2626'),
     c3);
 
   // ④借入・個人ローン状況
@@ -11677,7 +11677,7 @@ const EXPENSE_ACCOUNTS=LEDGER_TYPES.filter(t=>t!=='売上'&&LABOR_TYPES.indexOf(
 // レポート内の金額。マイナスは赤字にする。
 function repYen(n){
   const v=Math.round(n||0);
-  const color=v<0?'#e53e3e':'inherit';
+  const color=v<0?'#DC2626':'inherit';
   return`<span style="color:${color}">${fmt(v)}</span>`;
 }
 
@@ -12075,7 +12075,7 @@ function generateReport(){
   // スマホでは表の代わりに縦並びのリストにする
   const fiscalCards=!fy?'':
     rpLine('累計売上',fmt(cum.sales))
-    +rpLine('累計営業利益',fmt(cum.profit),{color:cum.profit<0?'#e53e3e':''})
+    +rpLine('累計営業利益',fmt(cum.profit),{color:cum.profit<0?'#DC2626':''})
     +rpLine('累計利益率',cum.sales>0?(cum.profit/cum.sales*100).toFixed(1)+'%':'-')
     +rpLine('売上目標',fmt(fy.salesTarget),{top:true})
     +rpLine('└ 進捗',rateText(pct(cum.sales,fy.salesTarget)),{bold:true,indent:true})
@@ -12099,7 +12099,7 @@ function generateReport(){
     +rpLine('経費合計（CF管理）',fmt(exp),{top:true})
     +rpLine('役員報酬（CF管理）',fmt(lab))
     +rpLine('税金・公課（CF管理）',fmt(tax))
-    +rpLine('営業利益',fmt(profit),{bold:true,top:true,color:profit>=0?'#1D9E75':'#e53e3e'})
+    +rpLine('営業利益',fmt(profit),{bold:true,top:true,color:profit>=0?'#1D9E75':'#DC2626'})
     +rpLine('営業利益率',sales>0?(profit/sales*100).toFixed(1)+'%':'-',{bold:true})
     +'<div style="font-size:12px;font-weight:bold;margin:16px 0 6px">計画比</div>'
     +planRows.map(r=>rpLine(r.k,`${fmt(r.actual)} <span style="color:#888">/ ${fmt(r.plan)}</span>`)).join('')
@@ -12417,7 +12417,7 @@ function buildAnnualReportHtml(fy){
     +rpLine('経費合計',fmt(T.expense),{top:true})
     +rpLine('役員報酬',fmt(T.labor))
     +rpLine('税金・公課',fmt(T.tax))
-    +rpLine('営業利益',fmt(T.profit),{bold:true,top:true,color:T.profit>=0?'#1D9E75':'#e53e3e'})
+    +rpLine('営業利益',fmt(T.profit),{bold:true,top:true,color:T.profit>=0?'#1D9E75':'#DC2626'})
     +rpLine('営業利益率',arPctText(T.profit,T.sales),{bold:true})
     +rpLine('期目標（売上）',fmt(fy.salesTarget),{top:true})
     +rpLine('└ 目標達成率',rateText(rate),{bold:true,indent:true});
@@ -12877,7 +12877,7 @@ function updateContractHint(){
   if(n===null){
     hint.innerHTML='<span style="color:var(--text-muted)">契約開始月と終了月を入力すると、契約期間合計を見積書に記載します。</span>';
   }else if(n<3){
-    hint.innerHTML='<span style="color:var(--red)">※最低契約期間は3ヶ月です</span>';
+    hint.innerHTML='<span style="color:var(--red-ink)">※最低契約期間は3ヶ月です</span>';
   }else{
     hint.innerHTML='<span style="color:var(--text-secondary)">契約期間 '+n+'ヶ月　支払方法: '+document.getElementById('q-payment').value+'</span>';
   }
@@ -13255,7 +13255,7 @@ function showInboxFolderId(k){
   const raw=document.getElementById('ib-'+k).value.trim();
   const id=driveFolderIdFrom(raw);
   document.getElementById('ib-'+k+'-id').innerHTML=!raw?'未設定'
-    :id?'フォルダID：'+escAttr(id):'<span style="color:var(--red)">URLまたはIDを読み取れません</span>';
+    :id?'フォルダID：'+escAttr(id):'<span style="color:var(--red-ink)">URLまたはIDを読み取れません</span>';
 }
 
 function saveInboxFolders(){
