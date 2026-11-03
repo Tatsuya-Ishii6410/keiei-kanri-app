@@ -222,4 +222,4 @@ if (require.main === module) {
     .then(r => { if (cmd !== 'combine') console.log(JSON.stringify(Object.fromEntries(Object.entries(r).map(([w, v]) => [w, v.heights])))); process.exit(0); })
     .catch(e => { console.error(e.message); process.exit(1); });
 }
-module.exports = { findChrome, startServer, withChrome, evalJs, wait, ROOT, shot, combine };
+module.exports = { findChrome, startServer, withChrome, evalJs, wait, ROOT, PRELUDE, shot, combine };

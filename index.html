@@ -778,6 +778,18 @@ body.bs-docview{overflow:hidden}
 .te-head{flex:none;margin:0;padding:14px 20px 10px;border-bottom:1px solid var(--border)}
 .te-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:14px 20px 6px;scroll-padding:12px}
 .te-foot{flex:none;margin:0;padding:10px 20px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--border);background:var(--bg-primary)}
+/* ===== ほかの編集・追加の画面も同じ3層（mfLayoutModals が起動時に付ける：見出し／本文 .mf-body／フッター .mf-foot）=====
+   見出し＋最後の子が .actions-row のモーダルだけ。フッターがない画面は見出しの固定と本文のスクロールだけ */
+.mf-overlay{padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+.modal.mf-modal{display:flex;flex-direction:column;padding:0;overflow:hidden;max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px - env(safe-area-inset-bottom))}
+.mf-head{flex:none;margin:0;padding:16px 24px 12px}
+.mf-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:16px 24px 8px;scroll-padding:12px}
+.mf-foot{flex:none;margin:0;padding:10px 24px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--border);background:var(--bg-primary)}
+.mf-foot .btn{min-height:44px}
+/* 領収書から登録：ボタンの行は描き直す本文（#rc-body）の中にあるので、本文のスクロールの中で下に貼り付ける */
+#rc-body .actions-row{position:sticky;bottom:0;z-index:2;margin-top:12px;padding:8px 0 calc(8px + env(safe-area-inset-bottom));background:var(--bg-primary);border-top:1px solid var(--border)}
+#rc-body .actions-row .btn{min-height:44px}
+#modal-receipt .mf-body{scroll-padding-bottom:84px;padding-bottom:0}
 .te-modal #te-result:empty,.te-modal .te-under:empty,.te-modal #te-purpose-hint:empty{display:none}
 .te-modal #te-result{margin:0 0 10px}
 .te-modal .te-under{margin:-6px 0 10px}
@@ -1067,6 +1079,12 @@ body.bs-docview{overflow:hidden}
   .te-foot{padding:8px 14px calc(8px + env(safe-area-inset-bottom))}
   .te-overlay{padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
   .modal.te-modal{max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px - env(safe-area-inset-bottom))}
+  .mf-overlay{padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
+  .modal.mf-modal{padding:0;max-width:100%;max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px - env(safe-area-inset-bottom))}
+  .mf-head{padding:8px 10px 8px 14px}
+  .mf-body{padding:10px 14px 6px}
+  .mf-foot{padding:8px 14px calc(8px + env(safe-area-inset-bottom));flex-direction:row;flex-wrap:wrap;align-items:center}
+  .mf-foot .btn{flex:1 1 0;min-width:0;justify-content:center;white-space:normal}
   .te-modal .te-foot{flex-direction:row;align-items:center}
   .te-foot .btn{min-height:44px;flex:1;justify-content:center;width:auto}
   .te-modal .form-row{gap:8px;margin-bottom:6px}
@@ -1129,6 +1147,11 @@ body.bs-docview{overflow:hidden}
   #loan-body .card-header .btn{width:auto;align-self:flex-start}
   .actions-row{flex-direction:column-reverse;align-items:stretch}
   .actions-row .btn{width:100%;justify-content:center}
+  /* 編集・追加の画面のフッターは、交通費と同じく横に並べる（キャンセル｜保存） */
+  .modal .mf-foot{flex-direction:row;align-items:center}
+  .modal .mf-foot .btn{width:auto;flex:1 1 0;min-width:0}
+  #rc-body .actions-row{flex-direction:row;align-items:center}
+  #rc-body .actions-row .btn{width:auto;flex:1 1 0;min-width:0}
 
   /* 表の中の操作ボタンは縦積みに */
   #project-list td>div,#ledger-list td>div,#quote-list td>div,
@@ -2826,11 +2849,11 @@ body.bs-docview{overflow:hidden}
       <select id="tax-fiscal" onchange="renderTaxEstimate()"></select></div>
   </div>
   <div id="tax-estimate-body"></div>
+  <div id="tax-register-msg" style="margin-top:8px;font-size:13px;text-align:right;min-height:20px" role="status"></div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-tax-estimate')">閉じる</button>
     <button class="btn primary" onclick="registerTaxPlans()">💾 CF管理に出金予定として登録</button>
   </div>
-  <div id="tax-register-msg" style="margin-top:8px;font-size:13px;text-align:right;min-height:20px"></div>
 </div>
 </div>
 
@@ -3738,6 +3761,21 @@ function showPage(p,btn){
 
 function openModal(id){document.getElementById(id).classList.add('open')}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
+/* 編集・追加の画面を3層にする（見た目と配置だけ。要素は移すだけで id・onclick・入力値・閉じ方は変わらない）
+   対象：.modal の最初の子が .modal-header。最後の子が .actions-row ならフッターに固定。交通費（te-modal）は別に作り済み */
+function mfLayoutModals(){
+  document.querySelectorAll('.modal-overlay>.modal:not(.te-modal):not(.mf-modal)').forEach(m=>{
+    const kids=[...m.children],h=kids[0],last=kids[kids.length-1];
+    if(!h||!h.classList.contains('modal-header')||kids.length<2)return;
+    const foot=last.classList.contains('actions-row')&&kids.length>2?last:null;
+    const body=document.createElement('div');body.className='mf-body';
+    kids.slice(1,foot?-1:undefined).forEach(k=>body.appendChild(k));
+    m.insertBefore(body,foot);
+    m.parentElement.classList.add('mf-overlay');m.classList.add('mf-modal');h.classList.add('mf-head');
+    if(foot)foot.classList.add('mf-foot');
+  });
+}
+mfLayoutModals();
 document.querySelectorAll('.modal-overlay').forEach(m=>{
   m.addEventListener('click',e=>{if(e.target!==m)return;if(m.id==='modal-invoice-sync')closeInvoiceSync();else m.classList.remove('open');});
 });
@@ -7753,7 +7791,7 @@ function openTravelEntry(id){
 }
 
 document.addEventListener('focusin',e=>{
-  if(e.target&&e.target.closest&&e.target.closest('#te-body'))setTimeout(()=>{try{e.target.scrollIntoView({block:'nearest'})}catch(_){}},250);
+  if(e.target&&e.target.closest&&e.target.closest('#te-body,.mf-body'))setTimeout(()=>{try{e.target.scrollIntoView({block:'nearest'})}catch(_){}},250);
 });
 
 // 運賃検索は電車・バス（旧「電車・バス」も）のときだけ出す

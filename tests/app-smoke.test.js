@@ -303,6 +303,34 @@ const SCENARIO = String.raw`(async () => {
     window.confirm = conf;
     ok(asked && S.ledger.length === n0, '削除の確認が出ない、または確認で取り消しても消えた');
   });
+  await step('編集・追加の画面：見出し／本文／固定フッター（保存・キャンセル・閉じ方は従来どおり）', async () => {
+    // 見出し＋最後の子が actions-row のモーダルは、すべて3層（交通費は te-、ほかは mf-）
+    const bad = [...document.querySelectorAll('.modal-overlay>.modal')].filter(m => {
+      const k = [...m.children];
+      return k.length && k[0].classList.contains('modal-header') && !m.classList.contains('te-modal')
+        && !(m.classList.contains('mf-modal') && k[1] && k[1].classList.contains('mf-body'));
+    }).map(m => m.parentElement.id);
+    ok(!bad.length, '3層になっていない画面：' + bad.join(','));
+    const m = document.querySelector('#modal-add-ledger>.modal'), foot = m.querySelector(':scope>.mf-foot');
+    const fb = t => foot && [...foot.querySelectorAll('button')].find(b => b.textContent.includes(t));
+    ok(foot && fb('キャンセル') && foot.querySelector('#modal-ledger-submit') && !foot.querySelector('.danger'), '実績入力のフッターに 保存・キャンセル がない（または危険な操作がある）');
+    ok(m.querySelector('.mf-body #l-amount'), '入力欄が本文に入っていない');
+    // 保存：フッターのボタンから従来の saveLedger
+    openLedgerModal(null, 'actual');
+    const n0 = S.ledger.length;
+    document.getElementById('l-desc').value = 'フッターの保存'; document.getElementById('l-amount').value = '1234';
+    document.getElementById('l-type').value = '消耗品費';
+    document.getElementById('modal-ledger-submit').click();
+    ok(S.ledger.length === n0 + 1 && !document.getElementById('modal-add-ledger').classList.contains('open'), 'フッターの保存で登録・閉じるができない');
+    S.ledger = S.ledger.filter(l => l.desc !== 'フッターの保存'); refreshAll();
+    // キャンセル・背景のタップで閉じる
+    openLedgerModal(null, 'actual'); fb('キャンセル').click();
+    ok(!document.getElementById('modal-add-ledger').classList.contains('open'), 'キャンセルで閉じない');
+    openLedgerModal(null, 'actual');
+    const ov = document.getElementById('modal-add-ledger'); ov.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    ok(!ov.classList.contains('open'), '背景のタップで閉じない');
+    m.querySelector('.mf-body').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
   await step('CF管理：予定を実績に変換（出金予定・入金予定。スマホの行から。二重にならない）', async () => {
     const keep = JSON.parse(JSON.stringify(S.ledger)), keepProj = JSON.parse(JSON.stringify(S.projects));
     const pad = n => String(n).padStart(2, '0'), now = new Date();

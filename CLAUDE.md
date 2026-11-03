@@ -39,7 +39,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - [docs/travel.md](docs/travel.md)：交通費（計算・精算・台帳・カレンダー・訪問先の候補・運賃・手段・入力モーダル）
 - [docs/ops.md](docs/ops.md)：週次バックアップ、入金遅延、月次締め、ログイン
 - [docs/dashboard.md](docs/dashboard.md)：新ダッシュボード（第1〜4次）、朝日凛子、アプリのアイコン
-- [docs/ui.md](docs/ui.md)：レイアウト、レスポンシブ、フォント、共通ナビ、一覧の上の操作エリア、スマホの横長ルール
+- [docs/ui.md](docs/ui.md)：レイアウト、レスポンシブ、フォント、共通ナビ、一覧の上の操作エリア、スマホの横長ルール、編集・追加の画面の3層（見出し／本文／固定フッター。mfLayoutModals）
 - [docs/ui-cf-projects.md](docs/ui-cf-projects.md)：UI/UX改修指示（CF管理・案件管理）の原文。最重要制約はこれに従う
 - [docs/ui-revamp.md](docs/ui-revamp.md)：UI改修（共通部品 uc-：ヒーロー・KPI 2列・明細の行・進捗行・バッジ・差額。新しい画面の部品はこれを使う）
 - 進行中の作業：[PROGRESS.md](PROGRESS.md)
