@@ -602,6 +602,16 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .pj-pipe-bar .btn{min-height:44px;border-radius:12px}
 .pj-pipe-sum{font-size:13px;margin:0 0 10px;color:var(--text-primary)}
 .pj-pipe-note{font-size:11px;color:var(--text-muted);margin-left:6px}
+.inv-pend-head{display:flex;flex-direction:column;gap:2px;font-size:13px}
+.inv-pend-head span{font-size:12px}
+.inv-pend{list-style:none;margin:0 0 12px;padding:0;border:0.5px solid var(--border);border-radius:var(--radius-md)}
+.inv-pend li{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:10px;border-bottom:0.5px solid var(--border)}
+.inv-pend li:last-child{border-bottom:0}
+.inv-pend-main{min-width:0;flex:1 1 220px}
+.inv-pend-sub{display:block;font-size:12px;color:var(--text-secondary);overflow-wrap:anywhere}
+.inv-pend-act{display:flex;gap:8px;align-items:center;flex:1 1 260px;min-width:0}
+.inv-pend-act select{flex:1;min-width:0;font-size:13px}
+.inv-pend-act .btn{min-height:44px;flex:none}
 .pa-sec{margin-bottom:16px}
 .pa-h{font-size:14px;font-weight:700;margin:0 0 2px}
 .pa-n{font-size:12px;font-weight:700;color:var(--text-secondary)}
@@ -2181,6 +2191,7 @@ body.bs-docview{overflow:hidden}
 <div class="modal-overlay" id="modal-invoice-sync">
 <div class="modal wide">
   <div class="modal-header"><span class="modal-title">ドライブから請求書を同期</span><button class="btn sm" onclick="closeModal('modal-invoice-sync')">✕</button></div>
+  <div id="inv-pending"></div>
   <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
     請求書関係フォルダの「{年}年{月}月」フォルダにあるPDFを読み取り、
     請求書データ・月次請求レコード・入金予定に反映します。
@@ -9502,6 +9513,7 @@ function openInvoiceSyncModal(){
   document.getElementById('inv-list').innerHTML='';
   document.getElementById('inv-sync-btn').style.display='none';
   invMsg('');
+  renderInvPending();
   openModal('modal-invoice-sync');
 }
 
@@ -9668,7 +9680,8 @@ async function syncInvoices(){
 
   saveState();
   btn.disabled=false;
-  closeModal('modal-invoice-sync');
+  // 保留があれば同期の画面を開いたまま、上に保留の一覧を出す
+  if(invPending.length)renderInvPending();else closeModal('modal-invoice-sync');
   refreshAll();
   alert(invSyncSummary(cnt)
     +(errors.length?`\n\n読み取れなかったファイル:\n`+errors.join('\n'):''));
@@ -9678,6 +9691,44 @@ async function syncInvoices(){
    invPending：案件を決められなかった請求書（このセッションだけ。ファイル・宛名・金額・日付など読み取った内容だけを持つ。
    請求書・請求レコード・請求済みの状態・入金予定はまだ作らない。次の同期でも同じPDFは改めて保留になる） */
 let invPending=[];
+/* 保留の一覧（同期の画面の上）。案件を選んで「確定」すると、通常の同期と同じ処理（invSyncApply）を行う。
+   選べる案件：候補（同じ取引先・受注済み・その月が契約期間内）→ 同じ取引先のほかの受注済みの案件 → ほかの受注済みの案件。「案件に付けずに請求書だけ登録」も選べる */
+function renderInvPending(){
+  const el=document.getElementById('inv-pending');
+  if(!el)return;
+  if(!invPending.length){el.innerHTML='';return;}
+  const billable=S.projects.filter(billableProject);
+  const label=x=>`${x.client||'（取引先なし）'}／${x.name}（${x.start||'開始日なし'}〜${x.end||''}）`;
+  el.innerHTML=`<div class="alert alert-warning inv-pend-head"><b>案件を決められない請求書 ${invPending.length}件</b>
+      <span>案件を選んで確定するまで、請求書・請求レコード・入金予定は作りません</span></div>
+    <ul class="inv-pend">${invPending.map((it,i)=>{
+      const k=normClientName(it.client);
+      const cand=it.cands.map(id=>S.projects.find(x=>x.id===id)).filter(Boolean);
+      const same=billable.filter(x=>normClientName(x.client)===k&&it.cands.indexOf(x.id)<0);
+      const other=billable.filter(x=>normClientName(x.client)!==k);
+      const opts=(cand.length?`<optgroup label="候補（その月が契約期間内）">${cand.map(x=>`<option value="${x.id}">${escAttr(label(x))}</option>`).join('')}</optgroup>`:'')
+        +(same.length?`<optgroup label="同じ取引先のほかの案件">${same.map(x=>`<option value="${x.id}">${escAttr(label(x))}</option>`).join('')}</optgroup>`:'')
+        +(other.length?`<optgroup label="ほかの受注済みの案件">${other.map(x=>`<option value="${x.id}">${escAttr(label(x))}</option>`).join('')}</optgroup>`:'')
+        +'<option value="none">案件に付けずに請求書だけ登録</option>';
+      return`<li><div class="inv-pend-main"><b>${escAttr(it.client||'（宛名を読めず）')}</b>
+          <span class="inv-pend-sub">${escAttr(it.f.name)}・${it.ym.replace('-','年')}月分・${fmt(it.p.total||0)}（税込）・${escAttr(it.p.date||'日付なし')}
+          ・${it.cands.length?`候補 ${it.cands.length}件`:'候補なし'}</span></div>
+        <div class="inv-pend-act"><select id="inv-pend-sel-${i}" aria-label="付ける案件"><option value="">案件を選ぶ…</option>${opts}</select>
+          <button class="btn sm primary" onclick="confirmInvPending(${i})">確定</button></div></li>`;
+    }).join('')}</ul>`;
+}
+async function confirmInvPending(i){
+  const it=invPending[i];if(!it)return;
+  const v=document.getElementById('inv-pend-sel-'+i).value;
+  if(!v){alert('付ける案件を選んでください');return;}
+  const proj=v==='none'?null:S.projects.find(x=>x.id===parseInt(v));
+  if(v!=='none'&&!proj){alert('案件が見つかりません');return;}
+  const cnt=invSyncCounters();
+  await invSyncApply(it,proj,cnt,{updateAmount:false});
+  invPending.splice(i,1);
+  saveState();refreshAll();renderInvPending();
+  invMsg(`<div class="alert alert-success">${escAttr(it.client)}の請求書を確定しました（新規 ${cnt.added}件・上書き ${cnt.updated}件・スキップ ${cnt.skipExact+cnt.skipUser}件・請求済み ${cnt.billed}件・入金予定 ${cnt.planned}件）</div>`);
+}
 function invSyncCounters(){return{added:0,skipExact:0,skipUser:0,updated:0,billed:0,planned:0,amountUpdated:0,pending:0,unlinked:0};}
 function invSyncSummary(c){
   return`${c.added+c.updated}件の請求書を同期しました\n`
