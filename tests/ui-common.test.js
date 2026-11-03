@@ -15,7 +15,7 @@ function fnSource(name) {
 const iconsAt = html.indexOf('const UC_ICONS=');
 assert(iconsAt > 0, 'UC_ICONS が見つかりません');
 const iconsSrc = html.slice(iconsAt, html.indexOf('\n};', iconsAt) + 3);
-const names = ['fmt', 'escAttr', 'ucIcon', 'ucBadge', 'ucDiff', 'ucKpis', 'ucBar', 'ucMore', 'ucHero', 'ucRow', 'ucProgress'];
+const names = ['fmt', 'escAttr', 'ucIcon', 'ucBadge', 'ucDiff', 'ucKpis', 'ucBar', 'ucMore', 'ucHero', 'ucHeroInner', 'ucRow', 'ucProgress'];
 const app = {};
 vm.createContext(app);
 vm.runInContext(iconsSrc + '\n' + names.map(fnSource).join('\n') + `
