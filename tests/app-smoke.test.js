@@ -301,6 +301,20 @@ const SCENARIO = String.raw`(async () => {
   await step('交通費台帳', async () => {
     nav('ledger'); switchCfTab('travel', document.querySelector('[onclick*="switchCfTab(\'travel\'"]'));
     change('tl-month', '');
+    // スマホの行（ucRow）：件数・展開・編集・削除の確認（取り消すと消えない）
+    const tRows = [...document.querySelectorAll('#tl-cards .uc-row')];
+    ok(tRows.length === travelLedgerRows(null).length && tRows.length > 0, '交通費の行の数が一覧と違う：' + tRows.length);
+    const tr = tRows[0];
+    if (tr) {
+      tr.querySelector('summary').click();
+      const tb = t => [...tr.querySelectorAll('.uc-row-actions button')].find(b => b.textContent.trim() === t);
+      ok(tr.open && tb('編集') && tb('削除'), '交通費の行が展開されない、または 編集・削除 がない');
+      const n0 = S.ledger.length, conf = window.confirm; let asked = false;
+      window.confirm = () => { asked = true; return false; };
+      tb('削除').click();
+      window.confirm = conf;
+      ok(asked && S.ledger.length === n0, '交通費の削除の確認が出ない、または取り消しても消えた');
+    }
     printTravelLedger(); closeDocViewer();
     switchCfTab('cf', document.querySelector('[onclick*="switchCfTab(\'cf\'"]'));
   });

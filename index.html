@@ -672,6 +672,12 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
   .list-toolbar.cf-tb .lt-o5{display:none!important}
   .list-toolbar.cf-tb .btn{padding-left:6px;padding-right:6px}
 }
+.uc-day{display:flex;justify-content:space-between;gap:8px;padding:6px 14px;font-size:12px;font-weight:600;color:var(--ui-muted,#64748B);background:var(--ui-page,#F8FAFF);border-top:1px solid var(--ui-border-solid,#E3E7EF);font-variant-numeric:tabular-nums}
+.uc-rows>.uc-day:first-child{border-top:0}
+.uc-day+.uc-row{border-top:1px solid var(--ui-border-solid,#E3E7EF)}
+.uc-mark{padding:1px 7px;font-size:10px;margin-right:6px;vertical-align:1px}
+.uc-dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}
+.uc-dl dd{margin:0;color:var(--ui-text,#17233D);word-break:break-word}
 .uc-fixed{display:inline-block;font-size:10px;font-weight:700;color:var(--ui-muted,#64748B);border:1px solid var(--ui-border-solid,#E3E7EF);border-radius:6px;padding:0 5px;margin-right:6px;vertical-align:1px}
 .uc-row[open]>summary{background:var(--ui-line,#EEF1F6)}
 .uc-prog{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:8px 0;font-size:13px}
@@ -7226,7 +7232,7 @@ function renderTravelLedger(){
 
   if(mi!==null){
     tb.innerHTML=travelDayRowsHtml(rows);
-    cards.innerHTML=travelDayCardsHtml(rows);
+    cards.innerHTML=travelLinesHtml(rows);
     return;
   }
   // 全期間は月ごとにまとめて小計を出す
@@ -7253,7 +7259,7 @@ function renderTravelLedger(){
     const list=byMonth[k];
     const sub=list.reduce((a,l)=>a+l.amount,0);
     return`<div class="mob-group">${k}</div>`
-      +travelDayCardsHtml(list)
+      +travelLinesHtml(list)
       +mobTotal(`${k} 小計（${list.length}件）`,fmt(sub));
   }).join('');
 }
@@ -11638,6 +11644,29 @@ function travelDayCardsHtml(rows,withActions){
       'background:var(--bg-secondary);padding:10px 14px;margin-bottom:6px')
     +g.list.map(l=>travelCardHtml(l,withActions)).join('')
   ).join('');
+}
+
+// 交通費台帳（スマホ）：日付の小見出し（その日の合計）＋コンパクトな行（共通部品 ucRow。入出金明細と同じ行）
+function travelLinesHtml(rows){
+  return`<div class="uc-rows ui-scope">${travelDayGroups(rows).map(g=>
+    `<div class="uc-day"><span>${escAttr(g.date)}</span><span>その日の合計 ${fmt(g.total)}</span></div>`
+    +g.list.map(travelLineHtml).join('')).join('')}</div>`;
+}
+function travelLineHtml(l){
+  const t=travelPartsOf(l);
+  const edit=needsTravelEdit(l);
+  const dl=[['移動手段',travelModeLabel(t)],['出発',t.from||'-'],['到着',t.to||'-'],['訪問先',l.visit||'-'],['用件',l.purpose||'-']]
+    .concat(l.memo?[['備考',l.memo]]:[]);
+  return ucRow({
+    main:`${t.from||'（出発 未入力）'} → ${t.to||'（到着 未入力）'}`,
+    sub:[l.visit,l.purpose].filter(Boolean).join('・')||'訪問先・用件なし',
+    markHtml:edit?'<span class="badge badge-amber uc-mark">要編集</span>':'',
+    amount:l.amount,amountNote:travelModeLabel(t),
+    attrs:` data-ledger-id="${l.id}"${edit?' data-needs-edit="1"':''}`,
+    bodyHtml:`<dl class="uc-dl">${dl.map(r=>`<dt>${escAttr(r[0])}</dt><dd>${escAttr(r[1])}</dd>`).join('')}</dl>`,
+    actionsHtml:`<button class="btn sm" onclick="openTravelEntry(${l.id})">編集</button>`
+      +`<button class="btn sm danger" onclick="deleteLedger(${l.id})">削除</button>`
+  });
 }
 
 function travelCardHtml(l,withActions){

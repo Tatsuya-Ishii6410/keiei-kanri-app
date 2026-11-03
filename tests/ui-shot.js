@@ -73,6 +73,18 @@ const PRELUDE = String.raw`(() => {
     L({ date: d(-1, 10), type: '消耗品費', desc: '前月の文具', amount: 1100 }),
     L({ date: d(-1, 25), type: '売上', desc: '前月の入金', amount: 220000 }),
   ];
+  // 交通費（実績・CFの実績からは除外。翌月25日に精算）：同じ日に複数・要編集（到着なし／0円）・往復・前月分を含む
+  const T = (day, desc, amount, visit, purpose, k = 0, memo) => L({ date: d(k, day), type: '交通費', desc, amount, visit, purpose, memo });
+  ledger.push(
+    T(4, '青野ヶ原駅→三宮駅（電車）', 560, 'A社', '商談'),
+    T(4, '三宮駅→青野ヶ原駅（電車）', 560, 'A社', '商談'),
+    T(9, '青野ヶ原駅→大阪駅（電車）往復', 2420, '株式会社テスト商事', '定例会議', 0, '乗換1回'),
+    T(13, '小野市役所前→社町駅（バス）', 380, '合同会社みほん', '提案'),
+    T(19, 'カレンダー：打ち合わせ', 0, 'B社', '打ち合わせ'),
+    T(21, '青野ヶ原駅→（電車）', 0, '株式会社サンプル', '納品'),
+    T(26, '自宅→加古川（車）往復', 1480, '株式会社サンプル', '現地調査', 0, 'ガソリン代'),
+    T(28, '青野ヶ原駅→三宮駅（電車）往復', 1120, 'A社', '契約'),
+    T(15, '青野ヶ原駅→三宮駅（電車）往復', 1120, 'A社', '商談', -1));
   const plan = Array.from({ length: 12 }, () => ({ sales: 0, expense: 0, labor: 0, tax: 0 }));
   plan[m] = { sales: 600000, expense: 200000, labor: 250000, tax: 0 };   // 税金・公課は計画ゼロ（ゼロ除算の確認）
   const SEED = {
@@ -105,6 +117,14 @@ const PAGES = {
     root: '#page-ledger',
     parts: { '明細': '#ledger-list-title', '計画対実績': '#plan-month-label', '資金状況': '#cf-balance', 'KPI': '#cf-actual-in', 'ヘッダー': '#ledger-month' },
     valueRoot: '#cf-pane-main',
+  },
+  travel: {
+    open: `showPage('ledger',[...document.querySelectorAll('.nav-btn')].find(b=>(b.getAttribute('onclick')||'').includes("'ledger'")));
+      switchCfTab('travel',document.querySelector('[onclick*="switchCfTab(\\'travel\\'"]'));
+      document.getElementById('tl-month').value=String(new Date().getMonth());renderTravelLedger();`,
+    root: '#page-ledger',
+    parts: { '一覧': '#tl-list', '要約': '#tl-summary', 'ヘッダー': '#tl-month' },
+    valueRoot: '#cf-pane-travel',
   },
 };
 // 測る：その要素を含む一番近い .card（または .uc-hero / .metric-grid / .uc-kpis）の高さ
