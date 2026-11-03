@@ -1262,21 +1262,21 @@ body.bs-docview{overflow:hidden}
 <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar(false)"></div>
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-head">
-    <div class="sidebar-logo">📊 経営管理</div>
+    <div class="sidebar-logo">経営管理</div>
     <div class="sidebar-company">アスリンク株式会社</div>
   </div>
   <nav class="sidebar-nav">
-    <button class="nav-btn active" onclick="showPage('dashboard',this)">📈 ダッシュボード</button>
-    <button class="nav-btn" onclick="showPage('projects',this)">💼 案件管理</button>
-    <button class="nav-btn" onclick="showPage('quotes',this)">📄 見積・請求</button>
-    <button class="nav-btn" onclick="showPage('ledger',this)">💰 CF管理</button>
-    <button class="nav-btn" onclick="showPage('csv',this)">🏦 CSV取込</button>
-    <button class="nav-btn" onclick="showPage('report',this)">📊 月次レポート</button>
-    <button class="nav-btn" onclick="showPage('settings',this)">⚙️ 設定</button>
+    <button class="nav-btn active" onclick="showPage('dashboard',this)">ダッシュボード</button>
+    <button class="nav-btn" onclick="showPage('projects',this)">案件管理</button>
+    <button class="nav-btn" onclick="showPage('quotes',this)">見積・請求</button>
+    <button class="nav-btn" onclick="showPage('ledger',this)">CF管理</button>
+    <button class="nav-btn" onclick="showPage('csv',this)">CSV取込</button>
+    <button class="nav-btn" onclick="showPage('report',this)">月次レポート</button>
+    <button class="nav-btn" onclick="showPage('settings',this)">設定</button>
   </nav>
   <div class="sidebar-foot">
     <span class="save-indicator" id="save-indicator-side" title="データの保存状態"></span>
-    <button class="sidebar-logout" onclick="logout()">🔓 ログアウト</button>
+    <button class="sidebar-logout" onclick="logout()">ログアウト</button>
   </div>
 </aside>
 
@@ -1707,7 +1707,7 @@ body.bs-docview{overflow:hidden}
 <!-- CSV IMPORT -->
 <div id="page-csv" class="page">
   <div class="section-header">
-    <h1 class="section-title title-dup">📥 CSV取込</h1>
+    <h1 class="section-title title-dup">CSV取込</h1>
   </div>
 
   <div class="tab-group">
@@ -1720,9 +1720,9 @@ body.bs-docview{overflow:hidden}
     <div class="card">
       <div class="card-header"><span class="card-title">取込種別を選択</span></div>
       <div class="csv-type-toggle">
-        <button class="csv-type-btn active" id="csvbtn-project" onclick="setCsvType('project')">💼 新規案件追加</button>
-        <button class="csv-type-btn" id="csvbtn-ledger" onclick="setCsvType('ledger')">💰 収支データ追加</button>
-        <button class="csv-type-btn" id="csvbtn-bank" onclick="setCsvType('bank')">🏦 銀行明細取込</button>
+        <button class="csv-type-btn active" id="csvbtn-project" onclick="setCsvType('project')">新規案件追加</button>
+        <button class="csv-type-btn" id="csvbtn-ledger" onclick="setCsvType('ledger')">収支データ追加</button>
+        <button class="csv-type-btn" id="csvbtn-bank" onclick="setCsvType('bank')">銀行明細取込</button>
       </div>
 
       <div class="csv-drop-zone" id="csv-drop-zone"
@@ -1730,7 +1730,7 @@ body.bs-docview{overflow:hidden}
         ondragover="csvDragOver(event)"
         ondragleave="csvDragLeave(event)"
         ondrop="csvDrop(event)">
-        <div style="font-size:36px;margin-bottom:10px">📂</div>
+        <div style="margin-bottom:10px;color:var(--text-muted)" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></div>
         <div style="font-size:14px;font-weight:500;margin-bottom:4px">CSVファイルをドラッグ＆ドロップ</div>
         <div style="font-size:12px;color:var(--text-secondary)">またはクリックして選択　UTF-8 / Shift-JIS 対応</div>
       </div>
@@ -1746,7 +1746,7 @@ body.bs-docview{overflow:hidden}
           ondragover="bankDragOver(event)"
           ondragleave="bankDragLeave(event)"
           ondrop="bankDrop(event)">
-          <div style="font-size:36px;margin-bottom:10px">🏦</div>
+          <div style="margin-bottom:10px;color:var(--text-muted)" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></div>
           <div style="font-size:14px;font-weight:500;margin-bottom:4px">銀行明細CSVをドラッグ＆ドロップ</div>
           <div style="font-size:12px;color:var(--text-secondary)">またはクリックして選択　Shift-JIS / UTF-8 自動判別</div>
         </div>
@@ -1798,10 +1798,10 @@ body.bs-docview{overflow:hidden}
   <!-- テンプレートパネル -->
   <div id="csv-panel-template" style="display:none">
     <div class="card">
-      <div class="card-header"><span class="card-title">🏦 銀行明細の取込について</span></div>
+      <div class="card-header"><span class="card-title">銀行明細の取込について</span></div>
       <p style="font-size:13px;color:var(--text-secondary)">
         GMOあおぞらネット銀行の明細CSVをそのままドロップするだけで取込できます。<br>
-        テンプレートに合わせて作り直す必要はありません。「データ取込」タブで「🏦 銀行明細取込」を選んでください。
+        テンプレートに合わせて作り直す必要はありません。「データ取込」タブで「銀行明細取込」を選んでください。
       </p>
     </div>
     <div class="card">
@@ -1818,7 +1818,7 @@ body.bs-docview{overflow:hidden}
         <div class="col-item"><div class="col-name">メモ<span class="col-opt">任意</span></div><div class="col-note">備考・メモ</div></div>
       </div>
       <div class="tmpl-code" id="tmpl-project-code"></div>
-      <button class="btn" onclick="csvDownloadTemplate('project')">📥 テンプレートをダウンロード</button>
+      <button class="btn" onclick="csvDownloadTemplate('project')">テンプレートをダウンロード</button>
     </div>
 
     <div class="card">
@@ -1831,7 +1831,7 @@ body.bs-docview{overflow:hidden}
         <div class="col-item"><div class="col-name">金額<span class="col-req">必須</span></div><div class="col-note">数値のみ（税抜）</div></div>
       </div>
       <div class="tmpl-code" id="tmpl-ledger-code"></div>
-      <button class="btn" onclick="csvDownloadTemplate('ledger')">📥 テンプレートをダウンロード</button>
+      <button class="btn" onclick="csvDownloadTemplate('ledger')">テンプレートをダウンロード</button>
     </div>
   </div>
 </div>
@@ -1963,7 +1963,7 @@ body.bs-docview{overflow:hidden}
       <div class="form-group"><label class="form-label">燃費（km/L）</label><input id="t-fuel" type="number" step="0.1" placeholder="15"></div>
     </div>
     <div class="form-row single">
-      <div class="form-group"><label class="form-label">GoogleカレンダーID（「📅 カレンダーから作成」で読み取る。読み取りのみ）</label>
+      <div class="form-group"><label class="form-label">GoogleカレンダーID（「カレンダーから作成」で読み取る。読み取りのみ）</label>
         <input id="t-calendar" type="text" placeholder="tatsuya-ishii@us-links.com"></div>
     </div>
     <div class="actions-row">
@@ -1978,12 +1978,12 @@ body.bs-docview{overflow:hidden}
       読み取りだけで、データは変更しません。</div>
   </div>
   <div class="card">
-    <div class="card-header"><span class="card-title">📥 受信箱フォルダ（Googleドライブ）</span></div>
+    <div class="card-header"><span class="card-title">受信箱フォルダ（Googleドライブ）</span></div>
     <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;line-height:1.7">
       Googleドライブに「領収書」「受取請求書」の受信箱フォルダを作り、そのURL（またはフォルダID）を貼ってください。
-      毎週月曜の朝にGASが読み取り、ダッシュボードの「📥 取込待ち」に入れます（経費への登録は確認してから）。
+      毎週月曜の朝にGASが読み取り、ダッシュボードの「取込待ち」に入れます（経費への登録は確認してから）。
       処理が終わったファイルは、受信箱の中の「処理済み」フォルダに移動します（削除はしません）。<br>
-      ※「📷 領収書から登録」の写真の保存先（マイドライブの「領収書/年月」）とは別のフォルダにしてください。
+      ※「領収書から登録」の写真の保存先（マイドライブの「領収書/年月」）とは別のフォルダにしてください。
     </div>
     <div class="form-row single">
       <div class="form-group"><label class="form-label">領収書の受信箱（URL または ID）</label>
@@ -2001,7 +2001,7 @@ body.bs-docview{overflow:hidden}
     <div id="inbox-folder-msg" style="margin-top:8px;font-size:13px;text-align:right;color:var(--green);min-height:20px"></div>
   </div>
   <div class="card">
-    <div class="card-header"><span class="card-title">🙋 ダッシュボードの案内役</span></div>
+    <div class="card-header"><span class="card-title">ダッシュボードの案内役</span></div>
     <label style="display:flex;align-items:center;gap:10px;min-height:44px;font-size:14px;cursor:pointer">
       <input type="checkbox" id="s-rinko" onchange="setRinkoOn(this.checked)" style="width:20px;height:20px">凛子を表示する
     </label>
@@ -2009,9 +2009,9 @@ body.bs-docview{overflow:hidden}
       オフにしても判定の文字はそのまま出ます（この設定はこのブラウザに保存します）。</div>
   </div>
   <div class="card">
-    <div class="card-header"><span class="card-title">✉ 入金の催促文（ひな形）</span></div>
+    <div class="card-header"><span class="card-title">入金の催促文（ひな形）</span></div>
     <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;line-height:1.7">
-      ダッシュボードの「⏰ 入金遅延」の一覧で「催促文をコピー」を押すと、このひな形に宛名などを入れた文面をコピーします（メールは送りません）。<br>
+      ダッシュボードの「入金遅延」の一覧で「催促文をコピー」を押すと、このひな形に宛名などを入れた文面をコピーします（メールは送りません）。<br>
       使える差し込み：{宛名} {請求書番号} {金額} {期日} {遅延日数} {会社名}
     </div>
     <div class="form-row single">
@@ -2166,7 +2166,7 @@ body.bs-docview{overflow:hidden}
 
 <div id="page-close" class="page">
   <div class="section-header">
-    <h1 class="section-title title-dup">✅ 月次締め</h1>
+    <h1 class="section-title title-dup">月次締め</h1>
     <div class="list-toolbar lt-flat" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <span class="lt-select lt-o1"><select id="close-month" onchange="renderClosePage()" style="width:auto;font-size:13px"></select><svg class="lt-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
       <button class="btn lt-o2" onclick="showPage('dashboard',document.querySelectorAll('.nav-btn')[0])">← ダッシュボード</button>
@@ -2287,14 +2287,14 @@ body.bs-docview{overflow:hidden}
 <input type="file" id="rc-camera" accept="image/*" capture="environment" style="display:none" onchange="onReceiptFiles(this)">
 <div class="modal-overlay" id="modal-receipt">
 <div class="modal wide" style="max-width:1040px">
-  <div class="modal-header"><span class="modal-title"><span id="rc-title">📷 領収書から登録</span> <span id="rc-counter" style="font-size:13px;font-weight:400;color:var(--text-secondary)"></span></span><button class="btn sm" onclick="closeReceiptModal()">✕</button></div>
+  <div class="modal-header"><span class="modal-title"><span id="rc-title">領収書から登録</span> <span id="rc-counter" style="font-size:13px;font-weight:400;color:var(--text-secondary)"></span></span><button class="btn sm" onclick="closeReceiptModal()">✕</button></div>
   <div id="rc-body"></div>
 </div>
 </div>
 
 <div class="modal-overlay" id="modal-inbox">
 <div class="modal wide" style="max-width:860px">
-  <div class="modal-header"><span class="modal-title">📥 取込待ち</span><button class="btn sm" onclick="closeModal('modal-inbox')">✕</button></div>
+  <div class="modal-header"><span class="modal-title">取込待ち</span><button class="btn sm" onclick="closeModal('modal-inbox')">✕</button></div>
   <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px">
     受信箱フォルダ（設定ページで指定）を、GASが毎週月曜の朝に読み取った結果です。1回に読むのは8ファイルまでで、残りは次の実行に回ります。
     読み取りに失敗したファイルは3回まで読み直せます。
@@ -2311,7 +2311,7 @@ body.bs-docview{overflow:hidden}
 
 <div class="modal-overlay" id="modal-debit-import">
 <div class="modal wide" style="max-width:980px">
-  <div class="modal-header"><span class="modal-title">📧 デビット通知から取込</span><button class="btn sm" onclick="closeModal('modal-debit-import')">✕</button></div>
+  <div class="modal-header"><span class="modal-title">デビット通知から取込</span><button class="btn sm" onclick="closeModal('modal-debit-import')">✕</button></div>
   <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
     GMOあおぞらネット銀行の「Visaデビットご利用のお知らせ」メールを読み取ります（ラベル変更・既読化・削除はしません）。
     メール本文はアプリに送られず、日時・金額・店名だけを受け取ります。
@@ -2356,7 +2356,7 @@ body.bs-docview{overflow:hidden}
 
 <div class="modal-overlay" id="modal-conflict" style="z-index:220">
 <div class="modal">
-  <div class="modal-header"><span class="modal-title">⚠️ 類似データが見つかりました</span></div>
+  <div class="modal-header"><span class="modal-title">類似データが見つかりました</span></div>
   <div class="two-col" style="gap:12px">
     <div>
       <div class="form-label" style="margin-bottom:6px">既存データ</div>
@@ -2527,7 +2527,7 @@ body.bs-docview{overflow:hidden}
 
 <div class="modal-overlay" id="modal-legacy-mode">
 <div class="modal wide" style="max-width:820px">
-  <div class="modal-header"><span class="modal-title">🔀 旧「電車・バス」の手段を整理</span><button class="btn sm" onclick="closeModal('modal-legacy-mode')">✕</button></div>
+  <div class="modal-header"><span class="modal-title">旧「電車・バス」の手段を整理</span><button class="btn sm" onclick="closeModal('modal-legacy-mode')">✕</button></div>
   <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;line-height:1.7">
     手段が「電車・バス」のまま保存されている行を、「電車」か「バス」に分けます。提案は、駅名に「バス」「停留所」があればバス、それ以外は電車です。
     行ごとに変えられます。「適用」を押すまでデータは変わりません。適用すると摘要の（手段）も書き換えます。<br>
@@ -2562,7 +2562,7 @@ body.bs-docview{overflow:hidden}
 
 <div class="modal-overlay" id="modal-cal-import">
 <div class="modal wide" style="max-width:1180px">
-  <div class="modal-header"><span class="modal-title">📅 カレンダーから交通費を作成</span><button class="btn sm" onclick="closeModal('modal-cal-import')">✕</button></div>
+  <div class="modal-header"><span class="modal-title">カレンダーから交通費を作成</span><button class="btn sm" onclick="closeModal('modal-cal-import')">✕</button></div>
   <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
     Googleカレンダーの予定を読み取るだけです（予定の作成・変更はしません）。
     場所のない予定は日付と訪問先だけで登録し、あとで台帳から編集してください。
@@ -2607,7 +2607,7 @@ body.bs-docview{overflow:hidden}
 
 <div class="modal-overlay" id="modal-overdue">
 <div class="modal wide" style="max-width:820px">
-  <div class="modal-header"><span class="modal-title">⏰ 入金遅延</span><button class="btn sm" onclick="closeModal('modal-overdue')">✕</button></div>
+  <div class="modal-header"><span class="modal-title">入金遅延</span><button class="btn sm" onclick="closeModal('modal-overdue')">✕</button></div>
   <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">
     入金予定日が今日より前の入金予定です（遅延日数の長い順）。取消した請求書の入金予定は出しません。
     <span class="badge badge-amber">1〜7日</span> <span class="badge badge-red">8〜30日</span> <span class="badge badge-red" style="font-weight:700">31日以上</span>
@@ -2785,7 +2785,7 @@ body.bs-docview{overflow:hidden}
 
 <div class="modal-overlay" id="modal-invoice-drafts">
 <div class="modal">
-  <div class="modal-header"><span class="modal-title">🧾 未作成の請求書</span><button class="btn sm" onclick="closeModal('modal-invoice-drafts')">✕</button></div>
+  <div class="modal-header"><span class="modal-title">未作成の請求書</span><button class="btn sm" onclick="closeModal('modal-invoice-drafts')">✕</button></div>
   <div id="idp-msg" style="font-size:14px;font-weight:600;margin-bottom:10px"></div>
   <div id="idp-list" style="max-height:280px;overflow:auto;margin-bottom:10px"></div>
   <div style="font-size:12px;color:var(--text-muted)">下書き（status=下書き）で作成します。発行・PDF出力はしません。内容を確認してから請求書タブで発行してください。</div>
@@ -2898,7 +2898,7 @@ body.bs-docview{overflow:hidden}
 
 <div class="modal-overlay" id="modal-tax-estimate">
 <div class="modal wide">
-  <div class="modal-header"><span class="modal-title">🧮 税金・社会保険の試算</span><button class="btn sm" onclick="closeModal('modal-tax-estimate')">✕</button></div>
+  <div class="modal-header"><span class="modal-title">税金・社会保険の試算</span><button class="btn sm" onclick="closeModal('modal-tax-estimate')">✕</button></div>
   <div class="form-row">
     <div class="form-group"><label class="form-label">対象の期</label>
       <select id="tax-fiscal" onchange="renderTaxEstimate()"></select></div>
@@ -3261,7 +3261,7 @@ function quoteFileName(q){
 }
 // ===== @invoice-rules-end
 
-// 「📅 カレンダーから作成」で読むカレンダー（設定ページで変更可。読み取りのみ）
+// 「カレンダーから作成」で読むカレンダー（設定ページで変更可。読み取りのみ）
 const DEFAULT_CALENDAR_ID='tatsuya-ishii@us-links.com';
 const defaultState={
   company:{
@@ -4638,23 +4638,23 @@ function renderCloseList(){
   const empty='<div class="empty-state">該当はありません</div>';
   if(closeListKind==='payable'){
     const rows=overduePayables(D.ledger,today);
-    title.textContent='⏰ 出金予定の支払期限超過';
+    title.textContent='出金予定の支払期限超過';
     note.textContent='予定日が今日より前の出金予定です。支払い済みなら「編集」で実績に、日付が変わったなら予定日を直してください。';
     body.innerHTML=rows.length?rows.map(l=>closeLedgerRow(l,editBtn(l))).join('<hr style="border:none;border-top:0.5px solid var(--border);margin:0">'):empty;
   }else if(closeListKind==='entertain'){
     const rows=entertainMissingIn(D.ledger,ym);
-    title.textContent=`🍽 交際費：「誰と」「用件」が空（${invYmJp(ym)}）`;
+    title.textContent=`交際費：「誰と」「用件」が空（${invYmJp(ym)}）`;
     note.textContent='「編集」で誰と・用件を入れてください。';
     body.innerHTML=rows.length?rows.map(l=>closeLedgerRow(l,editBtn(l))).join('<hr style="border:none;border-top:0.5px solid var(--border);margin:0">'):empty;
   }else if(closeListKind==='receipt'){
     const rows=receiptMissingIn(D.ledger,ym,ledgerGroup);
-    title.textContent=`📷 参考：領収書の写真リンクがない経費（${invYmJp(ym)}）`;
+    title.textContent=`参考：領収書の写真リンクがない経費（${invYmJp(ym)}）`;
     note.textContent='要対応には数えません。紙の領収書を保管しているなどで問題なければ、そのままで構いません（交通費は除く）。';
     body.innerHTML=rows.length?rows.map(l=>closeLedgerRow(l,editBtn(l))).join('<hr style="border:none;border-top:0.5px solid var(--border);margin:0">'):empty;
   }else if(closeListKind==='review'){
     const r=reviewCandidates(D.ledger,ym,ledgerGroup);
     const showDone=!!(document.getElementById('cl-show-done')||{}).checked;
-    title.textContent=`🔍 認証・重複の可能性（${invYmJp(ym)}）`;
+    title.textContent=`認証・重複の可能性（${invYmJp(ym)}）`;
     note.innerHTML='重複の可能性：同額（100円以上）で日付が前後1日以内、取込元が違う2件（片方はメール取込・領収書取込・銀行明細CSV。交通費は除く）。'
       +'同じ支払いなら片方を削除、別の支払いなら「確認済みにする」（2件とも印を付けます）。<br>'
       +'認証の可能性：10円以下の経費。実際の支出でなければ削除、支出なら「確認済みにする」。<br>'
@@ -4869,7 +4869,7 @@ function renderProjects(){
   }
   document.getElementById('project-empty').style.display='none';
   tb.innerHTML=list.map(p=>`<tr>
-    <td><button class="btn sm" onclick="toggleBillingRows(${p.id})" title="月次請求">${expandedProjects[p.id]?'▼':'▶'}</button></td>
+    <td><button class="btn sm" onclick="toggleBillingRows(${p.id})" title="月次請求" aria-label="月次請求を${expandedProjects[p.id]?'閉じる':'開く'}" aria-expanded="${!!expandedProjects[p.id]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${expandedProjects[p.id]?'M6 9l6 6 6-6':'M9 6l6 6-6 6'}"/></svg></button></td>
     <td style="font-weight:500">${p.name}${projectMarksHtml(marks[p.id])}</td>
     <td style="font-size:12px;color:var(--text-secondary)">${p.client||'-'}</td>
     <td>${fmt(p.amount)}</td>
@@ -5694,7 +5694,7 @@ async function onReceiptFiles(input){
   }
   fillRecentDatalists();
   rcQueue=[];rcIndex=0;
-  document.getElementById('rc-title').textContent='📷 領収書から登録';
+  document.getElementById('rc-title').textContent='領収書から登録';
   document.getElementById('rc-counter').textContent='';
   document.getElementById('rc-body').innerHTML='<div class="alert alert-info"><span class="spinner"></span> 写真を縮小しています...</div>';
   openModal('modal-receipt');
@@ -6183,7 +6183,7 @@ function inboxOpen(i,manual){
   rcQueue=inboxItems.slice(i).map((x,j)=>inboxQueueItem(x,j===0&&manual));
   rcIndex=0;
   closeModal('modal-inbox');
-  document.getElementById('rc-title').textContent='📥 取込待ちの確認';
+  document.getElementById('rc-title').textContent='取込待ちの確認';
   openModal('modal-receipt');
   showReceipt(0);
 }
@@ -6703,7 +6703,7 @@ function renderLedger(){
     return`<tr style="${bg}">
       <td style="font-size:12px;white-space:nowrap">${ledgerDateOf(l)}</td>
       <td>${ledgerBadge(l.type)}</td>
-      <td style="font-size:12px">${l.fixedCostId?'<span title="固定費から自動追加">🔁 </span>':''}${l.desc}${receiptLinkHtml(l)}${expenseExtraText(l)?`<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">${escAttr(expenseExtraText(l))}</div>`:''}${l.memo?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${l.memo}</div>`:''}</td>
+      <td style="font-size:12px">${l.fixedCostId?'<span class="badge badge-gray" title="固定費から自動追加" style="margin-right:4px">固定費</span>':''}${l.desc}${receiptLinkHtml(l)}${expenseExtraText(l)?`<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">${escAttr(expenseExtraText(l))}</div>`:''}${l.memo?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${l.memo}</div>`:''}</td>
       <td style="text-align:right;font-weight:500;color:${inflow?'var(--green)':'var(--text-muted)'}">${inflow?fmt(l.amount):'-'}</td>
       <td style="text-align:right;font-weight:500;color:${inflow?'var(--text-muted)':'var(--red-ink)'}">${inflow?'-':fmt(l.amount)}</td>
       <td><span class="badge ${LEDGER_STATES[st].cls}">${LEDGER_STATES[st].label.replace(/^📅\s*/,'')}</span></td>
@@ -8359,7 +8359,7 @@ function registerCalRows(){
   calSkipped+=sel.length;
   saveState();
   renderTravelLedger();refreshAll();
-  calMsg(`<div class="alert alert-success">✓ ${sel.length}件を交通費台帳に登録しました。⚠要編集の行は台帳から編集してください。</div>`);
+  calMsg(`<div class="alert alert-success">✓ ${sel.length}件を交通費台帳に登録しました。「要編集」の行は台帳から編集してください。</div>`);
   renderCalImport();
 }
 
@@ -8502,7 +8502,7 @@ function renderSettleNotice(){
   const total=travelActualTotal(prev);
   if(total<=0||settlementFor(ymOfMonth(prev))){el.innerHTML='';return;}
   el.innerHTML=`<div class="alert alert-warning">
-    ⚠️ ${prev+1}月の交通費精算（${fmt(total)}）がまだ登録されていません。
+    ${prev+1}月の交通費精算（${fmt(total)}）がまだ登録されていません。
     <button class="btn sm" style="margin-left:auto" onclick="openSettleModal(${prev})">交通費精算を追加</button>
   </div>`;
 }
@@ -9999,7 +9999,7 @@ async function invLoadFolder(){
 
 function invStateBadge(f){
   if(f.dup==='exact')return`<span class="badge badge-green">✓ 登録済（${f.reason}）</span>`;
-  if(f.dup==='similar')return'<span class="badge badge-amber">⚠️ 類似データあり</span>';
+  if(f.dup==='similar')return'<span class="badge badge-amber">類似データあり</span>';
   return'<span class="badge badge-blue">未登録</span>';
 }
 
@@ -11224,9 +11224,9 @@ function buildForecastHtml(fy){
 
   /* --- 月別予実 --- */
   const cellBg=st=>st==='now'?'background:var(--blue-bg);':st==='future'?'background:var(--bg-secondary);':'';
-  const badge=st=>st==='now'?'<span class="badge badge-blue">✅ 実績（当月）</span>'
-    :st==='future'?'<span class="badge badge-gray">📅 予定</span>'
-    :'<span class="badge badge-green">✅ 実績</span>';
+  const badge=st=>st==='now'?'<span class="badge badge-blue">実績（当月）</span>'
+    :st==='future'?'<span class="badge badge-gray">予定</span>'
+    :'<span class="badge badge-green">実績</span>';
   // 期が年をまたぐので、月名の横に小さく年を添える
   const monthLabel=r=>`${r.label}<span style="font-size:10px;color:var(--text-muted);margin-left:4px">${r.year}</span>`;
   let prev=null;
@@ -12423,9 +12423,9 @@ function buildAnnualReportHtml(fy){
     +rpLine('└ 目標達成率',rateText(rate),{bold:true,indent:true});
 
   /* --- 1. 月次推移 --- */
-  const stBadge=r=>r.state==='now'?'<span class="badge badge-blue">✅ 実績（当月）</span>'
-    :r.future?'<span class="badge badge-gray">📅 予定</span>'
-    :'<span class="badge badge-green">✅ 実績</span>';
+  const stBadge=r=>r.state==='now'?'<span class="badge badge-blue">実績（当月）</span>'
+    :r.future?'<span class="badge badge-gray">予定</span>'
+    :'<span class="badge badge-green">実績</span>';
   // 期が年をまたぐので月名の横に年を小さく添える
   const mLabel=r=>`${r.label}<span style="font-size:10px;color:#888;margin-left:4px">${r.year}</span>`;
   const td=(v,align)=>`<td style="padding:7px 8px;border-bottom:1px solid #e0e0e0;${align?'text-align:'+align+';':''}">${v}</td>`;

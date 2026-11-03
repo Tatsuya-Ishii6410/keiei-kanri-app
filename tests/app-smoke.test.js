@@ -616,6 +616,13 @@ const SCENARIO = String.raw`(async () => {
     }
     ok(!bad.length, 'モーダルの✕・入力欄が44px未満：' + bad.slice(0, 4).join(' ／ '));
   });
+  // 段階6-a で外した絵文字が戻っていない（モーダルの見出し・サイドバー・CSV取込・月次締め・設定の見出し）
+  await step('絵文字を使わない場所', async () => {
+    const emo = new RegExp(String.fromCharCode(92) + 'p{Extended_Pictographic}', 'u');   // SCENARIO は文字列なのでバックスラッシュを避ける
+    const els = [...document.querySelectorAll('.modal-title, #sidebar, #page-csv .section-title, #page-csv .csv-type-btn, #page-csv .card-title, #page-close .section-title, #page-settings .card-title')];
+    const hit = els.filter(e => emo.test(e.textContent)).map(e => e.textContent.trim().split(String.fromCharCode(10))[0].slice(0, 16));
+    ok(els.length > 30 && !hit.length, '絵文字が残っている：' + hit.slice(0, 5).join(' ／ '));
+  });
   window.__step = '終了';
   await wait(800);
   return { checks, gas: window.__gas, alerts: window.__alerts, errs: window.__errs, settle: window.__settleNumbers };
