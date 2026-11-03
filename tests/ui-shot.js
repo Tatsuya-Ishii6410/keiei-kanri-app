@@ -105,7 +105,17 @@ const PRELUDE = String.raw`(() => {
       { id: 2, projectId: 5, billingMonth: ym(0), amount: 200000, invoiceStatus: 'invoiced', invoiceId: null, paidDate: null, paidAmount: null, expectedPayDate: d(1, 10), note: '' },
     ],
     nextBillingId: 50,
-    quotes: [], ledger, plan, bankBalance: 1234567,
+    // 見積・請求：見積2件、請求は 発行済（期限超過）・発行済（訂正版）・下書き・取消・ドライブ同期 の5件（日付は今月）
+    quotes: [
+      { id: 'EST-1', type: '見積書', client: '株式会社テスト商事', subject: '営業支援 見積', date: d(0, 3), expire: d(1, 3), amount: 330000, items: [{ name: '営業支援', qty: 1, unit: 300000 }] },
+      { id: 'EST-2', type: '見積書', client: '合同会社みほん', subject: '新規の提案', date: d(0, 8), expire: d(1, 8), amount: 550000, items: [{ name: '提案', qty: 1, unit: 500000 }] },
+      { id: 'INV-1', type: '請求書', status: 'issued', client: '株式会社テスト商事', subject: '営業支援 10月分', date: d(0, 1), due: d(0, 2), amount: 330000, items: [{ name: '営業支援', qty: 1, unit: 300000 }] },
+      { id: 'INV-2', type: '請求書', status: 'issued', revision: 2, history: [{ at: d(0, 5), reason: '金額の訂正', changes: [] }], client: '有限会社ためし', subject: '現地調査', date: d(0, 4), due: d(1, 28), amount: 220000, items: [{ name: '現地調査', qty: 1, unit: 200000 }] },
+      { id: 'DRAFT-1', type: '請求書', status: 'draft', client: '株式会社サンプル', subject: '保守契約 11月分', date: d(0, 6), due: d(1, 30), amount: 55000, items: [{ name: '保守', qty: 1, unit: 50000 }] },
+      { id: 'INV-3', type: '請求書', status: 'cancelled', cancelReason: '宛名の誤り', client: '株式会社サンプル', subject: '保守契約（取消）', date: d(0, 2), due: d(1, 30), amount: 55000, items: [{ name: '保守', qty: 1, unit: 50000 }] },
+      { id: 'INV-4', type: '請求書', status: 'issued', source: 'drive_sync', client: 'みほん工業株式会社', subject: '研修の企画', date: d(0, 7), due: d(1, 31), amount: 110000, items: [] },
+    ],
+    ledger, plan, bankBalance: 1234567,
   };
   const reply = o => new Response(JSON.stringify(o), { status: 200, headers: { 'Content-Type': 'application/json' } });
   const realFetch = window.fetch.bind(window);
@@ -146,6 +156,20 @@ const PAGES = {
     valueRoot: '#pj-tab-list',
   },
 };
+// 見積・請求（請求書タブ。見積書タブは quotesEst）
+PAGES.quotes = {
+  open: `showPage('quotes',[...document.querySelectorAll('.nav-btn')].find(b=>(b.getAttribute('onclick')||'').includes("'quotes'")));
+    document.getElementById('quote-month').value=String(new Date().getMonth());renderQuotes();
+    switchQuoteTab('invoice',document.querySelectorAll('#page-quotes .tab-group .tab')[1]);`,
+  root: '#page-quotes',
+  parts: { '一覧': '#invoice-empty', '要約': '#invoice-hero', 'ヘッダー': '#quote-month' },
+  valueRoot: '#q-invoice',
+};
+PAGES.quotesEst = Object.assign({}, PAGES.quotes, {
+  open: PAGES.quotes.open.replace("switchQuoteTab('invoice',document.querySelectorAll('#page-quotes .tab-group .tab')[1]);", ''),
+  parts: { '一覧': '#estimate-empty', '要約': '#estimate-hero', 'ヘッダー': '#quote-month' },
+  valueRoot: '#q-estimate',
+});
 // 案件の行を1つ開いた状態（ステップ表示の確認用）
 PAGES.projectsOpen = Object.assign({}, PAGES.projects, {
   open: PAGES.projects.open + `const r=document.querySelector('#project-cards .uc-row[data-project-id="1"]');if(r)r.open=true;`,
@@ -161,7 +185,10 @@ const MEASURE = (p) => `(() => {
   const amounts=(vr.textContent.match(/¥-?[0-9,]+/g)||[]).sort();
   const bal=document.getElementById('cf-balance');
   return {heights:h,hScroll:document.documentElement.scrollWidth>window.innerWidth,scrollWidth:document.documentElement.scrollWidth,
-    amounts:[...new Set(amounts)],balanceInput:bal?bal.value:null};
+    amounts:[...new Set(amounts)],balanceInput:bal?bal.value:null,
+    // 状態・件数の突き合わせ用：PCの表（tbody）の行の数と、行の中のバッジの文字の数え上げ
+    rows:vr.querySelectorAll('tbody>tr').length,
+    badges:[...vr.querySelectorAll('tbody .badge')].map(b=>b.textContent.trim()).reduce((a,t)=>(a[t]=(a[t]||0)+1,a),{})};
 })()`;
 
 async function shot(name, outDir, appFile, pageKey = 'ledger') {

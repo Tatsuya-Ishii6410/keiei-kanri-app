@@ -220,6 +220,12 @@ const SCENARIO = String.raw`(async () => {
     for (const t of ['estimate', 'invoice', 'upload', 'invoice']) switchQuoteTab(t, document.querySelector('[onclick*="switchQuoteTab(\'' + t + '\'"]'));
     change('quote-month', '');
     previewQuoteById(S.quotes.find(q => !isInvoiceDoc(q)).id); closeDocViewer();
+    // 要約（ヒーロー）：合計は従来どおり（見積は全件、請求は発行済だけ）
+    const sum = (type, f) => S.quotes.filter(q => (q.type || '見積書') === type && f(q)).reduce((a, q) => a + (q.amount || 0), 0);
+    const hv = id => Number((document.querySelector('#' + id + ' .uc-hero-value') || { dataset: {} }).dataset.ucV);
+    ok(hv('estimate-hero') === sum('見積書', () => true), '見積の合計が従来の計算と違う：' + hv('estimate-hero'));
+    ok(hv('invoice-hero') === sum('請求書', q => docStatusOf(q) === 'issued'), '請求の合計が従来の計算と違う：' + hv('invoice-hero'));
+    ok(!/NaN|Infinity/.test(document.getElementById('q-invoice').textContent), '見積・請求に NaN');
   });
   // ドライブの請求書同期：候補1件は自動、0件・2件以上は保留（請求書・請求レコード・入金予定を作らない）、保留から選ぶと自動と同じ結果
   await step('ドライブの請求書同期（保留・確定）', async () => {
