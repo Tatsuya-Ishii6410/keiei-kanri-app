@@ -679,6 +679,10 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
   .list-toolbar.tl-tb .lt-o4{order:5;grid-column:span 2}
   .list-toolbar.tl-tb .btn{padding-left:6px;padding-right:6px}
 }
+.pj-hero{display:flex;gap:12px 24px;flex-wrap:wrap;align-items:stretch}
+.pj-hero-main{flex:1 1 220px;min-width:0}
+.pj-hero-fc{flex:1 1 220px;min-width:0;padding:10px 14px;border:1px dashed var(--ui-caution,#F59E0B);border-radius:16px;background:rgba(255,255,255,.7)}
+.pj-hero-fc-value{font-size:20px;font-weight:700;color:var(--amber-text,#92400E);font-variant-numeric:tabular-nums;margin:2px 0}
 #tl-hero .uc-kpis{margin:12px 0 0}
 #tl-hero .uc-kpi{background:rgba(255,255,255,.8);box-shadow:none}
 #tl-hero .uc-kpi-value{font-size:15px}
@@ -1381,15 +1385,17 @@ body.bs-docview{overflow:hidden}
   </div>
   <div id="pj-tab-list">
   <label class="pj-switch"><input type="checkbox" id="project-show-ended" onchange="renderProjects()"> 終了した案件も表示</label>
-  <div class="metric-grid" style="grid-template-columns:minmax(200px,300px)">
-    <div class="metric-card">
-      <div class="metric-label" id="project-total-label">売上合計</div>
-      <div class="metric-value blue" id="project-total">¥0</div>
-      <div class="metric-sub" id="project-total-sub">対象: 0件</div>
-      <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border)">
-        <div style="font-size:12px;color:var(--amber-text)">+ 売上見込み <strong id="project-forecast">¥0</strong></div>
-        <div class="metric-sub" id="project-forecast-sub">（商談中 0件）</div>
-      </div>
+  <!-- 営業サマリー（表示だけ。金額・件数は renderProjects の従来の集計）。確定（契約済・進行中・完了）と見込み（商談中）を分けて出す -->
+  <div class="uc-hero ui-scope pj-hero" id="pj-hero">
+    <div class="pj-hero-main">
+      <div class="uc-hero-label"><span id="project-total-label">売上合計</span> <span class="badge badge-blue">確定</span></div>
+      <div class="uc-hero-value" id="project-total">¥0</div>
+      <div class="uc-hero-sub" id="project-total-sub">対象: 0件</div>
+    </div>
+    <div class="pj-hero-fc">
+      <div class="uc-hero-label">売上見込み <span class="badge badge-amber">未確定</span></div>
+      <div class="pj-hero-fc-value" id="project-forecast">¥0</div>
+      <div class="uc-hero-sub"><span id="project-forecast-sub">（商談中 0件）</span>。確定の売上合計には含めません</div>
     </div>
   </div>
   <div class="card">
@@ -4721,7 +4727,7 @@ function renderProjects(){
   const pipeline=S.projects.filter(p=>p.status==='商談中'&&(mi===null||projectCoversAbs(p,abs)));
   const forecast=pipeline.reduce((a,p)=>a+(mi===null?projectMonthAmount(p,null):projectDefaultMonthly(p)),0);
   document.getElementById('project-total-label').textContent=(mi===null?'全期間':(mi+1)+'月')+'の売上合計';
-  document.getElementById('project-total').textContent=fmt(total);
+  ucCountUp(document.getElementById('project-total'),total);
   document.getElementById('project-total-sub').textContent='対象: '+inMonth.length+'件（契約済・進行中・完了）';
   document.getElementById('project-forecast').textContent=fmt(forecast);
   document.getElementById('project-forecast-sub').textContent='（商談中 '+pipeline.length+'件）';

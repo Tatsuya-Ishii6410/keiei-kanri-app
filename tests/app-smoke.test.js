@@ -158,7 +158,17 @@ const SCENARIO = String.raw`(async () => {
     ok(document.body.classList.contains('dv2-on'), '新ダッシュボードが表示されていない');
   });
   await step('ダッシュボード（旧）', async () => { setDashVersion(1); change('month-select'); setDashVersion(2); });
-  await step('案件管理', async () => { nav('projects'); ok(document.querySelector('#page-projects.active'), '案件管理が開かない'); });
+  await step('案件管理', async () => {
+    nav('projects'); ok(document.querySelector('#page-projects.active'), '案件管理が開かない');
+    // 営業サマリー：今月の確定売上＝進行中の営業支援の今月分（300,000）。見込み（商談中）は別枠で 0
+    change('project-month', String(new Date().getMonth()));
+    const tot = document.getElementById('project-total'), hero = document.getElementById('pj-hero');
+    ok(hero && hero.classList.contains('ui-scope'), '営業サマリーのヒーローが無い');
+    ok(Number(tot.dataset.ucV) === 300000, '確定の売上合計が従来の集計と違う：' + tot.dataset.ucV);
+    ok(document.getElementById('project-forecast').textContent === '¥0', '売上見込みが違う');
+    ok(/確定/.test(hero.textContent) && /未確定/.test(hero.textContent), '確定と見込みの区別が無い');
+    ok(!/NaN|Infinity/.test(hero.textContent), '営業サマリーに NaN');
+  });
   await step('請求書の下書き作成', async () => {
     syncMonthlyBillings();
     const ym = localToday().slice(0, 7);

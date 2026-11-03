@@ -91,8 +91,20 @@ const PRELUDE = String.raw`(() => {
     projects: [
       { id: 1, name: '営業支援', client: '株式会社テスト商事', status: '進行中', contract: 'monthly', amount: 300000, start: ym(-3), end: ym(6), invoiceStatus: 'uninvoiced' },
       { id: 2, name: '単発の制作', client: '株式会社サンプル', status: '完了', contract: 'single', amount: 120000, start: ym(-1), end: ym(-1), invoiceStatus: 'paid' },
-      { id: 3, name: '新規の提案', client: '合同会社みほん', status: '商談中', contract: 'single', amount: 500000, start: ym(1), end: ym(1), invoiceStatus: 'uninvoiced' },
+      { id: 3, name: '新規の提案', client: '合同会社みほん', status: '商談中', contract: 'single', amount: 500000, start: ym(0), end: ym(0), invoiceStatus: 'uninvoiced' },
+      { id: 4, name: '保守契約', client: '株式会社サンプル', status: '契約済', contract: 'monthly', amount: 50000, start: ym(0), end: '', invoiceStatus: 'uninvoiced' },
+      { id: 5, name: '現地調査', client: '有限会社ためし', status: '進行中', contract: 'single', amount: 200000, start: ym(0), end: ym(0), invoiceStatus: 'uninvoiced' },
+      { id: 6, name: '研修の企画', client: 'みほん工業株式会社', status: '契約済', contract: 'annual', amount: 1200000, start: ym(0), end: ym(11), invoiceStatus: 'uninvoiced' },
+      { id: 7, name: '見送りの提案', client: '合同会社みほん', status: '失注', contract: 'single', amount: 80000, start: ym(0), end: ym(0), invoiceStatus: 'uninvoiced' },
+      { id: 8, name: '旧サポート', client: '株式会社テスト商事', status: '完了', contract: 'monthly', amount: 40000, start: ym(-4), end: ym(-1), invoiceStatus: 'uninvoiced' },
     ],
+    // 先月分は請求済・未入金（繰越の印）。現地調査は今月分を請求済（入金確認のボタン）
+    monthlyBillings: [
+      { id: 3, projectId: 8, billingMonth: ym(-1), amount: 40000, invoiceStatus: 'invoiced', invoiceId: null, paidDate: null, paidAmount: null, expectedPayDate: d(0, 10), note: '' },
+      { id: 1, projectId: 1, billingMonth: ym(-1), amount: 300000, invoiceStatus: 'invoiced', invoiceId: null, paidDate: null, paidAmount: null, expectedPayDate: d(0, 25), note: '' },
+      { id: 2, projectId: 5, billingMonth: ym(0), amount: 200000, invoiceStatus: 'invoiced', invoiceId: null, paidDate: null, paidAmount: null, expectedPayDate: d(1, 10), note: '' },
+    ],
+    nextBillingId: 50,
     quotes: [], ledger, plan, bankBalance: 1234567,
   };
   const reply = o => new Response(JSON.stringify(o), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -125,6 +137,13 @@ const PAGES = {
     root: '#page-ledger',
     parts: { '一覧': '#tl-list', '要約': '#tl-summary', 'ヘッダー': '#tl-month' },
     valueRoot: '#cf-pane-travel',
+  },
+  projects: {
+    open: `showPage('projects',[...document.querySelectorAll('.nav-btn')].find(b=>(b.getAttribute('onclick')||'').includes("'projects'")));
+      document.getElementById('project-month').value=String(new Date().getMonth());renderProjects();`,
+    root: '#page-projects',
+    parts: { '一覧': '#project-empty', '営業サマリー': '#project-total', 'ヘッダー': '#project-month' },
+    valueRoot: '#pj-tab-list',
   },
 };
 // 測る：その要素を含む一番近い .card（または .uc-hero / .metric-grid / .uc-kpis）の高さ
