@@ -189,6 +189,11 @@
 - 表示・「印刷・PDF保存」は書類の全画面表示（#doc-viewer。下の節）。開いている間 document.title をファイル名にするので
   「PDFに保存」の既定名になる。HTMLダウンロード（docStandaloneHtml）も同じ名前
 - 帳票のフォントは DOC_JA_FONT（Noto Sans CJK JP → Webフォントの Noto Sans JP）。単体HTMLには DOC_FONT_LINK を入れる
+- 印刷（A4・倍率100%で1ページ）：@page は A4・余白12mm（DOC_PAGE_MARGIN。書類の全画面表示は pageMargin で渡す。交通費台帳などは従来どおり0）。
+  印刷では本文（.doc-sheet）の内側の余白を0、色・背景は print-color-adjust:exact。行（tr）と枠（.doc-keep：金額・契約・特記事項・振込先・備考・合計欄）は
+  途中で切らず、表の見出しはページごとに繰り返す。合計欄は tfoot ではなく最後の tbody（tfoot はページごとに繰り返されるため）。DOC_PRINT_CSS を表示と単体HTMLの両方に入れる。
+  詰めたのは余白・行の高さ・枠の内側だけ（文字の大きさ・項目・金額・文面は同じ）。テスト：tests/doc-print.test.js（明細3行は1ページ、25行は2ページ以上）
+- PDF はブラウザの印刷だけで作る（GAS は請求書のPDFを作らない。ドライブの請求書同期は読むだけ）
 
 ## 書類の全画面表示（#doc-viewer。請求書・見積書・交通費台帳のPDF）
 - ★ 別ウィンドウ（window.open＋document.write）は使わない。ホーム画面から開いたアプリ（standalone）では戻る操作がなく、アプリに戻れなかった

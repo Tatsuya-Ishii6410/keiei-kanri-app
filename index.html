@@ -12843,7 +12843,7 @@ function docYen(n){return '¥'+Math.round(n||0).toLocaleString('ja-JP')}
 // 【お振込先】の1行（ラベルは幅100px・太字）
 function docBankRow(label,value,color){
   if(!value)return '';
-  return `<div style="margin-bottom:5px"><span style="display:inline-block;width:100px;font-weight:bold">${label}</span>：<span style="color:${color||'#111'}">${value}</span></div>`;
+  return `<div style="margin-bottom:1px"><span style="display:inline-block;width:100px;font-weight:bold">${label}</span>：<span style="color:${color||'#111'}">${value}</span></div>`;
 }
 
 // 契約月数（両端を含む）。片方でも欠けていれば null。
@@ -12886,10 +12886,11 @@ function buildDocHtml(q,c){
   // 請求書の状態の表示（下書き／訂正版／取消）
   const st=isInvoiceDoc(q)?docStatusOf(q):'issued';
   const stamp=st==='draft'?'下書き':st==='cancelled'?'取消':(isInvoiceDoc(q)&&invRevision(q)>1?'訂正版':'');
-  const th='padding:10px 12px;background:'+DOC_NAVY+';color:#fff;font-weight:bold;';
-  const td='padding:10px 12px;border-bottom:1px solid #e0e0e0;';
-  const sumTd='padding:10px 12px;border-bottom:1px solid #e0e0e0;text-align:right;font-family:'+DOC_NUM_FONT+';';
-  const totalTd='padding:10px 12px;background:'+DOC_NAVY+';color:#fff;font-weight:bold;text-align:right;font-family:'+DOC_NUM_FONT+';';
+  // A4・倍率100%で1ページに収めるため、表の行の内側の余白は上下6px（文字の大きさは変えない）
+  const th='padding:6px 10px;background:'+DOC_NAVY+';color:#fff;font-weight:bold;';
+  const td='padding:6px 10px;border-bottom:1px solid #e0e0e0;';
+  const sumTd='padding:6px 10px;border-bottom:1px solid #e0e0e0;text-align:right;font-family:'+DOC_NUM_FONT+';';
+  const totalTd='padding:6px 10px;background:'+DOC_NAVY+';color:#fff;font-weight:bold;text-align:right;font-family:'+DOC_NUM_FONT+';';
 
   // 月額固定の契約かどうか。契約期間があれば月数と期間合計も出す。
   const monthly=!!q.isMonthly;
@@ -12905,29 +12906,29 @@ function buildDocHtml(q,c){
   ].filter(Boolean).join('<br>');
 
   return `
-<div style="background:#fff;color:#111;font-family:${DOC_JA_FONT};font-size:13px;line-height:1.6;padding:40px">
-  ${stamp?`<div style="text-align:right;margin-bottom:-28px"><span style="display:inline-block;border:2px solid ${DOC_RED};color:${DOC_RED};font-weight:bold;font-size:13px;padding:2px 10px;letter-spacing:2px">${stamp}</span></div>`:''}
-  <div style="font-size:28px;font-weight:bold;letter-spacing:12px;text-align:center;color:${DOC_NAVY}">${lb.title}</div>
-  <div style="border-top:2px solid ${DOC_NAVY};margin:14px 0 26px"></div>
-  <div style="display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:26px">
+<div class="doc-sheet" style="background:#fff;color:#111;font-family:${DOC_JA_FONT};font-size:13px;line-height:1.5;padding:40px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+  ${stamp?`<div style="text-align:right;margin-bottom:-26px"><span style="display:inline-block;border:2px solid ${DOC_RED};color:${DOC_RED};font-weight:bold;font-size:13px;padding:2px 10px;letter-spacing:2px">${stamp}</span></div>`:''}
+  <div style="font-size:26px;font-weight:bold;letter-spacing:12px;text-align:center;color:${DOC_NAVY}">${lb.title}</div>
+  <div style="border-top:2px solid ${DOC_NAVY};margin:8px 0 16px"></div>
+  <div style="display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:16px">
     <div style="flex:1;min-width:0">
       <div style="font-size:18px;font-weight:bold;border-bottom:1px solid #333;padding-bottom:6px">${client||'（宛先未設定）'} 御中</div>
-      <div style="font-size:12px;color:#333;margin-top:16px;line-height:2">毎度格別のお引き立てを賜り厚く御礼申し上げます。<br>${lb.lead}</div>
+      <div style="font-size:12px;color:#333;margin-top:10px;line-height:1.7">毎度格別のお引き立てを賜り厚く御礼申し上げます。<br>${lb.lead}</div>
     </div>
     <div style="text-align:right;white-space:nowrap">
       <div style="font-size:12px">${lb.numberLabel}: ${isInvoiceDoc(q)?invoiceDisplayNo(q):q.id}</div>
       <div style="font-size:12px">発行日: ${jpDate(q.date)}</div>
-      <div style="font-size:15px;font-weight:bold;color:${DOC_NAVY};margin-top:8px">${c.name||''}</div>
+      <div style="font-size:15px;font-weight:bold;color:${DOC_NAVY};margin-top:6px">${c.name||''}</div>
       ${c.rep?`<div style="font-size:13px;font-weight:bold">代表取締役 ${c.rep}</div>`:''}
-      <div style="font-size:11px;color:#555;line-height:1.9;margin-top:4px">${meta}</div>
+      <div style="font-size:11px;color:#555;line-height:1.6;margin-top:2px">${meta}</div>
     </div>
   </div>
-  <div style="background:#f5f5f5;border:1px solid #ddd;border-radius:6px;text-align:center;padding:16px;margin-bottom:${months||q.paymentMethod?'14px':'26px'}">
+  <div class="doc-keep" style="background:#f5f5f5;border:1px solid #ddd;border-radius:6px;text-align:center;padding:10px 16px;margin-bottom:${months||q.paymentMethod?'10px':'16px'}">
     <div style="font-size:12px;color:#555">${lb.amountLabel}${monthly?'（月額）':''}</div>
-    <div style="font-size:32px;font-weight:bold;color:${DOC_NAVY};margin-top:2px;font-family:${DOC_NUM_FONT}">${docYen(total)}-</div>
+    <div style="font-size:30px;line-height:1.3;font-weight:bold;color:${DOC_NAVY};font-family:${DOC_NUM_FONT}">${docYen(total)}-</div>
     ${periodTotal!==null?`<div style="font-size:12px;color:#555;margin-top:6px">契約期間合計 <strong style="color:${DOC_NAVY};font-size:14px">${docYen(periodTotal)}-</strong>（${months}ヶ月）</div>`:''}
   </div>
-  ${(months||q.paymentMethod)?`<div style="border:1px solid #ddd;border-radius:6px;padding:12px 16px;margin-bottom:26px;font-size:12px;line-height:1.9">
+  ${(months||q.paymentMethod)?`<div class="doc-keep" style="border:1px solid #ddd;border-radius:6px;padding:8px 16px;margin-bottom:16px;font-size:12px;line-height:1.7">
     ${months?`<div><span style="display:inline-block;width:82px;font-weight:bold">契約期間</span>：${ymJp(q.contractStart)}〜${ymJp(q.contractEnd)}（${months}ヶ月）</div>`:''}
     ${q.paymentMethod?`<div><span style="display:inline-block;width:82px;font-weight:bold">支払方法</span>：${q.paymentMethod}</div>`:''}
   </div>`:''}
@@ -12944,27 +12945,28 @@ function buildDocHtml(q,c){
       <td style="${td}text-align:right">${docYen(it.unit)}</td>
       <td style="${td}text-align:right">${docYen(it.qty*it.unit)}</td>
     </tr>`).join('')}</tbody>
-    <tfoot>
+    <!-- 合計欄：tfoot はページごとに繰り返されるので、最後のページにだけ出す tbody にする（中で改ページしない） -->
+    <tbody class="doc-keep">
       <tr><td colspan="2" style="border:none"></td><td style="${sumTd}white-space:nowrap">${monthly?'月額小計（税抜）':'小計（税抜）'}</td><td style="${sumTd}">${docYen(sub)}</td></tr>
       <tr><td colspan="2" style="border:none"></td><td style="${sumTd}white-space:nowrap">消費税（10%）</td><td style="${sumTd}">${docYen(tax)}</td></tr>
       <tr><td colspan="2" style="border:none"></td><td style="${totalTd}white-space:nowrap">${monthly?'月額合計（税込）':'合計金額（税込）'}</td><td style="${totalTd}">${docYen(total)}-</td></tr>
       ${periodTotal!==null?`<tr><td colspan="2" style="border:none"></td>
         <td style="${totalTd}white-space:nowrap">契約期間合計（税込）</td>
         <td style="${totalTd}">${docYen(periodTotal)}-</td></tr>
-      <tr><td colspan="4" style="padding:6px 12px;text-align:right;font-size:11px;color:#555;border:none">月額合計 ${docYen(total)} × ${months}ヶ月</td></tr>`:''}
-    </tfoot>
+      <tr><td colspan="4" style="padding:4px 10px;text-align:right;font-size:11px;color:#555;border:none">月額合計 ${docYen(total)} × ${months}ヶ月</td></tr>`:''}
+    </tbody>
   </table>
-  ${monthly?`<div style="border:1px solid #ddd;padding:14px 16px;margin-top:22px;font-size:11px;line-height:2;color:#333">
-    <div style="font-weight:bold;margin-bottom:4px;font-size:12px">【特記事項】</div>
+  ${monthly?`<div class="doc-keep" style="border:1px solid #ddd;padding:8px 16px;margin-top:14px;font-size:11px;line-height:1.7;color:#333">
+    <div style="font-weight:bold;margin-bottom:2px;font-size:12px">【特記事項】</div>
     ・本契約の最低契約期間は3ヶ月とさせていただきます。<br>
     ・契約期間満了の1ヶ月前までにご連絡がない場合、同条件にて自動更新となります。<br>
     ・解約をご希望の場合は、解約希望日の1ヶ月前までにご連絡ください。
   </div>`:''}
-  <div style="border:1px solid #ddd;padding:16px;margin-top:${monthly?'14px':'26px'};font-size:12px">
-    <div style="font-weight:bold;margin-bottom:8px">【お振込先】</div>
+  <div class="doc-keep" style="border:1px solid #ddd;padding:10px 16px;margin-top:${monthly?'12px':'16px'};font-size:12px">
+    <div style="font-weight:bold;margin-bottom:4px">【お振込先】</div>
     ${docBankRow('銀行名',c.bankName)}${docBankRow('支店名',c.bankBranch)}${docBankRow('口座種別',c.accountType)}${docBankRow('口座番号',c.accountNumber)}${docBankRow('口座名義',c.accountHolder)}${docBankRow(lb.dueLabel,jpDate(q.due||q.expire),DOC_RED)}
   </div>
-  ${q.note?`<div style="margin-top:14px;font-size:11px;color:#555;line-height:1.8">備考: ${q.note}</div>`:''}
+  ${q.note?`<div class="doc-keep" style="margin-top:10px;font-size:11px;color:#555;line-height:1.6">備考: ${q.note}</div>`:''}
 </div>`;
 }
 
@@ -12976,7 +12978,12 @@ function buildDocHtml(q,c){
    紙の見た目は単体HTML（docStandaloneHtml）と同じ：A4・余白0（@page はこの画面を開いている間だけ差し込む）・幅794px。
    スマホでは本文を画面幅に縮小して表示（zoom）。ピンチで拡大できる。履歴に1つ積むので、端末の「戻る」でも閉じる */
 let dvwOpen=false,dvwPrevTitle='';
-function openDocViewer({title,fileName,css,html,actions}){
+/* 請求書・見積書の印刷（A4・倍率100%）：用紙の余白は @page で12mm（2ページ目以降も同じ余白）。印刷では本文の内側の余白を0にする。
+   明細の行・合計欄・振込先などの枠は途中で切らない。表の見出しはページごとに繰り返す（合計欄は最後のページだけ） */
+const DOC_PAGE_MARGIN='12mm';
+const DOC_PRINT_CSS='.doc-sheet tr,.doc-keep{break-inside:avoid;page-break-inside:avoid}.doc-sheet thead{display:table-header-group}'
+  +'@media print{.doc-sheet{padding:0!important}}';
+function openDocViewer({title,fileName,css,html,actions,pageMargin}){
   const v=document.getElementById('doc-viewer');
   const host=document.getElementById('dvw-sheet');
   const root=host.shadowRoot||host.attachShadow({mode:'open'});
@@ -12988,12 +12995,14 @@ function openDocViewer({title,fileName,css,html,actions}){
     v.hidden=false;dvwOpen=true;
     document.body.classList.add('bs-docview');
     let ps=document.getElementById('dvw-page');
-    if(!ps){ps=document.createElement('style');ps.id='dvw-page';ps.textContent='@page{size:A4 portrait;margin:0}';}
+    if(!ps){ps=document.createElement('style');ps.id='dvw-page';}
     document.head.appendChild(ps);   // アプリの @page（余白15mm）より後ろに置いて上書きする
     try{history.pushState({dvw:1},'');}catch(e){}
     document.getElementById('dvw-stage').scrollTop=0;
     setTimeout(()=>v.querySelector('.dvw-back').focus({preventScroll:true}),0);
   }
+  // 用紙の余白：請求書・見積書は DOC_PAGE_MARGIN、交通費台帳などは従来どおり0（書類の側で余白を持つ）
+  document.getElementById('dvw-page').textContent='@page{size:A4 portrait;margin:'+(pageMargin||'0')+'}';
   document.title=fileName||title||dvwPrevTitle;
   fitDocViewer();
 }
@@ -13039,8 +13048,10 @@ function showPreviewModal(){
   openDocViewer({
     title:(q.type||'見積書')+(inv?'（'+INVOICE_DOC_STATES[st].label+(st!=='draft'&&invRevision(q)>1?'・訂正版':'')+'）':''),
     fileName:docFileBase(q),
+    css:DOC_PRINT_CSS,
     html:buildDocHtml(q,S.company),
-    actions
+    actions,
+    pageMargin:DOC_PAGE_MARGIN
   });
 }
 
@@ -13057,7 +13068,7 @@ function docStandaloneHtml(q){
     +DOC_FONT_LINK
     +'<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#fff;font-family:'+DOC_JA_FONT+'}'
     +'.sheet{max-width:794px;margin:0 auto}'  /* A4縦の幅（210mm ≒ 794px） */
-    +'@page{size:A4 portrait;margin:0}'
+    +'@page{size:A4 portrait;margin:'+DOC_PAGE_MARGIN+'}'+DOC_PRINT_CSS
     +'</style></head><body><div class="sheet">'+buildDocHtml(q,S.company)+'</div></body></html>';
 }
 
