@@ -3851,11 +3851,13 @@ function addGroups(a,b){
     labor:a.labor+b.labor,tax:a.tax+b.tax};
 }
 
-// その絶対月の出金予定（planned_out）をグループごとに集計する
+// その絶対月の出金予定（planned_out）をグループごとに集計する（経費の見込み・消費税の課税仕入に使う）
+// 交通費精算の出金予定（settlementMonth）は除く：その交通費は日々の実績（区分 交通費）で経費に入っているので、予定も足すと二重になる
 function sumPlannedOutAbs(abs){
   const t={sales:0,expense:0,labor:0,tax:0};
   S.ledger.forEach(l=>{
     if(ledgerStatusOf(l)!=='planned_out')return;
+    if(l.settlementMonth)return;
     if(dateToAbs(l.expectedDate||l.date)!==abs)return;
     t[ledgerGroup(l.type)]+=l.amount||0;
   });
@@ -12463,7 +12465,8 @@ function buildAnnualReportHtml(fy){
     if(isActual(l)){
       const a=dateToAbs(l.date);
       if(a!==null&&absList.indexOf(a)>=0)expActual[l.type]+=l.amount||0;
-    }else if(ledgerStatusOf(l)==='planned_out'){
+    }else if(ledgerStatusOf(l)==='planned_out'&&!l.settlementMonth){
+      // 交通費精算の予定は除く（日々の交通費の実績で計上済み。sumPlannedOutAbs と同じ）
       // 予定は翌月以降ぶんだけ（当月までは実績で見るので二重計上しない）
       // ※ 翌月以降に実績が入っていれば、それは上の実績側で数えている
       const a=dateToAbs(l.expectedDate||l.date);

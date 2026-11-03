@@ -354,13 +354,14 @@ const SCENARIO = String.raw`(async () => {
         profit: [profitOfAbs(absT), profitOfAbs(absP)],                                  // 損益（営業利益）
         plSettle: pl === null ? null : pl.includes('交通費精算'),                         // 月次P/L に精算の行が出ないこと
         corp: fy ? estimateCorporateTax(fy).income : null,                               // 税金の試算（法人税の課税所得）
-        purchases: fy ? estimateConsumptionTax(fy).basis : null,                         // 税金の試算（消費税の課税仕入）
+        purchases: fy ? estimateConsumptionTax(fy).basis : null,                         // 税金の試算（消費税の課税仕入。精算の予定は入れない＝④）
+        plannedExp: sumPlannedOutAbs(absP).expense,                                      // 経費の見込み（出金予定。精算の予定は入れない＝④）
         cfOut: cf.actualOut, cfPlanOut: cf.planOut,                                      // CF管理
         travel: sameYear ? travelActualTotal(miT) : null,                                // 交通費台帳
       };
     };
     const same = (a, b, keys, label) => keys.forEach(k => ok(JSON.stringify(a[k]) === JSON.stringify(b[k]), label + '：' + k + ' が変わった ' + JSON.stringify(a[k]) + '→' + JSON.stringify(b[k])));
-    const EXP = ['exp', 'report', 'dash', 'profit', 'corp', 'travel'];
+    const EXP = ['exp', 'report', 'dash', 'profit', 'corp', 'travel', 'purchases', 'plannedExp'];
     try {
       // 0) 振込前（出金予定のまま）
       S.ledger = base(); refreshAll();
