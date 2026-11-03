@@ -629,6 +629,28 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 .uc-more dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
 .uc-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:16px}
 @media (min-width:1024px){.uc-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+/* 段階4.5 PC幅（1024px以上）：要約カードを横並びにして低くする。中身・数字は同じ（並べ方だけ） */
+@media (min-width:1024px){
+  .uc-hero{padding:14px 20px}
+  .uc-hero-value{font-size:28px}
+  /* CF管理：［月末予測］［横棒・内訳］［口座残高の入力］の3列 */
+  #cf-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:2px 28px;align-items:start}
+  #cf-forecast{display:contents}
+  #cf-hero .uc-hero-label{grid-column:1;grid-row:1}
+  #cf-hero .uc-hero-value{grid-column:1;grid-row:2;margin:0}
+  #cf-hero .uc-hero-sub{grid-column:1;grid-row:3}
+  #cf-hero .uc-bar{grid-column:2;grid-row:1;align-self:end;margin:6px 0 0}
+  #cf-hero .uc-bar-legend{grid-column:2;grid-row:2;margin:0}
+  #cf-hero .uc-more{grid-column:2;grid-row:3;margin:0}
+  #cf-hero .cf-hero-foot{grid-column:3;grid-row:1/span 3;align-self:center;margin:0;padding:0 0 0 24px;border-top:0;border-left:1px solid var(--uc-line);flex-wrap:nowrap;align-items:flex-end;gap:8px}
+  #cf-hero .cf-hero-foot .form-group{flex:0 0 160px}
+  /* 交通費台帳：［合計］［件数・精算状況・精算予定日・要編集］の2列 */
+  #tl-summary{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.6fr);gap:2px 24px;align-items:center}
+  #tl-summary>.uc-hero-label{grid-column:1;grid-row:1}
+  #tl-summary>.uc-hero-value{grid-column:1;grid-row:2;margin:0}
+  #tl-summary>.uc-hero-sub{grid-column:1;grid-row:3}
+  #tl-hero .uc-kpis{grid-column:2;grid-row:1/span 3;margin:0}
+}
 .uc-kpi{background:#FFFFFF;border:1px solid var(--uc-line);border-radius:16px;padding:12px 14px;min-width:0;color:var(--uc-text);box-shadow:0 1px 3px rgba(23,35,61,.05)}
 .uc-kpi-label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--uc-muted);font-weight:600}
 .uc-kpi-label svg{flex:none;color:var(--uc-accent)}

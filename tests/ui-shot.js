@@ -170,6 +170,13 @@ PAGES.quotesEst = Object.assign({}, PAGES.quotes, {
   parts: { '一覧': '#estimate-empty', '要約': '#estimate-hero', 'ヘッダー': '#quote-month' },
   valueRoot: '#q-estimate',
 });
+// ダッシュボード（段階4.5 の PC幅の確認用。部分は測らず、画面全体と金額だけ）
+PAGES.dashboard = {
+  open: `showPage('dashboard',[...document.querySelectorAll('.nav-btn')].find(b=>(b.getAttribute('onclick')||'').includes("'dashboard'")));`,
+  root: '#page-dashboard',
+  parts: {},
+  valueRoot: '#page-dashboard',
+};
 // 案件の行を1つ開いた状態（ステップ表示の確認用）
 PAGES.projectsOpen = Object.assign({}, PAGES.projects, {
   open: PAGES.projects.open + `const r=document.querySelector('#project-cards .uc-row[data-project-id="1"]');if(r)r.open=true;`,
