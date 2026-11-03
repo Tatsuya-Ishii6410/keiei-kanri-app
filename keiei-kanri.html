@@ -593,6 +593,8 @@ body.bs-nav2 .content :is(.page,.section-header,.card,.report-card,.tab-group){s
 /* 案件管理：一覧の印・スイッチ */
 .pj-marks{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;font-weight:400}
 .pj-marks .badge{white-space:normal;text-align:left}
+.pj-switch{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin:-8px 0 4px;font-size:13px;color:var(--text-secondary);cursor:pointer}
+.pj-switch input{width:18px;height:18px;margin:0;flex:none}
 .pj-out-note{font-size:12px;color:var(--text-secondary);margin:0 0 8px}
 
 /* ===== 書類の全画面表示（#doc-viewer）。上部の固定バー：56px＋セーフエリア・白・薄い境界線 ===== */
@@ -1253,6 +1255,7 @@ body.bs-docview{overflow:hidden}
       </div>
     </div>
   </div>
+  <label class="pj-switch"><input type="checkbox" id="project-show-ended" onchange="renderProjects()"> 終了した案件も表示</label>
   <div class="metric-grid" style="grid-template-columns:minmax(200px,300px)">
     <div class="metric-card">
       <div class="metric-label" id="project-total-label">売上合計</div>
@@ -4468,7 +4471,7 @@ function renderProjects(){
     empty.textContent=S.projects.length===0
       ?'案件がありません。「案件追加」から登録してください。'
       :(inv?'この条件に当てはまる案件はありません。':(mi===null?'表示できる案件がありません。':(mi+1)+'月に売上が発生する案件はありません。'))
-        +'（商談中・失注の案件は出していません）';
+        +'（商談中・失注の案件'+(showEnded?'':'と、終了した案件')+'は出していません）';
     return;
   }
   document.getElementById('project-empty').style.display='none';
@@ -4490,11 +4493,13 @@ function renderProjects(){
   </tr>`+billingRowsHtml(p,8)).join('');
   cards.innerHTML=list.map(p=>projectCardHtml(p,marks[p.id])).join('');
 }
-// 一覧の印（表示だけ）：繰越（前の月の請求済み・未入金）
+// 一覧の印（表示だけ）：繰越（前の月の請求済み・未入金）／終了（「終了した案件も表示」で出した案件）／終了日が未設定（売上は開始月のみ）
 function projectMarksHtml(st){
   if(!st)return'';
   const m=[];
   if(st.carryMark)m.push(`<span class="badge badge-amber">繰越（${st.carry.map(ym=>+ym.slice(5,7)+'月').join('・')}分 請求済・未入金）</span>`);
+  else if(st.ended&&!(st.inRange&&currentProjectMonth()!==null))m.push('<span class="badge badge-gray">終了</span>');
+  if(st.noEnd)m.push('<span class="badge badge-gray">終了日が未設定（売上は開始月のみ）</span>');
   return m.length?`<div class="pj-marks">${m.join('')}</div>`:'';
 }
 
