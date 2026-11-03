@@ -77,6 +77,12 @@
 - `ucSteps(steps,current,label,changed)`：順序のある状態のステップ。current が順序の外なら空（失注はバッジ）。達成率は出さない。changed の時だけ今の段に uc-pop（reduced-motion で止める）
 - 見込みタブ・PCの表は変えていない（絵文字だけ外した）
 
+## 段階4 見積・請求（済）の決めごと
+- 指示書に見積・請求の節は無い → 段階1〜3の部品と原則（要約・コンパクトな行・状態は別のバッジ・絵文字なし）を当てた
+- 要約 #estimate-hero・#invoice-hero（ucHeroInner）。#estimate-summary・#invoice-summary は一覧の見出し（「請求書の一覧（n件）」）に変えた
+- スマホの一覧 quoteRowHtml（ucRow）。取消の行は data-cancelled で薄く。期限超過は uc-badge-alert（#DC2626）
+- 撮影の突き合わせに、PCの表の行の数とバッジの文字の数え上げ（rows・badges）を足した
+
 ## 確認
 - 各段階：375px と 1440px の前後のスクリーンショット、一覧部分の縦の長さの前後の数値
 - 横スクロールなし。npm test（静的チェック・画面の実行テスト）が通る

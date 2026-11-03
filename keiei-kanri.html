@@ -1475,9 +1475,9 @@ body.bs-docview{overflow:hidden}
     </select><svg class="lt-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
   </div>
   <div class="tab-group">
-    <button class="tab active" onclick="switchQuoteTab('estimate',this)">📄 <span class="tab-full">見積書</span><span class="tab-short">見積</span></button>
-    <button class="tab" onclick="switchQuoteTab('invoice',this)">💴 <span class="tab-full">請求書</span><span class="tab-short">請求</span></button>
-    <button class="tab" onclick="switchQuoteTab('upload',this)">📤 <span class="tab-full">PDF取込</span><span class="tab-short">PDF</span></button>
+    <button class="tab active" onclick="switchQuoteTab('estimate',this)"><span class="tab-full">見積書</span><span class="tab-short">見積</span></button>
+    <button class="tab" onclick="switchQuoteTab('invoice',this)"><span class="tab-full">請求書</span><span class="tab-short">請求</span></button>
+    <button class="tab" onclick="switchQuoteTab('upload',this)"><span class="tab-full">PDF取込</span><span class="tab-short">PDF</span></button>
   </div>
   <div id="q-estimate">
     <div class="uc-hero ui-scope q-hero" id="estimate-hero"></div>
@@ -1504,8 +1504,8 @@ body.bs-docview{overflow:hidden}
             <option value="">すべての状態</option><option value="draft">下書き</option>
             <option value="issued">発行済</option><option value="cancelled">取消</option>
           </select><svg class="lt-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
-          <button class="btn lt-wide" onclick="openInvoiceSyncModal()">☁️ ドライブから請求書を同期</button>
-          <button class="btn lt-wide" onclick="openBulkInvoiceModal()">📄 一括請求書作成</button>
+          <button class="btn lt-wide" onclick="openInvoiceSyncModal()">ドライブから請求書を同期</button>
+          <button class="btn lt-wide" onclick="openBulkInvoiceModal()">一括請求書作成</button>
           <button class="btn primary lt-primary lt-o2" onclick="openCreateInvoiceModal()">+ 請求書作成</button>
           <div class="lt-menu-wrap lt-o3">
             <button class="btn lt-menu-btn" id="inv-more-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="inv-more-menu" onclick="ltMenu(this)">その他 ▾</button>
@@ -1527,7 +1527,7 @@ body.bs-docview{overflow:hidden}
   <div id="q-upload" style="display:none">
     <div class="card">
       <div class="upload-zone" onclick="document.getElementById('pdf-input').click()">
-        <div style="font-size:36px;margin-bottom:10px">📤</div>
+        <div style="margin-bottom:10px;color:var(--text-muted)" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></div>
         <div style="font-size:14px;font-weight:500;margin-bottom:4px">PDFをクリックして選択</div>
         <div style="font-size:12px;color:var(--text-secondary)">見積書・請求書のPDFをアップロードするとAIが内容を読み取り、自動で登録します</div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:6px">※ テキストが埋め込まれたPDFのみ対応</div>
@@ -2230,7 +2230,7 @@ body.bs-docview{overflow:hidden}
   </div>
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-create-quote')">キャンセル</button>
-    <button class="btn primary" id="q-submit-btn" onclick="submitQuoteModal()">📄 作成してプレビュー</button>
+    <button class="btn primary" id="q-submit-btn" onclick="submitQuoteModal()">作成してプレビュー</button>
   </div>
 </div>
 </div>
@@ -2764,7 +2764,7 @@ body.bs-docview{overflow:hidden}
 
 <div class="modal-overlay" id="modal-invoice-history">
 <div class="modal wide">
-  <div class="modal-header"><span class="modal-title">🕘 訂正履歴 <span id="ih-title" style="font-size:13px;font-weight:400"></span></span><button class="btn sm" onclick="closeModal('modal-invoice-history')">✕</button></div>
+  <div class="modal-header"><span class="modal-title">訂正履歴 <span id="ih-title" style="font-size:13px;font-weight:400"></span></span><button class="btn sm" onclick="closeModal('modal-invoice-history')">✕</button></div>
   <div id="ih-body"></div>
   <div class="actions-row"><button class="btn" onclick="closeModal('modal-invoice-history')">閉じる</button></div>
 </div>
@@ -5127,7 +5127,7 @@ function renderQuoteTable(type,prefix){
       <td style="font-size:12px">${q.client||''}</td>
       <td style="white-space:nowrap">${fmt(q.amount)}</td>
       <td style="font-size:12px;color:var(--text-secondary);white-space:nowrap">${q.date||'-'}</td>
-      ${isInvoice?`<td style="font-size:12px;white-space:nowrap;${overdue?'color:#E24B4A;font-weight:600':'color:var(--text-secondary)'}">${due||'-'}${overdue?' ⚠ 期限超過':''}</td>`:''}
+      ${isInvoice?`<td style="font-size:12px;white-space:nowrap;${overdue?'color:#DC2626;font-weight:600':'color:var(--text-secondary)'}">${due||'-'}${overdue?' 期限超過':''}</td>`:''}
       <td><div style="display:flex;gap:4px;flex-wrap:wrap">${quoteActionsHtml(q)}</div></td>
     </tr>`;
   }).join('');
@@ -5309,19 +5309,19 @@ function invoiceStateBadges(q){
 
 function quoteActionsHtml(q){
   const id=escAttr(q.id);
-  const view=`<button class="btn sm" onclick="previewQuoteById('${id}')">👁 表示</button>`;
-  const hist=(q.history||[]).length?`<button class="btn sm" onclick="openInvoiceHistory('${id}')">🕘 履歴</button>`:'';
+  const view=`<button class="btn sm" onclick="previewQuoteById('${id}')">表示</button>`;
+  const hist=(q.history||[]).length?`<button class="btn sm" onclick="openInvoiceHistory('${id}')">履歴</button>`:'';
   if(!isInvoiceDoc(q))return view+`<button class="btn sm danger" onclick="deleteQuote('${id}')">削除</button>`;
   const st=docStatusOf(q);
   if(st==='draft'){
     return view
-      +`<button class="btn sm" onclick="openEditInvoiceModal('${id}')">✏️ 編集</button>`
-      +`<button class="btn sm primary" onclick="issueDraftInvoice('${id}')">✅ 発行</button>`
+      +`<button class="btn sm" onclick="openEditInvoiceModal('${id}')">編集</button>`
+      +`<button class="btn sm primary" onclick="issueDraftInvoice('${id}')">発行</button>`
       +`<button class="btn sm danger" onclick="deleteQuote('${id}')">削除</button>`;
   }
   if(st==='issued'){
     return view
-      +`<button class="btn sm" onclick="openEditInvoiceModal('${id}')">✏️ 訂正</button>`
+      +`<button class="btn sm" onclick="openEditInvoiceModal('${id}')">訂正</button>`
       +hist
       +`<button class="btn sm danger" onclick="openCancelInvoice('${id}')">取消</button>`;
   }
@@ -5334,7 +5334,7 @@ function setQuoteEditMode(q){
   const issued=!!q&&docStatusOf(q)==='issued';
   document.getElementById('q-reason-group').style.display=issued?'':'none';
   document.getElementById('q-reason').value='';
-  document.getElementById('q-submit-btn').textContent=!q?'📄 作成してプレビュー':issued?'💾 訂正して保存':'💾 下書きを保存';
+  document.getElementById('q-submit-btn').textContent=!q?'作成してプレビュー':issued?'訂正して保存':'下書きを保存';
 }
 
 function submitQuoteModal(){
@@ -5415,7 +5415,7 @@ function saveInvoiceEdit(){
   closeModal('modal-create-quote');
   setQuoteEditMode(null);
   renderQuotes();refreshAll();
-  if(wasIssued)alert(`訂正しました（${invoiceDisplayNo(q)}）。訂正前の内容は「🕘 履歴」で見られます。`
+  if(wasIssued)alert(`訂正しました（${invoiceDisplayNo(q)}）。訂正前の内容は「履歴」で見られます。`
     +(synced?`\n入金予定 ${synced}件の金額を更新しました。`:''));
   else if(synced)alert(`入金予定 ${synced}件の金額を更新しました。`);
 }
@@ -5546,7 +5546,7 @@ function createInvoiceDraftsNow(){
   saveState();
   closeModal('modal-invoice-drafts');
   refreshAll();
-  alert(`${made.length}件の請求書を下書きで作成しました。\n見積・請求ページの請求書タブで内容を確認し、「✅ 発行」してください。`);
+  alert(`${made.length}件の請求書を下書きで作成しました。\n見積・請求ページの請求書タブで内容を確認し、「発行」してください。`);
 }
 
 function skipInvoiceDraftsToday(){

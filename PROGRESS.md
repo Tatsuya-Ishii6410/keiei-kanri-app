@@ -27,7 +27,11 @@
   - [x] 3-b スマホの一覧を ucRow（projectRowHtml。閉じた行＝案件名・顧客・金額・状態・印、展開＝期間・種別・請求・入金・操作・月次請求）。ucRow に footHtml。PCの表は維持
   - [x] 3-c ステップ（ucSteps・PROJECT_STEPS。失注はバッジ。状態が変わった時だけ軽い動き）。スマホの行の展開の中だけ（PCの表はバッジのまま）
   - 実データの確認（ユーザー）：スマホで案件管理を開き、売上合計・売上見込み・件数・繰越などの印が前と同じかスクショで確認
-- [ ] 段階4：見積・請求
+- [x] 段階4：見積・請求（9cc6f3b・6b0d1ca・4-c）。変更前の数字（見本のデータ）：請求書 5件・合計 ¥660,000（発行済のみ）・下書き1・取消1・訂正版1、見積書 2件・¥880,000 → 変更後も同じ
+  - [x] 4-a 要約（#estimate-hero・#invoice-hero。合計・件数は renderQuoteTable の計算のまま。下書き・取消は合計に含めないと明記、期限超過の件数は行の印と同じ条件）
+  - [x] 4-b スマホの一覧を ucRow（quoteRowHtml。閉じた行＝宛名・件名・発行日・金額・状態・期限超過の印、取消は薄く）。PCの表は維持
+  - [x] 4-c 絵文字を外す（タブ・操作エリア・行の操作・作成の画面・訂正履歴・案内の文）。PDF取込の大きなアイコンは線画SVG
+  - 実データの確認（ユーザー）：スマホで見積・請求を開き、請求額・件数・状態が前と同じかスクショで確認
 - [ ] 段階4.5：PC幅の微調整（段階1・2で PC の画面全体が約8〜9%長くなった。ヒーロー・要約カードを、PCでは低く・横並びにする）
 - [ ] 段階5：そのほかの画面の監査（報告のみ）。対象に、カレンダー取込の完了メッセージの「⚠要編集」の絵文字を含める
 
@@ -36,8 +40,8 @@
 - [x] ② 編集・追加の画面の3層（mfLayoutModals・docs/ui.md）：375×667・390×664 で保存が見える画面 22→28。設定ページは対象外（カードごとに保存が7つ）→ 直すかはユーザーの判断待ち
   - 実機の確認（ユーザー）：iPhone で 実績入力・案件の編集・見積書の作成 を開き、キーボードを出しても入力中の欄と保存ボタンが見えるか
 
-現在の段階：段階4
-次の一手：段階4 見積・請求（renderQuotes・renderQuoteTable・quoteCardHtml を調べる → 要約・行・請求の状態の表示。tests/ui-shot.js の PAGES に quotes を足す。撮影：node tests/ui-shot.js shot <名前> <scratchpad> [前のHTML] [ledger|travel|projects|projectsOpen]、比較：node tests/ui-shot.js combine <出力.png> <前> <後> <scratchpad>）
+現在の段階：段階4.5
+次の一手：段階4.5 PC幅の微調整（1440px でヒーロー・要約カードを低く・横並びに：CF管理 #cf-hero、交通費 #tl-hero、案件 #pj-hero、見積・請求 #invoice-hero・#estimate-hero。撮影：node tests/ui-shot.js shot <名前> <scratchpad> [前のHTML] [ledger|travel|projects|projectsOpen|quotes|quotesEst]、比較：node tests/ui-shot.js combine <出力.png> <前> <後> <scratchpad>）
 
 ## 完了した準備：作業ルールの整備（途中で止まらないために）
 
