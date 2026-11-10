@@ -48,6 +48,11 @@
 - [x] ③の修正：紐付けの初期値は金額が完全一致の時だけ（778f8eb）
 - [x] ⑤ 請求書・見積書を A4・倍率100%で1ページに（6ea781c・テスト 05fd2d8。docs/projects-billing.md）。GAS は関係なし（再デプロイ不要）
   - 実機の確認（ユーザー）：PC・スマホで月次の請求書を「印刷・PDF保存」し、倍率100%で1ページか
+- [x] ⑥ 交通費台帳の2件（docs/travel.md）
+  - ①削除：精算済みの月の警告・取込の行の削除済みの印（画面 17d94fc・GAS 44dedaa）。★GASの再デプロイが必要（settings の ledger.deletedExtIds）
+  - ②カレンダー取込の到着を最寄駅に（e402c1f。GASの変更なし）
+  - 別承認：別の端末の古いデータが全体を上書きする件（保存は全シートの上書き。settings の updatedAt を版として比べる案）
+  - 実機の確認（ユーザー）：7月の行が消せるか（症状がボタン・削除・復活のどれか）、カレンダー取込で最寄駅が出るか
 
 現在の段階：UI改修 段階6-a 完了。残りの監査の項目は、ユーザーの判断待ち
 次の一手：ユーザーが選んだ監査の項目（docs/ui-audit.md）から。撮影：node tests/ui-shot.js shot <名前> <scratchpad> [前のHTML] [ledger|travel|projects|projectsOpen|quotes|quotesEst|dashboard]
