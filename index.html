@@ -7043,6 +7043,28 @@ function visitSuggestions(index,station,limit){
     .sort(byCountRecent).slice(0,limit||8);
 }
 
+// 訪問先（予定の名前）に、過去の交通費で使った駅（いちばん多い駅。同数は最近）。無ければ ''（カレンダー取込の案A）
+function stationForVisit(index,visit){
+  const key=normVisit(visit);
+  if(!index||!key||isHomeVisit(visit))return'';
+  let best=null;
+  Object.keys(index.stations||{}).forEach(st=>{
+    const v=index.stations[st][key];
+    if(v&&(!best||byCountRecent(v,best.v)<0))best={st,v};
+  });
+  return best?best.st+'駅':'';
+}
+
+// 予定の場所欄に書かれた「〇〇駅」（最初の1つ）。数字・ハイフンを含む住所の部分は駅名にしない。無ければ ''（案B）
+function stationInLocation(loc){
+  const toks=String(loc||'').normalize('NFKC').split(/[\s、,，()（）「」『』\/・]+/);
+  for(const t of toks){
+    const m=/^([^\d\-‐−〒]+?駅)/.exec(t);
+    if(m)return m[1];
+  }
+  return'';
+}
+
 // 取引先の候補：案件の取引先名（重複・exclude と同じものを除く）。新しい案件から limit 件
 function clientSuggestions(projects,exclude,limit){
   const seen={};
@@ -8044,8 +8066,20 @@ function calVisitName(title){
   return s||String(title||'').trim();
 }
 
+/* 到着＝最寄駅：B 場所欄の「〇〇駅」→ A 予定の名前が過去の訪問先に一致した駅 → C 一致しない（空。「最寄駅を入力」を促し、住所は小さく出す）
+   入力した駅は登録した行（訪問先＋到着）に残るので、次回から A で出る。住所からの駅の推定はしない */
+function calStationOf(ev){
+  const loc=String(ev.location||'').trim();
+  const b=stationInLocation(loc);
+  if(b)return{to:b,src:'loc'};
+  const a=stationForVisit(travelIndexNow(),calVisitName(ev.title));
+  if(a)return{to:a,src:'visit'};
+  return{to:'',src:''};
+}
+
 function makeCalRow(ev){
   const hasLoc=!!String(ev.location||'').trim();
+  const st=hasLoc?calStationOf(ev):{to:'',src:''};
   return{
     calId:ev.eventId,
     date:ev.date,
@@ -8056,7 +8090,8 @@ function makeCalRow(ev){
     cat:hasLoc?'A':'C',
     checked:true,
     from:hasLoc?calHomeStation():'',
-    to:hasLoc?String(ev.location).trim():'',
+    to:st.to,
+    toSrc:st.src,     // loc＝場所欄の駅／visit＝過去の訪問先から／''＝要入力
     mode:hasLoc?MODE_TRAIN:'',
     round:hasLoc,
     visit:calVisitName(ev.title),
@@ -8176,6 +8211,7 @@ function calEdit(i,field,el){
     }
   }else{
     r[field]=el.value;
+    if(field==='to')r.toSrc='';   // 手で入れた駅（「場所欄の駅」などの注記を外す）
     // 区間が変わったら推定運賃は使えない（手入力の値は残す）
     if((field==='from'||field==='to'||field==='mode')&&r.conf!=='manual'){r.fare='';r.conf='';r.fareError='';r.fareSrc='';}
   }
@@ -8218,6 +8254,15 @@ function calFareCell(r,i){
 
 const CAL_INPUT='style="width:100%;min-width:84px;font-size:12px;padding:4px 6px"';
 
+// 到着の欄：最寄駅を主に（入力欄）、住所は小さく補足。駅が決まらない行は「最寄駅を入力」
+function calToHtml(r,i,attrs){
+  const loc=String(r.location||'').trim();
+  const note=r.toSrc==='loc'?'場所欄の駅':r.toSrc==='visit'?'過去の訪問先から':'';
+  const need=loc&&!String(r.to||'').trim();
+  return`<input type="text" value="${escAttr(r.to)}" placeholder="${loc?'最寄駅を入力':''}" aria-label="到着（最寄駅）" onchange="calEdit(${i},'to',this)" ${attrs||''}>`
+    +(loc?`<div class="ci-addr" style="font-size:11px;color:var(--text-muted);margin-top:2px;line-height:1.4">${need?'<span class="badge badge-amber" style="font-size:10px">最寄駅を入力</span> ':''}${escAttr(loc)}${note?`（${note}）`:''}</div>`:'');
+}
+
 function calRowHtml(r,i){
   const bg=r.conf==='low'||r.fareError?'background:var(--amber-bg)':'';
   return`<tr style="${bg}">
@@ -8225,7 +8270,7 @@ function calRowHtml(r,i){
     <td style="font-size:12px;white-space:nowrap">${r.date}${r.startTime?`<div style="font-size:10px;color:var(--text-muted)">${r.startTime}</div>`:''}</td>
     <td style="font-size:12px;min-width:140px">${r.title}${calBadges(r)}</td>
     <td><input type="text" value="${escAttr(r.from)}" onchange="calEdit(${i},'from',this)" ${CAL_INPUT}></td>
-    <td><input type="text" value="${escAttr(r.to)}" onchange="calEdit(${i},'to',this)" ${CAL_INPUT}></td>
+    <td>${calToHtml(r,i,CAL_INPUT)}</td>
     <td><select onchange="calEdit(${i},'mode',this)" style="font-size:12px;padding:4px;width:auto">${calModeOptions(r.mode)}</select></td>
     <td style="text-align:center"><input type="checkbox" ${r.round?'checked':''} onchange="calEdit(${i},'round',this)" style="width:auto"></td>
     <td><input type="text" value="${escAttr(r.visit)}" onchange="calEdit(${i},'visit',this)" ${CAL_INPUT}></td>
@@ -8243,7 +8288,7 @@ function calCardHtml(r,i){
       <input type="checkbox" ${r.checked?'checked':''} onchange="calEdit(${i},'checked',this)" style="width:auto;margin-top:3px">
       <span><span style="font-size:13px">${r.date}${r.startTime?' '+r.startTime:''}</span><br>${r.title}${calBadges(r)}</span></label></div>`
     +field('出発',`<input type="text" value="${escAttr(r.from)}" onchange="calEdit(${i},'from',this)">`)
-    +field('到着',`<input type="text" value="${escAttr(r.to)}" onchange="calEdit(${i},'to',this)">`)
+    +field('到着（最寄駅）',calToHtml(r,i))
     +field('手段',`<select onchange="calEdit(${i},'mode',this)">${calModeOptions(r.mode)}</select>`)
     +`<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-bottom:8px"><input type="checkbox" ${r.round?'checked':''} onchange="calEdit(${i},'round',this)" style="width:auto"> 往復</label>`
     +field('訪問先',`<input type="text" value="${escAttr(r.visit)}" onchange="calEdit(${i},'visit',this)">`)
@@ -8347,7 +8392,8 @@ function registerCalRows(){
       type:'交通費',
       desc,
       amount:calRowAmount(r),
-      memo:'',
+      // 最寄駅を入れずに登録した行は、住所を備考に残す（台帳で要編集。到着には住所を入れない）
+      memo:!to&&String(r.location||'').trim()?'住所：'+String(r.location).trim():'',
       visit:r.visit.trim(),
       purpose:r.purpose.trim(),
       status:'actual',

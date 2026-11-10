@@ -600,6 +600,37 @@ const SCENARIO = String.raw`(async () => {
     ok(S.ledger.length === n0, '後片付けで件数が戻らない');
     closeModal('modal-cal-import'); window.__calEvents = [];
   });
+  // カレンダー取込の到着＝最寄駅（B 場所欄の駅／C 一致しない→入力を促す／入力した駅は次回 A で出る）。運賃の計算の関数は同じで、到着が住所→駅に変わる
+  await step('カレンダー取込：最寄駅', async () => {
+    const d1 = '2026-07-10', d2 = '2026-07-17', title = '【訪問】最寄駅テスト商会';
+    const fetchCal = async (d) => { openCalendarImport(); document.getElementById('ci-from').value = d; document.getElementById('ci-to').value = d; await fetchCalendarEvents(); return calRows; };
+    window.__calEvents = [
+      { eventId: 'evS1@' + d1, date: d1, startTime: '10:00', title: '駅テスト', location: '大阪府大阪市北区梅田3-1-1 大阪駅前第3ビル', online: false },
+      { eventId: 'evS2@' + d1, date: d1, startTime: '15:00', title, location: '兵庫県神戸市兵庫区9-9', online: false },
+    ];
+    const rows = await fetchCal(d1);
+    const b = rows.find(r => r.calId === 'evS1@' + d1), c = rows.find(r => r.calId === 'evS2@' + d1);
+    ok(b && b.to === '大阪駅' && b.toSrc === 'loc', '場所欄の駅が到着にならない：' + (b && b.to));
+    ok(c && c.to === '' && c.toSrc === '', '一致しない行の到着が空にならない：' + (c && c.to));
+    const body = document.getElementById('ci-body').innerHTML;
+    ok(/最寄駅を入力/.test(body) && body.includes('兵庫県神戸市兵庫区9-9'), '一致しない行に「最寄駅を入力」と住所が出ない');
+    ok(calFareKey(b).includes('大阪駅') && !calFareKey(b).includes('梅田3'), '運賃を調べる到着が駅になっていない：' + calFareKey(b));
+    // C：駅を入れて登録 → 次回、同じ名前の予定は A でその駅
+    const ci = calRows.indexOf(c);
+    calEdit(ci, 'to', { value: '新開地駅' });
+    calRows.forEach(r => { r.checked = r === c; });
+    const conf = window.confirm; window.confirm = () => true;
+    registerCalRows();
+    window.confirm = conf;
+    const added = S.ledger.find(l => l.calId === 'evS2@' + d1);
+    ok(added && /新開地駅/.test(added.desc) && added.visit === '最寄駅テスト商会', '入力した駅で登録されない：' + (added && added.desc));
+    window.__calEvents = [{ eventId: 'evS3@' + d2, date: d2, startTime: '10:00', title, location: '兵庫県神戸市兵庫区9-9', online: false }];
+    const rows2 = await fetchCal(d2);
+    const a = rows2.find(r => r.calId === 'evS3@' + d2);
+    ok(a && a.to === '新開地駅' && a.toSrc === 'visit', '入力した駅が次回の候補にならない：' + (a && a.to));
+    S.ledger = S.ledger.filter(l => l !== added);
+    closeModal('modal-cal-import'); window.__calEvents = [];
+  });
   await step('月次締め', async () => {
     openClosePage(); await wait(100);
     const btn = [...document.querySelectorAll('#page-close button')].find(b => /この月の確認を完了/.test(b.textContent));

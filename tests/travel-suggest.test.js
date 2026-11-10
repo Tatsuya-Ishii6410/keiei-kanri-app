@@ -20,7 +20,7 @@ const modesSrc = /const TRAVEL_MODES=(\[[^\]]*\]);/.exec(html)[1];
 vm.runInContext(html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + `
 const TRAVEL_MODES_FOR_TEST=${modesSrc};
 globalThis.exported = { HOME_STATIONS, TRAVEL_BLANK_DESC, normStation, isHomeStation, normVisit, visitSideStation,
-  buildVisitIndex, visitSuggestions, clientSuggestions, lastPurposeFor,
+  buildVisitIndex, visitSuggestions, clientSuggestions, lastPurposeFor, stationForVisit, stationInLocation,
   TRAVEL_PURPOSES, purposeFromState, purposeToState, travelPurposeHintFor, isReturnTrip, applyReturnAutofill,
   pastFares, fareAutofill, isCalendarTravel, isFareConfirmed, normFareCache, shouldConfirmFare, confirmFareInCache, calcFareSources,
   fareModeOf, rowFareModeOf, buildTravelDesc, travelModeChoices, fareCacheKey, legacyModeRows, relabelTravelMode,
@@ -145,6 +145,26 @@ test('同じ数の表記は最近の方を出す', () => {
   const idx = A.buildVisitIndex([tr('2026-09-01', '青野ヶ原駅', '鷹取', 'くらし工房'),
     tr('2026-10-01', '青野ヶ原駅', '鷹取', '株式会社くらし工房')], partsOf);
   assert.deepStrictEqual(labels(A.visitSuggestions(idx, '鷹取', 8)), ['株式会社くらし工房']);
+});
+
+test('カレンダー取込の最寄駅 A：予定の名前が過去の訪問先に一致 → その駅（多い駅・同数は最近）／一致しない・自宅は空', () => {
+  seq = 0;
+  const idx = A.buildVisitIndex([tr('2026-09-01', '青野ヶ原駅', '鷹取', 'くらし工房'),
+    tr('2026-09-10', '青野ヶ原駅', '鷹取', 'くらし工房'), tr('2026-10-01', '青野ヶ原駅', '三宮', 'くらし工房')], partsOf);
+  assert.strictEqual(A.stationForVisit(idx, 'くらし工房'), '鷹取駅');
+  assert.strictEqual(A.stationForVisit(idx, 'まだ行ったことのない会社'), '');
+  assert.strictEqual(A.stationForVisit(idx, ''), '');
+  // 入力した駅は登録した行に残る → 次回の候補になる
+  const idx2 = A.buildVisitIndex([tr('2026-11-01', '青野ヶ原駅', '新開地駅', '新しい取引先')], partsOf);
+  assert.strictEqual(A.stationForVisit(idx2, '新しい取引先'), '新開地駅');
+});
+
+test('カレンダー取込の最寄駅 B：場所欄の「〇〇駅」（住所の数字の部分は駅にしない）', () => {
+  assert.strictEqual(A.stationInLocation('梅田駅'), '梅田駅');
+  assert.strictEqual(A.stationInLocation('大阪府大阪市北区梅田3-1-1 大阪駅前第3ビル'), '大阪駅');
+  assert.strictEqual(A.stationInLocation('株式会社テスト（JR三ノ宮駅 徒歩5分）'), 'JR三ノ宮駅');
+  assert.strictEqual(A.stationInLocation('兵庫県神戸市中央区2-2'), '');
+  assert.strictEqual(A.stationInLocation(''), '');
 });
 
 test('最後の用件：訪問先ごとに、いちばん新しい用件（表記ゆれもまとめる）', () => {
