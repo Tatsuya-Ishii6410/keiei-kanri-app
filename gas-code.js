@@ -194,6 +194,7 @@ function readAll_() {
     backup: settings.backup,
     reminder: settings.reminder,
     monthClose: settings.monthClose,
+    deletedExtIds: settings.deletedExtIds,
     taxSettings: settings.taxSettings,
     bankBalance: settings.bankBalance,
     currentFiscalYearId: settings.currentFiscalYearId,
@@ -388,6 +389,7 @@ function readSettings_(sh) {
   var backup = { lastAt: '', lastFile: '', lastError: '', lastErrorAt: '' };
   var reminder = { template: '' };   // 入金の催促文のひな形（空ならアプリの初期の文面）
   var monthClose = {};               // 月次締めの確認日時 { 'YYYY-MM': 'YYYY-MM-DD HH:mm' }
+  var deletedExtIds;                 // 削除済みの取込の外部ID（キーが無ければ undefined → アプリは手元の値を残す）
   var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15,
     calendarId: DEFAULT_CALENDAR_ID, fareCache: {} };
   // 税金設定は、シートに無い項目はキーごと返さない（アプリ側の初期値を潰さないため）
@@ -436,6 +438,8 @@ function readSettings_(sh) {
       reminder.template = str_(value);
     } else if (/^monthClose\.\d{4}-\d{2}$/.test(key)) {
       if (str_(value)) monthClose[key.substring(11)] = str_(value);
+    } else if (key === 'ledger.deletedExtIds') {
+      deletedExtIds = parseIdList_(value);
     } else if (key === 'travel.googleMapsApiKey') {
       travel.googleMapsApiKey = str_(value);
     } else if (key === 'travel.gasolinePrice') {
@@ -497,6 +501,7 @@ function readSettings_(sh) {
     backup: backup,
     reminder: reminder,
     monthClose: monthClose,
+    deletedExtIds: deletedExtIds,
     taxSettings: taxSettings,
     bankBalance: bankBalance,
     currentFiscalYearId: currentFiscalYearId,
@@ -571,6 +576,10 @@ function writeAll_(data) {
   Object.keys(mc).sort().forEach(function (ym) {
     if (/^\d{4}-\d{2}$/.test(ym) && str_(mc[ym])) settings.push(['monthClose.' + ym, str_(mc[ym])]);
   });
+  // 削除済みの取込の外部ID（JSONの配列。アプリが送らない＝古いアプリの時は、シートの値を残す）
+  var delIds = Array.isArray(data.deletedExtIds) ? data.deletedExtIds
+    : readSettings_(ss.getSheetByName('settings')).deletedExtIds;
+  if (delIds) settings.push(['ledger.deletedExtIds', JSON.stringify(parseIdList_(JSON.stringify(delIds)))]);
   var tv = data.travel || {};
   settings.push(['travel.googleMapsApiKey', str_(tv.googleMapsApiKey)]);
   settings.push(['travel.gasolinePrice', num_(tv.gasolinePrice) || 175]);
@@ -1655,6 +1664,19 @@ function fareLookup_(from, to, mode) {
 // settings シートの travel.fareCache（JSON）に保存して次回から再利用する。
 
 var FARE_BATCH_MAX = 10; // 1リクエストの最大区間数（アプリ側で分割して呼ぶ）
+
+// 外部IDの一覧（JSONの配列の文字列）→ 文字列の配列。重複・空は外す。壊れていれば空
+function parseIdList_(v) {
+  var s = str_(v);
+  if (!s) return [];
+  try {
+    var a = JSON.parse(s);
+    if (!Array.isArray(a)) return [];
+    var seen = {}, out = [];
+    a.forEach(function (x) { var k = str_(x); if (k && !seen[k]) { seen[k] = true; out.push(k); } });
+    return out;
+  } catch (e) { return []; }
+}
 
 function parseFareCache_(v) {
   var s = str_(v);

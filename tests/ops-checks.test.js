@@ -376,6 +376,19 @@ test('GASとの往復：催促文のひな形（複数行）が消えない', ()
   assert.strictEqual(gas.readAll_().reminder.template, '');
 });
 
+test('GASとの往復：削除済みの取込の外部ID（ledger.deletedExtIds）が残る・古いアプリでは消えない・キーが無ければ undefined', () => {
+  ss = mockSpreadsheet();
+  gas.ensureSheets_(ss);
+  gas.writeAll_({});
+  assert.strictEqual(gas.readAll_().deletedExtIds, undefined);   // 古いシート：アプリは手元の値を残す
+  gas.writeAll_({ deletedExtIds: ['ev1@2026-07-03', 'mail:m1', 'mail:m1', ''] });
+  assert.deepStrictEqual(Array.from(gas.readAll_().deletedExtIds), ['ev1@2026-07-03', 'mail:m1']);
+  gas.writeAll_({ company: { name: 'X' } });                     // deletedExtIds を送らない古いアプリ
+  assert.deepStrictEqual(Array.from(gas.readAll_().deletedExtIds), ['ev1@2026-07-03', 'mail:m1']);
+  gas.writeAll_({ deletedExtIds: [] });
+  assert.deepStrictEqual(Array.from(gas.readAll_().deletedExtIds), []);
+});
+
 console.log('③ 月次締めチェック');
 
 const YM = '2026-10';
