@@ -116,6 +116,7 @@ const PRELUDE = String.raw`(() => {
       case 'inboxScan': return { ok: true, read: 1, ready: 1, failed: 0, unsupported: 0, remaining: 0 };
       case 'inboxList': return { ok: true, items: [{ fileId: 'f1', kind: '領収書', status: 'ready', fileName: 'r.jpg', data: { date: ymdOf(now), amount: 1100, payee: '文具店' }, confidence: '高' }] };
       case 'driveList': return { ok: true, files: [{ id: 'o1', name: 'old.pdf', processed: false }] };
+      case 'calendarEvents': return { ok: true, events: JSON.parse(JSON.stringify(window.__calEvents || [])) };
       case 'debitMails': return { ok: true, items: [{ messageId: 'm1', datetime: ymdOf(now) + ' 10:00', amount: 1200, merchant: 'NEXT', account: '****' }], unreadable: [] };
       default: return { ok: true };
     }
@@ -571,6 +572,33 @@ const SCENARIO = String.raw`(async () => {
     }
     printTravelLedger(); closeDocViewer();
     switchCfTab('cf', document.querySelector('[onclick*="switchCfTab(\'cf\'"]'));
+  });
+  // 取込の行を消したら、次のカレンダー取込で候補に出さない（消していない予定は出る）。精算済みの月は確認の文に警告
+  await step('交通費の削除：削除済みの印・精算済みの月の警告', async () => {
+    const d = '2026-07-03', ym = d.slice(0, 7);
+    window.__calEvents = [
+      { eventId: 'evA@' + d, date: d, startTime: '10:00', title: '削除テストA', location: '大阪府大阪市北区1-1', online: false },
+      { eventId: 'evB@' + d, date: d, startTime: '14:00', title: '削除テストB', location: '兵庫県神戸市中央区2-2', online: false },
+    ];
+    const fetchCal = async () => { openCalendarImport(); document.getElementById('ci-from').value = d; document.getElementById('ci-to').value = d; await fetchCalendarEvents(); return calRows.concat(calOnline).map(r => r.calId); };
+    const ids0 = await fetchCal();
+    ok(ids0.includes('evA@' + d) && ids0.includes('evB@' + d), 'カレンダーの予定が候補に出ない：' + ids0.join(','));
+    const n0 = S.ledger.length;
+    const row = { id: S.nextLedgerId++, date: d, type: '交通費', desc: '青野ヶ原駅 → 梅田駅（電車・バス）　往復', amount: 1000, status: 'actual', calId: 'evA@' + d };
+    const st = { id: S.nextLedgerId++, date: '2026-08-25', type: '交通費精算', desc: '交通費精算 2026年7月', amount: 4321, status: 'planned_out', settlementMonth: ym };
+    S.ledger.push(row, st);
+    const conf = window.confirm; let asked = '';
+    window.confirm = m => { asked = String(m); return true; };
+    deleteLedger(row.id);
+    window.confirm = conf;
+    ok(/精算の金額 ¥4,321 は自動では変わりません/.test(asked), '精算済みの月の警告が確認の文にない：' + asked.slice(0, 60));
+    ok(!S.ledger.some(l => l.id === row.id) && S.deletedExtIds.includes('evA@' + d), '削除されない、または削除済みの印が残らない');
+    const ids1 = await fetchCal();
+    ok(!ids1.includes('evA@' + d) && ids1.includes('evB@' + d), '消した予定が次の取込で出る、または消していない予定が出ない：' + ids1.join(','));
+    S.ledger = S.ledger.filter(l => l.id !== st.id);
+    S.deletedExtIds = S.deletedExtIds.filter(x => x !== 'evA@' + d);
+    ok(S.ledger.length === n0, '後片付けで件数が戻らない');
+    closeModal('modal-cal-import'); window.__calEvents = [];
   });
   await step('月次締め', async () => {
     openClosePage(); await wait(100);

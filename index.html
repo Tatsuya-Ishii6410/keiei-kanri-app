@@ -3417,6 +3417,8 @@ function mergeState(parsed){
     p.paidAmount=parseInt(p.paidAmount)||0;
   });
   if(!s.monthClose||typeof s.monthClose!=='object'||Array.isArray(s.monthClose))s.monthClose={};
+  // 削除済みの取込の外部ID（古いデータ・古いGASには無い → 空）
+  s.deletedExtIds=Array.isArray(s.deletedExtIds)?s.deletedExtIds.map(String).filter(Boolean):[];
   if(!Array.isArray(s.quotes))s.quotes=[];
   s.quotes.forEach(q=>{if(q.source!=='drive_sync')q.source='manual';normalizeQuoteDoc(q);});
   if(!Array.isArray(s.ledger))s.ledger=[];
@@ -3586,7 +3588,7 @@ function keepLocalWhenMissing(remote){
   ['nextBillingId','nextFiscalYearId','nextFixedCostId','bankBalance'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
-  ['travel','finance','taxSettings','mail','bank','inboxFolders','backup','reminder','monthClose'].forEach(k=>{
+  ['travel','finance','taxSettings','mail','bank','inboxFolders','backup','reminder','monthClose','deletedExtIds'].forEach(k=>{
     if(d[k]===undefined&&S[k]!==undefined)d[k]=S[k];
   });
   if(d.travel&&S.travel&&d.travel!==S.travel){
@@ -6034,7 +6036,7 @@ function inboxSummary(x){
 function renderInboxList(){
   const el=document.getElementById('inbox-list');
   if(!el)return;
-  const bulk=inboxItems.filter(x=>!inboxBulkBlocker(x,S.ledger)).length;
+  const bulk=inboxItems.filter(x=>!inboxBulkBlocker(x,S.ledger,S.deletedExtIds)).length;
   const bb=document.getElementById('inbox-bulk-btn');
   bb.textContent=`✓ 確信度が高のものを一括登録（${bulk}件）`;
   bb.disabled=!bulk||inboxBusy;
@@ -6044,7 +6046,7 @@ function renderInboxList(){
   el.innerHTML=inboxItems.map((x,i)=>{
     const ready=x.status==='ready';
     const dup=ready?inboxDupOf(S.ledger,x.kind,inboxFormOf(x)):null;
-    const block=ready?inboxBulkBlocker(x,S.ledger):'';
+    const block=ready?inboxBulkBlocker(x,S.ledger,S.deletedExtIds):'';
     const st=ready
       ?`<span class="badge ${x.confidence==='高'?'badge-green':x.confidence==='中'?'badge-amber':'badge-red'}">確信度 ${escAttr(x.confidence||'-')}</span>`
       :`<span class="badge badge-red">${escAttr(INBOX_STATE_LABEL[x.status]||x.status)}</span>`;
@@ -6142,14 +6144,14 @@ async function inboxSkip(i){
 
 // 確信度「高」で、対象外の条件に当たらないものを、確認画面を開かずに登録する
 async function inboxBulkRegister(){
-  const targets=inboxItems.filter(x=>!inboxBulkBlocker(x,S.ledger));
+  const targets=inboxItems.filter(x=>!inboxBulkBlocker(x,S.ledger,S.deletedExtIds));
   if(!targets.length||inboxBusy)return;
   if(!confirm(`確信度が高い ${targets.length}件を、確認画面を開かずに登録します。\n（領収書＝経費の実績、受取請求書＝支払期限の出金予定）\n\nよろしいですか？`))return;
   inboxBusy=true;renderInboxList();
   let n=0;
   const fails=[];
   for(const x of targets){
-    if(inboxBulkBlocker(x,S.ledger))continue;   // 先に登録した分と重複していないか見直す
+    if(inboxBulkBlocker(x,S.ledger,S.deletedExtIds))continue;   // 先に登録した分と重複していないか見直す
     const f=inboxFormOf(x);
     S.ledger.push(inboxLedgerEntry(x.kind,f,x.fileId,S.nextLedgerId++));
     saveState();
@@ -6314,7 +6316,7 @@ async function fetchDebitMails(){
   try{
     const json=await gasGet({action:'debitMails',since,until});
     if(!json||!json.ok)throw new Error((json&&json.error)||'メールを取得できませんでした');
-    const r=debitRowsFrom(json.items,S.ledger);
+    const r=debitRowsFrom(json.items,S.ledger,S.deletedExtIds);
     debitRows=r.rows;debitSkipped=r.skipped;
     debitUnreadable=json.unreadable||[];
     debitPeriodTo=until;
@@ -8110,8 +8112,7 @@ async function fetchCalendarEvents(){
   try{
     const json=await gasGet({action:'calendarEvents',from,to,calendarId:(S.travel&&S.travel.calendarId)||DEFAULT_CALENDAR_ID});
     if(!json||!json.ok)throw new Error((json&&json.error)||'予定を取得できませんでした');
-    const known={};
-    S.ledger.forEach(l=>{if(l.calId)known[l.calId]=true;});
+    const known=knownExtIds(S.ledger,S.deletedExtIds);   // 登録済み＋削除済みの予定は出さない
     calRows=[];calOnline=[];calSkipped=0;
     (json.events||[]).forEach(ev=>{
       if(known[ev.eventId]){calSkipped++;return;}
@@ -13179,9 +13180,23 @@ function receiptLinkHtml(l){
 }
 
 
+/* 収支の削除（どの月・どの行でも、確認つき）
+   交通費で、その月の精算が登録済み・振込済みなら、精算の金額は自動では変わらないと添える。
+   取込の行（カレンダー・デビット通知・領収書）は外部IDを S.deletedExtIds に残し、次の取込で候補に出さない */
 function deleteLedger(id){
-  if(!confirm('この収支を削除しますか？'))return;
-  S.ledger=S.ledger.filter(l=>l.id!==id);
+  const l=S.ledger.find(x=>x.id===id);
+  let msg='この収支を削除しますか？';
+  if(l&&l.type==='交通費'&&isActual(l)){
+    const st=settlementFor(String(l.date||'').slice(0,7));
+    if(st)msg+=`\n\nこの月の交通費精算は登録済みです。この行を消しても、精算の金額 ${fmt(st.amount)} は自動では変わりません。`;
+  }
+  if(!confirm(msg))return;
+  const ext=deletedExtIdOf(l);
+  if(ext){
+    if(!Array.isArray(S.deletedExtIds))S.deletedExtIds=[];
+    if(!S.deletedExtIds.includes(ext))S.deletedExtIds.push(ext);
+  }
+  S.ledger=S.ledger.filter(x=>x.id!==id);
   saveState();refreshAll();
 }
 
@@ -13376,6 +13391,19 @@ const MAIL_EXT_PREFIX='mail:';
 function mailExtId(messageId){return MAIL_EXT_PREFIX+messageId}
 function isMailImported(l){return String(l.calId||'').indexOf(MAIL_EXT_PREFIX)===0}
 
+// 取込の外部ID（ledger の calId）で「もう候補に出さない」もの＝登録済みの行の calId ＋ 削除済みの印（S.deletedExtIds）
+function knownExtIds(ledger,deleted){
+  const known={};
+  (ledger||[]).forEach(l=>{if(l&&l.calId)known[l.calId]=true;});
+  (Array.isArray(deleted)?deleted:[]).forEach(id=>{if(id)known[String(id)]=true;});
+  return known;
+}
+// 行を消した時に「削除済み」として残す外部ID（カレンダー・デビット通知 mail:・領収書 rcpt:）。銀行明細 bank:・手入力は残さない
+function deletedExtIdOf(l){
+  const c=String((l&&l.calId)||'');
+  return !c||c.indexOf('bank:')===0?'':c;
+}
+
 function isActualExpenseEntry(l){
   return(l.status||'actual')==='actual'&&l.type!=='売上';
 }
@@ -13404,9 +13432,8 @@ function bankDupFlags(ledger,date,amount,desc,income){
 /* デビット通知（GASの debitMails の items）をプレビュー行にする
    外部IDが登録済みのメールは除外し、同日×同金額の経費があれば重複の可能性、
    10円以下は認証の可能性としてチェックを外す。 */
-function debitRowsFrom(items,ledger){
-  const known={};
-  ledger.forEach(l=>{if(l.calId)known[l.calId]=true;});
+function debitRowsFrom(items,ledger,deleted){
+  const known=knownExtIds(ledger,deleted);   // 登録済み・削除済みのメールは出さない
   const rows=[];
   let skipped=0;
   (items||[]).forEach(it=>{
@@ -13635,7 +13662,7 @@ function inboxEntryError(kind,f){
 /* 「確信度が高のものを一括登録」の対象外の理由（対象なら空文字）
    対象外：読み取り済みでない／確信度が高でない／金額・日付が空／受取請求書で支払期限が空／
           交際費（誰と・用件が必要）／重複の可能性／登録済み */
-function inboxBulkBlocker(x,ledger){
+function inboxBulkBlocker(x,ledger,deleted){
   if(!x||x.status!=='ready')return'読み取りが済んでいない';
   if(x.confidence!=='高')return'確信度が高ではない';
   const f=inboxFormOf(x);
@@ -13643,6 +13670,7 @@ function inboxBulkBlocker(x,ledger){
   if(x.kind===INBOX_INVOICE&&!f.dueDate)return'支払期限が空';
   if(f.type==='交際費')return'交際費（誰と・用件の入力が必要）';
   if((ledger||[]).some(l=>l.calId===rcptExtId(x.fileId)))return'登録済み';
+  if((Array.isArray(deleted)?deleted:[]).includes(rcptExtId(x.fileId)))return'削除済み';
   if(inboxDupOf(ledger,x.kind,f))return'重複の可能性';
   return'';
 }

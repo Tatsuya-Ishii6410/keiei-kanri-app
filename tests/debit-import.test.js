@@ -25,7 +25,7 @@ vm.createContext(app);
 // const はコンテキストのプロパティにならないので、使う名前を最後に globalThis へ出す
 vm.runInContext(html.slice(html.indexOf('\n', begin) + 1, html.lastIndexOf('\n', end)) + `
 globalThis.exported = { normKey, guessExpenseType, bankGuessType, isAuthLike, mailExtId,
-  bankDupFlags, debitRowsFrom };`, app);
+  bankDupFlags, debitRowsFrom, deletedExtIdOf, knownExtIds };`, app);
 const A = app.exported;
 
 let passed = 0;
@@ -186,6 +186,25 @@ test('外部IDが登録済みのメールは除外（二重登録しない）', 
   const r = A.debitRowsFrom([nextItem, vercelItem], ledger);
   assert.strictEqual(r.skipped, 1);
   assert.deepStrictEqual(Array.from(r.rows, x => x.messageId), ['m-vercel']); // vm の配列は別レルムなので作り直して比べる
+});
+
+test('削除済みの印（deletedExtIds）のメールは次の取込で出さない／消していないメールは出る', () => {
+  const r = A.debitRowsFrom([nextItem, vercelItem], [], ['mail:m-next']);
+  assert.strictEqual(r.skipped, 1);
+  assert.deepStrictEqual(Array.from(r.rows, x => x.messageId), ['m-vercel']);
+  // 印が無い古いデータ（第3引数なし）は従来どおり
+  assert.strictEqual(A.debitRowsFrom([nextItem, vercelItem], []).rows.length, 2);
+});
+
+test('削除で残す外部ID：カレンダー・mail:・rcpt: は残す、bank:・手入力は残さない', () => {
+  assert.strictEqual(A.deletedExtIdOf({ calId: 'abc@2026-07-03' }), 'abc@2026-07-03');
+  assert.strictEqual(A.deletedExtIdOf({ calId: 'mail:m1' }), 'mail:m1');
+  assert.strictEqual(A.deletedExtIdOf({ calId: 'rcpt:f1' }), 'rcpt:f1');
+  assert.strictEqual(A.deletedExtIdOf({ calId: 'bank:2026-07-03:1000' }), '');
+  assert.strictEqual(A.deletedExtIdOf({ calId: '' }), '');
+  assert.strictEqual(A.deletedExtIdOf(null), '');
+  const k = A.knownExtIds([{ calId: 'a' }, { calId: '' }], ['b']);
+  assert(k.a && k.b && !k[''] && !k.c);
 });
 
 test('同日×同金額の経費があれば重複の可能性・チェックOFF（売上・予定は対象外）', () => {
