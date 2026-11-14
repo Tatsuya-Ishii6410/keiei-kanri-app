@@ -389,6 +389,38 @@ test('GASとの往復：削除済みの取込の外部ID（ledger.deletedExtIds�
   assert.deepStrictEqual(Array.from(gas.readAll_().deletedExtIds), []);
 });
 
+test('GASとの往復：古い端末の保存を断る（版 updatedAt・画面のID）。版なしの古いアプリ・版の無いシートは通る', () => {
+  ss = mockSpreadsheet();
+  gas.ensureSheets_(ss);
+  gas.ContentService = { MimeType: { JSON: 'json', JAVASCRIPT: 'js' }, createTextOutput: s => ({ setMimeType() { return this; }, text: s }) };
+  const post = body => JSON.parse(gas.doPost({ postData: { contents: JSON.stringify(Object.assign({ action: 'save' }, body)) } }).text);
+  // 版の無い古いシート：版を送っても通る
+  assert.strictEqual(gas.readAll_().syncVersion, '');
+  const r0 = post({ data: { company: { name: 'A' } }, baseVersion: 'x', writer: 'tabA' });
+  assert.ok(r0.ok && /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}$/.test(r0.version), JSON.stringify(r0));
+  assert.strictEqual(gas.readAll_().syncVersion, r0.version);
+  // 最新の版は通る。連続の保存（前の応答の版を送る）も通る
+  const r1 = post({ data: { company: { name: 'A1' } }, baseVersion: r0.version, writer: 'tabA' });
+  assert.ok(r1.ok);
+  const r2 = post({ data: { company: { name: 'A2' } }, baseVersion: r1.version, writer: 'tabA' });
+  assert.ok(r2.ok);
+  // 応答が届かなかった保存の再試行（古い版・同じ画面）は通る
+  const r3 = post({ data: { company: { name: 'A3' } }, baseVersion: r0.version, writer: 'tabA' });
+  assert.ok(r3.ok);
+  // 別の画面が古い版で保存 → 断る。シートは変わらない
+  const r4 = post({ data: { company: { name: 'B-old' } }, baseVersion: r0.version, writer: 'tabB' });
+  assert.ok(!r4.ok && r4.conflict && r4.version === r3.version && /別の端末で更新されています/.test(r4.error));
+  assert.strictEqual(gas.readAll_().company.name, 'A3');
+  // 版を送らない古いアプリは通る（今までどおり）
+  const r5 = post({ data: { company: { name: 'old-app' } } });
+  assert.ok(r5.ok);
+  assert.strictEqual(gas.readAll_().company.name, 'old-app');
+  // 古いアプリの保存のあと、前の版を持つ画面は断られる（同じ画面のIDではない）
+  assert.ok(!post({ data: {}, baseVersion: r3.version, writer: 'tabA' }).ok);
+  assert.strictEqual(gas.isStaleSave_(undefined, 'w', { updatedAt: 'v1' }), false);
+  assert.strictEqual(gas.isStaleSave_('v0', 'w', { updatedAt: '' }), false);
+});
+
 console.log('③ 月次締めチェック');
 
 const YM = '2026-10';
