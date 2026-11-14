@@ -544,6 +544,29 @@ const SCENARIO = String.raw`(async () => {
       S.ledger = keep; refreshAll();
     }
   });
+  // today() は端末のローカル日付（日本時間）。0時台・9時台・23時台で、請求書の発行日・実績の日付の初期値も今日
+  await step('今日の日付（日本時間の0時台・9時台・23時台）：today()・請求書の発行日・実績入力の日付', async () => {
+    const RealDate = Date;
+    try {
+      for (const [iso, want] of [['2026-03-01T00:30:00+09:00', '2026-03-01'], ['2026-03-01T09:30:00+09:00', '2026-03-01'], ['2026-03-01T23:30:00+09:00', '2026-03-01'], ['2026-01-01T00:05:00+09:00', '2026-01-01']]) {
+        const fixed = RealDate.parse(iso);
+        window.Date = class extends RealDate { constructor(...a) { if (a.length) super(...a); else super(fixed); } static now() { return fixed; } };
+        ok(today() === want, iso + '：today() が ' + today());
+        openCreateQuoteModal('請求書');
+        ok(document.getElementById('q-date').value === want, iso + '：請求書の発行日の初期値が ' + document.getElementById('q-date').value);
+        closeModal('modal-create-quote');
+        openLedgerModal();
+        ok(document.getElementById('l-date').value === want, iso + '：実績入力の日付の初期値が ' + document.getElementById('l-date').value);
+        closeModal('modal-add-ledger');
+        window.Date = RealDate;
+      }
+      // 契約更新の期間（月末の翌日・1年後の前日）も日付がずれない
+      const p = S.projects[0], keepEnd = p.end, keepC = p.contract;
+      p.end = '2026-03-31'; p.contract = 'annual'; openRenewModal(p.id);
+      ok(document.getElementById('r-start').value === '2026-04-01' && document.getElementById('r-end').value === '2027-03-31', '契約更新の期間がずれる：' + document.getElementById('r-start').value + '〜' + document.getElementById('r-end').value);
+      p.end = keepEnd; p.contract = keepC; closeModal('modal-renew-project');
+    } finally { window.Date = RealDate; }
+  });
   await step('CF管理：口座残高の桁区切り（保存する値は数字のまま）', async () => {
     const b0 = S.bankBalance, el = document.getElementById('cf-balance');
     ok(el.value === Number(b0).toLocaleString('ja-JP'), '残高が桁区切りで出ない：' + el.value);

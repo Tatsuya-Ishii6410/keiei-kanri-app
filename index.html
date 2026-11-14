@@ -4388,7 +4388,8 @@ function ucSteps(steps,current,label,changed){
     +steps.map((s,i)=>`<li class="${i<k?'is-done':i===k?'is-current':''}"${i===k?' aria-current="step"':''}><span class="uc-step-dot" aria-hidden="true"></span><span class="uc-step-label">${escAttr(s)}</span></li>`).join('')
     +'</ol>';
 }
-function today(){return new Date().toISOString().split('T')[0]}
+// 今日の日付（端末のローカル日付＝日本時間。toISOString は UTC なので 0〜9時に前日になる）。localToday と同じ
+function today(){return localToday()}
 function getMonth(){return parseInt(document.getElementById('month-select').value)}
 function statusBadge(s){
   const m={商談中:'badge-amber',契約済:'badge-blue',進行中:'badge-green',完了:'badge-gray',失注:'badge-red'};
@@ -5175,12 +5176,14 @@ function openRenewModal(id){
   const p=S.projects.find(x=>x.id===id);if(!p)return;
   renewTarget=id;
   document.getElementById('renew-info').textContent=`案件: ${p.name}（${p.client}）　現在の期間: ${p.start} 〜 ${p.end}`;
-  const end=new Date(p.end);end.setDate(end.getDate()+1);
-  document.getElementById('r-start').value=end.toISOString().split('T')[0];
+  // 日付はローカルの日付で計算する（UTC の toISOString は時刻帯によって1日ずれる）
+  const pe=String(p.end||'').split('-').map(Number);
+  const end=new Date(pe[0],(pe[1]||1)-1,pe[2]||1);end.setDate(end.getDate()+1);
+  document.getElementById('r-start').value=localYmd(end);
   const newEnd=new Date(end);
   if(p.contract==='monthly')newEnd.setMonth(newEnd.getMonth()+1);else newEnd.setFullYear(newEnd.getFullYear()+1);
   newEnd.setDate(newEnd.getDate()-1);
-  document.getElementById('r-end').value=newEnd.toISOString().split('T')[0];
+  document.getElementById('r-end').value=localYmd(newEnd);
   document.getElementById('r-amount').value=p.amount;
   openModal('modal-renew-project');
 }
