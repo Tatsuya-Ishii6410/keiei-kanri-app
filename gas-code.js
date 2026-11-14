@@ -147,8 +147,13 @@ function doPost(e) {
   }
   try {
     if (!body.data) throw new Error('dataがありません');
-    writeAll_(body.data);
-    return respond_({ ok: true, savedAt: new Date().toISOString() }, '');
+    var cur = readSettings_(openSpreadsheet_().getSheetByName('settings'));
+    if (isStaleSave_(body.baseVersion, body.writer, cur)) {
+      return respond_({ ok: false, conflict: true, version: cur.updatedAt,
+        error: '別の端末で更新されています。読み込み直してください' }, '');
+    }
+    var version = writeAll_(body.data, body.writer);
+    return respond_({ ok: true, savedAt: new Date().toISOString(), version: version }, '');
   } catch (err) {
     return respond_({ ok: false, error: String(err && err.message || err) }, '');
   } finally {
@@ -195,6 +200,7 @@ function readAll_() {
     reminder: settings.reminder,
     monthClose: settings.monthClose,
     deletedExtIds: settings.deletedExtIds,
+    syncVersion: settings.updatedAt,   // アプリは S に入れず、保存の時に baseVersion として送り返す
     taxSettings: settings.taxSettings,
     bankBalance: settings.bankBalance,
     currentFiscalYearId: settings.currentFiscalYearId,
@@ -390,6 +396,7 @@ function readSettings_(sh) {
   var reminder = { template: '' };   // 入金の催促文のひな形（空ならアプリの初期の文面）
   var monthClose = {};               // 月次締めの確認日時 { 'YYYY-MM': 'YYYY-MM-DD HH:mm' }
   var deletedExtIds;                 // 削除済みの取込の外部ID（キーが無ければ undefined → アプリは手元の値を残す）
+  var updatedAt = '', syncWriter = '';  // 保存の版・最後に保存した画面のID（無い古いシートは空）
   var travel = { googleMapsApiKey: '', gasolinePrice: 175, fuelEfficiency: 15,
     calendarId: DEFAULT_CALENDAR_ID, fareCache: {} };
   // 税金設定は、シートに無い項目はキーごと返さない（アプリ側の初期値を潰さないため）
@@ -472,6 +479,10 @@ function readSettings_(sh) {
       currentFiscalYearId = num_(value);
     } else if (key === 'nextFiscalYearId') {
       nextFiscalYearId = num_(value) || 1;
+    } else if (key === 'updatedAt') {
+      updatedAt = String(value === null || value === undefined ? '' : value).trim();
+    } else if (key === 'syncWriter') {
+      syncWriter = str_(value);
     }
   });
 
@@ -505,7 +516,9 @@ function readSettings_(sh) {
     taxSettings: taxSettings,
     bankBalance: bankBalance,
     currentFiscalYearId: currentFiscalYearId,
-    nextFiscalYearId: nextFiscalYearId
+    nextFiscalYearId: nextFiscalYearId,
+    updatedAt: updatedAt,        // 保存の版（古い端末の上書きの検知に使う）
+    syncWriter: syncWriter       // 最後に保存した画面のID
   };
 }
 
@@ -513,7 +526,7 @@ function readSettings_(sh) {
 // ===== 書き込み =================================================
 
 /** アプリの全データを4シートに書き戻す（全置換）。 */
-function writeAll_(data) {
+function writeAll_(data, writer) {
   var ss = openSpreadsheet_();
   ensureSheets_(ss);
 
@@ -610,7 +623,11 @@ function writeAll_(data) {
   settings.push(['bankBalance', num_(data.bankBalance)]);
   settings.push(['currentFiscalYearId', num_(data.currentFiscalYearId)]);
   settings.push(['nextFiscalYearId', num_(data.nextFiscalYearId) || 1]);
-  settings.push(['updatedAt', Utilities.formatDate(new Date(), timezone_(ss), 'yyyy-MM-dd HH:mm:ss')]);
+  // 保存の版：時刻＋ミリ秒（同じ秒の保存も区別する）。最後に保存した画面のID（通信の失敗からの再試行を古いと判定しない）
+  var now = new Date();
+  var version = Utilities.formatDate(now, timezone_(ss), 'yyyy-MM-dd HH:mm:ss') + '.' + ('00' + now.getMilliseconds()).slice(-3);
+  settings.push(['updatedAt', version]);
+  settings.push(['syncWriter', str_(writer)]);
 
   writeSheet_(ss.getSheetByName('projects'), SHEET_DEFS.projects, projects);
   writeSheet_(ss.getSheetByName('quotes'),   SHEET_DEFS.quotes,   quotes);
@@ -620,6 +637,21 @@ function writeAll_(data) {
   writeSheet_(ss.getSheetByName('monthlyBillings'), SHEET_DEFS.monthlyBillings, monthlyBillings);
   writeSheet_(ss.getSheetByName('settings'), SHEET_DEFS.settings, settings);
   SpreadsheetApp.flush();
+  return version;
+}
+
+/**
+ * 古い端末の保存か（保存を断るか）。
+ *  - baseVersion を送らない古いアプリ・版の無い古いシート → 断らない（今までどおり）
+ *  - 版が同じ → 断らない。版が違っても、最後に保存したのが同じ画面（writer）なら断らない
+ *    （応答が届かなかった保存の再試行。シートの中身はこの画面が送ったもの）
+ */
+function isStaleSave_(baseVersion, writer, current) {
+  if (baseVersion === undefined || baseVersion === null || baseVersion === '') return false;
+  if (!current || !current.updatedAt) return false;
+  if (String(baseVersion) === current.updatedAt) return false;
+  if (writer && current.syncWriter && String(writer) === current.syncWriter) return false;
+  return true;
 }
 
 /** 計画データを、どの形式で来ても12ヶ月分の配列に整える。 */
