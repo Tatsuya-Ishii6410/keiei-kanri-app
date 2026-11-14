@@ -1225,6 +1225,16 @@ body.bs-docview{overflow:hidden}
   .modal .modal-header button{min-height:44px;min-width:44px}
   .modal input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=hidden]),.modal select{min-height:44px}
 }
+/* 同期エラーの表示は押せる（理由のモーダル）。タップ領域は 44px 以上 */
+.sync-tap{cursor:pointer;min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;text-decoration:underline;text-underline-offset:3px}
+.sync-tap:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.dash-v2 .dv2-hello-sub button.sync-tap{font:inherit;color:#DC2626;font-weight:700;background:none;border:0;padding:0 4px;margin:-14px 0}
+.se-rows{display:grid;gap:8px;font-size:13px}
+.se-rows>div{display:flex;flex-wrap:wrap;gap:4px 12px}
+.se-k{color:var(--text-muted);min-width:9em}
+.se-rows code{font-size:12px;word-break:break-all;background:var(--bg,#F1F5F9);padding:2px 6px;border-radius:4px}
+.se-note{font-size:12px;color:var(--text-muted);margin:12px 0 0}
+.se-msg{font-size:13px;color:#DC2626;margin-top:8px;min-height:1em}
 </style>
 </head>
 <body>
@@ -2212,6 +2222,25 @@ body.bs-docview{overflow:hidden}
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-add-project')">キャンセル</button>
     <button class="btn primary" id="modal-project-submit" onclick="saveProject()">+ 追加</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-sync-err">
+<div class="modal" role="dialog" aria-labelledby="se-title">
+  <div class="modal-header"><span class="modal-title" id="se-title">同期エラーの理由</span><button class="btn sm" onclick="closeModal('modal-sync-err')" aria-label="閉じる">✕</button></div>
+  <div class="alert alert-warning" id="se-hint" style="margin-bottom:12px"></div>
+  <div class="se-rows">
+    <div><span class="se-k">失敗した処理</span><span id="se-op"></span></div>
+    <div><span class="se-k">発生時刻</span><span id="se-at"></span></div>
+    <div><span class="se-k">最後に同期できた時刻</span><span id="se-ok"></span></div>
+    <div><span class="se-k">元の文面</span><code id="se-detail"></code></div>
+  </div>
+  <p class="se-note">入力したデータは、この端末の中に残っています（再試行で送り直します）。</p>
+  <div id="se-msg" class="se-msg" role="status"></div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-sync-err')">閉じる</button>
+    <button class="btn primary" id="se-retry" onclick="retrySyncErr()">再試行</button>
   </div>
 </div>
 </div>
@@ -3523,7 +3552,7 @@ let gasPendingSave=false;
 function gasEnabled(){return typeof GAS_URL==='string'&&/^https:\/\/script\.google\.com\//.test(GAS_URL)}
 
 // state: 'off' | 'sync' | 'ok' | 'err'
-function setSyncStatus(state,detail){
+function setSyncStatus(state,detail,op){
   const inds=[document.getElementById('save-indicator'),document.getElementById('save-indicator-side')];
   const dot=document.getElementById('gas-dot');
   const txt=document.getElementById('gas-status');
@@ -3534,11 +3563,15 @@ function setSyncStatus(state,detail){
     err:{cls:'err',icon:'⚠',short:'同期エラー',long:'スプレッドシートに接続できませんでした。localStorageのデータで動作しています。'}
   };
   const m=map[state]||map.off;
+  if(state==='ok')syncLastOkAt=new Date();
+  if(state==='err')syncErrInfo={detail:String(detail||''),at:new Date(),op:op==='load'?'load':'push'};
+  const isErr=state==='err';
   inds.forEach(ind=>{
     if(!ind)return;
     ind.className='save-indicator '+m.cls;
     ind.innerHTML=m.icon+' <span class="si-text">'+m.short+'</span>';
     ind.title=m.long+(detail?'\n'+detail:'');
+    syncErrTapable(ind,isErr);
   });
   if(dot)dot.className='sync-dot '+m.cls;
   if(txt)txt.textContent=m.long+(detail?'（'+detail+'）':'');
@@ -3547,11 +3580,58 @@ function setSyncStatus(state,detail){
     tbs.className='tb-sync tb-new is-'+(state in map?state:'off');
     tbs.setAttribute('aria-label',m.short);tbs.title=m.long+(detail?'\n'+detail:'');
     tbs.querySelector('.tb-sync-t').textContent=state==='err'?'同期エラー':'';
+    syncErrTapable(tbs,isErr);
+    if(!isErr)tbs.setAttribute('role','img');
   }
   dv2SyncState=state;
   if(typeof renderDv2HelloSub==='function')renderDv2HelloSub();
 }
 let dv2SyncState='off';   // 新ダッシュボードのあいさつ行に出す同期の状態（setSyncStatus と同じ判定）
+let syncLastOkAt=null;    // 最後に同期できた時刻
+let syncErrInfo=null;     // 最後の同期エラー {detail, at, op:'load'|'push'}
+// 同期エラーの時だけ、表示を押せるようにする（押すと理由のモーダル）
+function syncErrTapable(el,on){
+  el.classList.toggle('sync-tap',on);
+  if(on){el.setAttribute('role','button');el.tabIndex=0;el.onclick=openSyncErr;el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openSyncErr();}};}
+  else{el.removeAttribute('role');el.removeAttribute('tabindex');el.onclick=null;el.onkeydown=null;}
+}
+// エラーの元の文面から、利用者向けの案内を作る
+function syncErrHint(detail){
+  const d=String(detail||'');
+  const h=d.match(/HTTP (\d{3})/);
+  if(h&&(h[1]==='401'||h[1]==='403'))return `GASの設定（公開の範囲・デプロイ）が変わった可能性があります（HTTP ${h[1]}）。`;
+  if(h&&h[1]==='404')return 'GASのURLが見つかりません。デプロイが削除・変更された可能性があります（HTTP 404）。';
+  if(h&&h[1].charAt(0)==='5')return `GAS側で一時的なエラーが起きています（HTTP ${h[1]}）。少し待って再試行してください。`;
+  if(/JSON|Unexpected token|is not valid/i.test(d))return '応答がJSONではありません（GASのログイン画面などが返っています）。';
+  if(/Failed to fetch|NetworkError|Load failed|タイムアウト|読み込みに失敗/i.test(d))return '通信に失敗しました。電波の良い場所で再試行してください。';
+  if(d)return 'GASがエラーを返しました。下の元の文面を確認してください。';
+  return '原因が分かりません。再試行してください。';
+}
+function syncTimeStr(d){
+  if(!d)return 'まだありません（この画面を開いてから）';
+  const p=n=>String(n).padStart(2,'0');
+  return `${d.getMonth()+1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function renderSyncErr(){
+  const x=syncErrInfo||{detail:'',at:null,op:'push'};
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  set('se-op',x.op==='load'?'読み込み（スプレッドシート → アプリ）':'保存（アプリ → スプレッドシート）');
+  set('se-hint',syncErrHint(x.detail));
+  set('se-detail',x.detail||'（なし）');
+  set('se-at',syncTimeStr(x.at));
+  set('se-ok',syncTimeStr(syncLastOkAt));
+  set('se-msg','');
+}
+function openSyncErr(){renderSyncErr();openModal('modal-sync-err');}
+// 失敗した方（読み込み／保存）だけをやり直す。同期の仕組みはそのまま
+async function retrySyncErr(){
+  const btn=document.getElementById('se-retry');
+  if(btn)btn.disabled=true;
+  try{ await ((syncErrInfo&&syncErrInfo.op==='load')?loadFromGAS():pushToGAS()); }
+  finally{ if(btn)btn.disabled=false; }
+  if(dv2SyncState==='err'){renderSyncErr();const m=document.getElementById('se-msg');if(m)m.textContent='再試行しましたが、まだ同期できません。';}
+  else closeModal('modal-sync-err');
+}
 
 // GASのウェブアプリはCORSで弾かれることがあるため、失敗したらJSONPで取り直す
 function gasJsonp(url){
@@ -3652,10 +3732,10 @@ async function loadFromGAS(){
   try{
     json=await gasLoadRaw();
   }catch(e){
-    setSyncStatus('err',e.message);return;
+    setSyncStatus('err',e.message,'load');return;
   }
   if(!json||!json.ok){
-    setSyncStatus('err',(json&&json.error)||'応答が不正です');return;
+    setSyncStatus('err',(json&&json.error)||'応答が不正です','load');return;
   }
   // 取込待ち（inbox シート）は S に入れない（アプリの保存の対象外）
   if(json.data&&Array.isArray(json.data.inboxItems))inboxItems=json.data.inboxItems;
@@ -3711,7 +3791,7 @@ async function pushToGAS(manual){
     if(!json.ok)throw new Error(json.error||'保存に失敗しました');
     setSyncStatus('ok');
   }catch(e){
-    setSyncStatus('err',e.message);
+    setSyncStatus('err',e.message,'push');
     if(manual)alert('スプレッドシートへの保存に失敗しました。\n'+e.message);
   }finally{
     gasSaving=false;
@@ -14527,7 +14607,9 @@ function renderDv2HelloSub(){
   if(!el)return;
   const d=new Date(),w='日月火水木金土'[d.getDay()];
   const st={ok:'同期済み',sync:'同期中',err:'同期エラー',off:'ローカル保存'}[dv2SyncState]||'ローカル保存';
-  el.innerHTML=`${d.getMonth()+1}月${d.getDate()}日（${w}）・<span class="${dv2SyncState==='err'?'is-err':''}">${st}</span>`;
+  el.innerHTML=`${d.getMonth()+1}月${d.getDate()}日（${w}）・`+(dv2SyncState==='err'
+    ?`<button type="button" class="sync-tap is-err" onclick="openSyncErr()" aria-label="同期エラーの理由を見る">${st}</button>`
+    :`<span>${st}</span>`);
 }
 // スクロールしてあいさつ行が見えなくなったら、上部バーに小さな「○月 ▾」のチップを出す（押すと既存の月の選択を開く）
 function dv2OpenMonth(){

@@ -128,6 +128,8 @@ const PRELUDE = String.raw`(() => {
       let action = (url.match(/[?&]action=([^&]+)/) || [])[1];
       if (!action && init && init.body) { try { action = JSON.parse(init.body).action; } catch (e) {} }
       window.__gas.push(window.__step + '：' + action);
+      const fail = window.__gasFail && window.__gasFail(action);   // 同期エラーの段：失敗の応答を返す
+      if (fail) return fail;
       return reply(gasReply(action));
     }
     if (/api\.anthropic\.com/.test(url)) throw new Error('テスト中に Anthropic API を呼ぼうとしました');
@@ -674,6 +676,55 @@ const SCENARIO = String.raw`(async () => {
       o.classList.remove('open');
     }
     ok(!bad.length, 'モーダルの✕・入力欄が44px未満：' + bad.slice(0, 4).join(' ／ '));
+  });
+  await step('同期エラー：押すと理由のモーダル・再試行で復帰', async () => {
+    const vis = e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
+    const modal = document.getElementById('modal-sync-err');
+    const n0 = S.ledger.length;
+    try {
+      // 保存の失敗（HTTP 403）：表示を押すとモーダル、理由・案内・時刻、再試行で保存し直す
+      window.__gasFail = a => a === 'save' ? new Response('forbidden', { status: 403 }) : null;
+      S.ledger.push({ id: 995, date: '2026-01-05', type: '雑費', desc: '同期エラーの確認', amount: 1, status: 'actual' });
+      await pushToGAS();
+      const taps = [...document.querySelectorAll('.sync-tap')];
+      ok(taps.length >= 2, '同期エラーの表示が押せる形にならない：' + taps.length);
+      const low = taps.filter(vis).filter(e => e.getBoundingClientRect().height < 44 || e.getBoundingClientRect().width < 44);
+      ok(taps.some(vis) && !low.length, '同期エラーの表示が見えない、または44px未満');
+      document.getElementById('tb-sync').click();
+      ok(modal.classList.contains('open'), '押してもモーダルが開かない');
+      const txt = id => document.getElementById(id).textContent;
+      ok(txt('se-detail') === 'HTTP 403', '元の文面が出ない：' + txt('se-detail'));
+      ok(/GASの設定.*HTTP 403/.test(txt('se-hint')), '案内の文が出ない：' + txt('se-hint'));
+      ok(/保存/.test(txt('se-op')) && /:[0-9][0-9]:[0-9][0-9]/.test(txt('se-at')), '失敗した処理・発生時刻が出ない');
+      saveLocal();   // saveState と同じく、手元の保存は GAS の前に済む
+      ok(Object.keys(localStorage).some(k => (localStorage.getItem(k) || '').includes('同期エラーの確認')), '保存の失敗で、手元の入力が残らない');
+      // まだ失敗（JSONでない応答＝ログイン画面など）：モーダルは開いたまま、案内が変わる
+      window.__gasFail = a => a === 'save' ? new Response('<html>login</html>', { status: 200 }) : null;
+      await retrySyncErr();
+      ok(modal.classList.contains('open') && /まだ同期できません/.test(txt('se-msg')), '再試行の失敗が出ない');
+      ok(/JSONではありません/.test(txt('se-hint')), 'JSONでない応答の案内が出ない：' + txt('se-hint') + ' / ' + txt('se-detail'));
+      // 復帰：同じデータを送り直し、表示が戻り、モーダルが閉じる
+      window.__gasFail = null;
+      const g0 = window.__gas.length;
+      await retrySyncErr();
+      ok(window.__gas.slice(g0).some(x => /：save$/.test(x)) && !window.__gas.slice(g0).some(x => /：load$/.test(x)), '再試行が保存をやり直さない（または読み込みをした）');
+      ok(!modal.classList.contains('open') && dv2SyncState === 'ok' && !document.querySelector('.sync-tap'), '再試行で復帰しない');
+      ok(S.ledger.length === n0 + 1, '再試行で入力が消えた');
+      // 読み込みの失敗（GASがエラーを返す）：元の文面と、再試行は読み込み
+      window.__gasFail = a => a === 'load' ? new Response(JSON.stringify({ ok: false, error: 'シートがありません' }), { status: 200 }) : null;
+      S.ledger = S.ledger.filter(x => x.id !== 995); saveLocal();
+      await loadFromGAS();
+      openSyncErr();
+      ok(/読み込み/.test(txt('se-op')) && txt('se-detail') === 'シートがありません' && /GASがエラー/.test(txt('se-hint')), '読み込みの失敗の表示が違う：' + txt('se-hint'));
+      ok(/[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/.test(txt('se-ok')), '最後に同期できた時刻が出ない');
+      window.__gasFail = null;
+      const g1 = window.__gas.length;
+      await retrySyncErr();
+      ok(window.__gas.slice(g1).some(x => /：load$/.test(x)) && dv2SyncState === 'ok' && !modal.classList.contains('open'), '読み込みの再試行で復帰しない');
+    } finally {
+      window.__gasFail = null; closeModal('modal-sync-err');
+      S.ledger = S.ledger.filter(x => x.id !== 995); saveLocal(); setSyncStatus('ok');
+    }
   });
   // 段階6-a で外した絵文字が戻っていない（モーダルの見出し・サイドバー・CSV取込・月次締め・設定の見出し）
   await step('絵文字を使わない場所', async () => {
