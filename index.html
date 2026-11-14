@@ -1235,6 +1235,12 @@ body.bs-docview{overflow:hidden}
 .se-rows code{font-size:12px;word-break:break-all;background:var(--bg,#F1F5F9);padding:2px 6px;border-radius:4px}
 .se-note{font-size:12px;color:var(--text-muted);margin:12px 0 0}
 .se-msg{font-size:13px;color:#DC2626;margin-top:8px;min-height:1em}
+/* GASが古い版の注意：上部に細く、目立たない色で（押すと手順）。タップ領域 44px */
+.gas-ver-note{display:block;width:100%;min-height:44px;padding:6px 16px;border:0;border-bottom:0.5px solid var(--amber,#F59E0B);background:var(--amber-bg,#FFFBEB);color:var(--amber-text,#92400E);font:inherit;font-size:12px;text-align:left;cursor:pointer}
+.gas-ver-note[hidden]{display:none}
+.gas-ver-note:focus-visible{outline:2px solid var(--orange);outline-offset:-2px}
+.gv-steps{font-size:13px;line-height:1.7;margin:0 0 12px;padding-left:1.4em}
+#se-ver.is-stale{color:var(--amber-text,#92400E);font-weight:700}
 .us-choices{display:grid;gap:8px;margin-bottom:12px}
 .us-choices .btn{min-height:44px;justify-content:center}
 .stash-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:0.5px solid var(--border,#E2E8F0);font-size:13px}
@@ -1319,6 +1325,7 @@ body.bs-docview{overflow:hidden}
     </span>
   </div>
 </header>
+<button type="button" class="gas-ver-note" id="gas-ver-note" hidden onclick="openGasVerHelp()">GASが古い版です。再デプロイが必要です（手順：新バージョンでデプロイ）</button>
 
 <main class="content">
 
@@ -2245,6 +2252,7 @@ body.bs-docview{overflow:hidden}
     <div><span class="se-k">失敗した処理</span><span id="se-op"></span></div>
     <div><span class="se-k">発生時刻</span><span id="se-at"></span></div>
     <div><span class="se-k">最後に同期できた時刻</span><span id="se-ok"></span></div>
+    <div><span class="se-k">GASの版</span><span id="se-ver"></span></div>
     <div><span class="se-k">元の文面</span><code id="se-detail"></code></div>
   </div>
   <p class="se-note">入力したデータは、この端末の中に残っています（再試行で送り直します）。</p>
@@ -2253,6 +2261,23 @@ body.bs-docview{overflow:hidden}
     <button class="btn" onclick="closeModal('modal-sync-err')">閉じる</button>
     <button class="btn primary" id="se-retry" onclick="retrySyncErr()">再試行</button>
   </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-gas-ver">
+<div class="modal" role="dialog" aria-labelledby="gv-title">
+  <div class="modal-header"><span class="modal-title" id="gv-title">GASの再デプロイの手順</span><button class="btn sm" onclick="closeModal('modal-gas-ver')" aria-label="閉じる">✕</button></div>
+  <p class="se-note" style="margin:0 0 12px">GASのコードが、アプリの期待する版より古いままです。今までどおり動きますが、新しい機能（GAS側の変更）が使えません。</p>
+  <ol class="gv-steps">
+    <li>gas-code.js の中身を、GASのエディタに貼り付けて保存する</li>
+    <li>「デプロイ」→「デプロイを管理」を開く</li>
+    <li>今のデプロイの鉛筆（編集）を押す</li>
+    <li>「バージョン」で「新バージョン」を選ぶ</li>
+    <li>「デプロイ」を押す（URLは変わりません。新しいデプロイは作らない）</li>
+    <li>アプリを読み込み直すと、この注意が消えます</li>
+  </ol>
+  <div class="se-rows"><div><span class="se-k">GASの版</span><span id="gv-ver"></span></div></div>
+  <div class="actions-row"><button class="btn" onclick="closeModal('modal-gas-ver')">閉じる</button></div>
 </div>
 </div>
 
@@ -3594,6 +3619,31 @@ let gasPendingSave=false;
 
 function gasEnabled(){return typeof GAS_URL==='string'&&/^https:\/\/script\.google\.com\//.test(GAS_URL)}
 
+/* ---- GASの版（再デプロイ忘れの検知）。gas-code.js の GAS_VERSION と同じにする（テストが確かめる） ----
+   読み込みの応答の版が古い・無いときは、上部に目立たない注意を出す（機能は止めない） */
+const GAS_EXPECTED_VERSION='2026-11-14-1';
+let gasVersionSeen=null;   // null＝まだ読み込んでいない、''＝応答に版が無い（古いGAS）
+// 版の比較（YYYY-MM-DD-連番を数字ごとに）。a<b なら負
+function cmpGasVersion(a,b){
+  const pa=String(a||'').split('-').map(Number),pb=String(b||'').split('-').map(Number);
+  for(let i=0;i<Math.max(pa.length,pb.length);i++){const d=(pa[i]||0)-(pb[i]||0);if(d)return d;}
+  return 0;
+}
+function gasVersionStale(){return gasVersionSeen!==null&&(!gasVersionSeen||cmpGasVersion(gasVersionSeen,GAS_EXPECTED_VERSION)<0)}
+function gasVersionText(){
+  return gasVersionSeen===null?'まだ確認していません':!gasVersionSeen?'版の番号がありません（古いGAS。期待：'+GAS_EXPECTED_VERSION+'）'
+    :gasVersionStale()?gasVersionSeen+'（古い版。期待：'+GAS_EXPECTED_VERSION+'）':gasVersionSeen+'（一致）';
+}
+function openGasVerHelp(){
+  const el=document.getElementById('gv-ver');if(el)el.textContent=gasVersionText();
+  openModal('modal-gas-ver');
+}
+function setGasVersion(v){
+  gasVersionSeen=v==null?'':String(v);
+  const el=document.getElementById('gas-ver-note');
+  if(el)el.hidden=!gasVersionStale();
+}
+
 // state: 'off' | 'sync' | 'ok' | 'err'
 function setSyncStatus(state,detail,op){
   const inds=[document.getElementById('save-indicator'),document.getElementById('save-indicator-side')];
@@ -3665,6 +3715,8 @@ function renderSyncErr(){
   set('se-detail',x.detail||'（なし）');
   set('se-at',syncTimeStr(x.at));
   set('se-ok',syncTimeStr(syncLastOkAt));
+  set('se-ver',gasVersionText());
+  const sv=document.getElementById('se-ver');if(sv)sv.classList.toggle('is-stale',gasVersionStale());
   set('se-msg','');
 }
 function openSyncErr(){renderSyncErr();openModal('modal-sync-err');}
@@ -3785,6 +3837,7 @@ async function loadFromGAS(){
   if(!json||!json.ok){
     setSyncStatus('err',(json&&json.error)||'応答が不正です','load');return;
   }
+  setGasVersion(json.gasVersion);   // 再デプロイ忘れの検知（古くても処理は続ける）
   // 取込待ち（inbox シート）は S に入れない（アプリの保存の対象外）
   if(json.data&&Array.isArray(json.data.inboxItems))inboxItems=json.data.inboxItems;
   if(json.data)delete json.data.inboxItems;
