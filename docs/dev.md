@@ -58,6 +58,13 @@
 - keiei-kanri.html 先頭の定数 GAS_URL にGASウェブアプリのURLを設定して連携する
 - localStorageはバックアップ。GASの読み込みに失敗したときのフォールバックとして使う
 - gas-code.js を修正したら、GAS側で「デプロイを管理」→新バージョンとしてデプロイし直すこと
+- 保存は7シートの全上書き。古い端末の上書きを防ぐため、版を比べる：
+  - 版＝settings の updatedAt（ミリ秒まで）。読み込みで syncVersion として返し、アプリは S に入れず覚える（localStorage の bizapp_sync）
+  - 保存で baseVersion と画面のID（writer）を送る。GASは版が違い、最後に保存したのが別の画面なら断る（{ok:false, conflict:true}）。同じ画面の再試行（応答が届かなかった保存）は通す
+  - baseVersion を送らない古いアプリ・updatedAt の無い古いシートは、今までどおり保存できる
+- 未送信の印（bizapp_sync の unsent）：saveState で立て、送れたら消す。印があるまま読み込みが成功したら、黙って置き換えず、送る／置き換えるを選ばせる。選ばなかった方は控え（bizapp_stash。30日・5件。設定の「同期の控え」からダウンロード・コピー。JSONは「データをインポート」で戻せる）
+- 同期エラーの表示を押すと理由のモーダル（modal-sync-err）。再試行は失敗した方（読み込み／保存）。断られた保存は「読み込み直す」
+- 今日の日付は today()＝localToday()（端末のローカル日付）。toISOString で日付を作らない
 
 ## 注意事項
 - pushすればGitHub Actionsが自動でGitHub Pagesにデプロイする（1〜2分）
