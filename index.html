@@ -1235,6 +1235,12 @@ body.bs-docview{overflow:hidden}
 .se-rows code{font-size:12px;word-break:break-all;background:var(--bg,#F1F5F9);padding:2px 6px;border-radius:4px}
 .se-note{font-size:12px;color:var(--text-muted);margin:12px 0 0}
 .se-msg{font-size:13px;color:#DC2626;margin-top:8px;min-height:1em}
+.us-choices{display:grid;gap:8px;margin-bottom:12px}
+.us-choices .btn{min-height:44px;justify-content:center}
+.stash-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:0.5px solid var(--border,#E2E8F0);font-size:13px}
+.stash-sub{font-size:12px;color:var(--text-muted)}
+.stash-btns{display:flex;gap:6px}
+@media(max-width:768px){.stash-btns .btn{min-height:44px}}
 </style>
 </head>
 <body>
@@ -2163,6 +2169,11 @@ body.bs-docview{overflow:hidden}
     </div>
   </div>
   <div class="card">
+    <div class="card-header"><span class="card-title">同期の控え</span></div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">未送信の変更とシートの内容のどちらかを選んだ時、選ばなかった方の内容です（30日・5件まで）。ダウンロードしたJSONは「データをインポート」で戻せます。</div>
+    <div id="stash-list"></div>
+  </div>
+  <div class="card">
     <div class="card-header"><span class="card-title">データ管理</span></div>
     <div style="display:flex;gap:12px;flex-wrap:wrap">
       <button class="btn" onclick="exportData()">📥 データをエクスポート（JSON）</button>
@@ -2241,6 +2252,21 @@ body.bs-docview{overflow:hidden}
   <div class="actions-row">
     <button class="btn" onclick="closeModal('modal-sync-err')">閉じる</button>
     <button class="btn primary" id="se-retry" onclick="retrySyncErr()">再試行</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-unsent">
+<div class="modal" role="dialog" aria-labelledby="us-title">
+  <div class="modal-header"><span class="modal-title" id="us-title">この端末に未送信の変更があります</span><button class="btn sm" onclick="closeModal('modal-unsent')" aria-label="閉じる">✕</button></div>
+  <div class="alert alert-warning" style="margin-bottom:12px">スプレッドシートの内容と、この端末の内容が違います。どちらを残すか選んでください。選ばなかった方は「控え」として30日残ります（設定 → 同期の控え から、ダウンロード・コピーできます）。</div>
+  <div id="us-info" class="se-note" style="margin:0 0 12px"></div>
+  <div class="us-choices">
+    <button class="btn primary" id="us-send" onclick="unsentSendLocal()">この端末の内容をシートへ送る</button>
+    <button class="btn" id="us-sheet" onclick="unsentUseSheet()">シートの内容で置き換える</button>
+  </div>
+  <div class="actions-row">
+    <button class="btn" onclick="closeModal('modal-unsent')">あとで決める</button>
   </div>
 </div>
 </div>
@@ -3540,8 +3566,25 @@ function saveLocal(){
 function saveState(){
   travelIndexDirty=true;   // 訪問先の候補の集計を作り直す
   saveLocal();
+  gasLocalRev++;
+  if(gasEnabled()&&!gasUnsent){gasUnsent=true;saveSyncMeta();}
   scheduleGasSave();
 }
+
+/* ---- 同期の版と未送信の印（古い端末の上書きの防止・未送信の入力の保護） ----
+   gasBaseVersion：最後に読み込んだ・保存したシートの版（settings の updatedAt）。保存の時に送り、GASが違えば断る
+   gasUnsent：この端末にシートへ送れていない変更がある（開き直した時の読み込みで、黙って置き換えない）
+   gasWriterId：この画面のID（応答が届かなかった保存の再試行を、GASが古いと判定しないため） */
+const SYNC_META_KEY='bizapp_sync';
+let gasBaseVersion='',gasUnsent=false,gasLocalRev=0,gasConflict=false;
+const gasWriterId='w'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+function loadSyncMeta(){
+  try{const m=JSON.parse(localStorage.getItem(SYNC_META_KEY)||'{}')||{};gasBaseVersion=String(m.base||'');gasUnsent=!!m.unsent;}catch(e){}
+}
+function saveSyncMeta(){
+  try{localStorage.setItem(SYNC_META_KEY,JSON.stringify({base:gasBaseVersion,unsent:gasUnsent}));}catch(e){}
+}
+loadSyncMeta();
 
 /* ===== Google Sheets 同期 ========================================== */
 
@@ -3564,7 +3607,7 @@ function setSyncStatus(state,detail,op){
   };
   const m=map[state]||map.off;
   if(state==='ok')syncLastOkAt=new Date();
-  if(state==='err')syncErrInfo={detail:String(detail||''),at:new Date(),op:op==='load'?'load':'push'};
+  if(state==='err')syncErrInfo={detail:String(detail||''),at:new Date(),op:['load','conflict','unsent'].includes(op)?op:'push'};
   const isErr=state==='err';
   inds.forEach(ind=>{
     if(!ind)return;
@@ -3615,8 +3658,10 @@ function syncTimeStr(d){
 function renderSyncErr(){
   const x=syncErrInfo||{detail:'',at:null,op:'push'};
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  set('se-op',x.op==='load'?'読み込み（スプレッドシート → アプリ）':'保存（アプリ → スプレッドシート）');
-  set('se-hint',syncErrHint(x.detail));
+  set('se-op',x.op==='load'||x.op==='unsent'?'読み込み（スプレッドシート → アプリ）':'保存（アプリ → スプレッドシート）');
+  set('se-hint',x.op==='conflict'?'別の端末で更新されています。読み込み直してください（この端末の入力は消さずに、どちらを残すか選べます）。'
+    :x.op==='unsent'?'この端末に未送信の変更があります。「再試行」で、どちらの内容を残すかを選べます。':syncErrHint(x.detail));
+  set('se-retry',x.op==='conflict'?'読み込み直す':x.op==='unsent'?'選び直す':'再試行');
   set('se-detail',x.detail||'（なし）');
   set('se-at',syncTimeStr(x.at));
   set('se-ok',syncTimeStr(syncLastOkAt));
@@ -3627,7 +3672,10 @@ function openSyncErr(){renderSyncErr();openModal('modal-sync-err');}
 async function retrySyncErr(){
   const btn=document.getElementById('se-retry');
   if(btn)btn.disabled=true;
-  try{ await ((syncErrInfo&&syncErrInfo.op==='load')?loadFromGAS():pushToGAS()); }
+  const op=syncErrInfo&&syncErrInfo.op;
+  // 古い端末と判定された保存・未送信の変更 → 読み込み直す（未送信の変更があれば、選ぶ画面が出る）
+  if(op==='conflict'||op==='unsent'){closeModal('modal-sync-err');if(btn)btn.disabled=false;await loadFromGAS();return;}
+  try{ await (op==='load'?loadFromGAS():pushToGAS()); }
   finally{ if(btn)btn.disabled=false; }
   if(dv2SyncState==='err'){renderSyncErr();const m=document.getElementById('se-msg');if(m)m.textContent='再試行しましたが、まだ同期できません。';}
   else closeModal('modal-sync-err');
@@ -3740,15 +3788,85 @@ async function loadFromGAS(){
   // 取込待ち（inbox シート）は S に入れない（アプリの保存の対象外）
   if(json.data&&Array.isArray(json.data.inboxItems))inboxItems=json.data.inboxItems;
   if(json.data)delete json.data.inboxItems;
+  // シートの版（古いGASは返さない → 空。保存は今までどおり）。S には入れない
+  const ver=json.data&&json.data.syncVersion!=null?String(json.data.syncVersion):'';
+  if(json.data)delete json.data.syncVersion;
   if(isRemoteEmpty(json.data)){
     // シートがまだ空のときは、手元のデータを初期投入する（消さない）
+    gasBaseVersion=ver;saveSyncMeta();
     await pushToGAS();
     refreshAll();
     return;
   }
+  // この端末に未送信の変更がある：黙ってシートの内容で置き換えず、どちらを残すか選んでもらう
+  if(gasUnsent){
+    syncPendingRemote={data:json.data,ver};
+    setSyncStatus('err','この端末に未送信の変更があります','unsent');
+    openUnsentChoice();
+    return;
+  }
+  applyRemoteState(json.data,ver);
+}
+let syncPendingRemote=null;   // 未送信の変更がある時に読み込んだシートの内容（選ぶまで置き換えない）
+function openUnsentChoice(){
+  const el=document.getElementById('us-info');
+  if(el)el.textContent=`この端末の最後の保存：${syncTimeStr(syncLastOkAt)}　／　未送信のまま閉じた、または別の端末で更新されました。`;
+  openModal('modal-unsent');
+}
+// ① この端末の内容をシートへ送る（先にシートの内容を控えに残す）
+async function unsentSendLocal(){
+  const p=syncPendingRemote;if(!p){closeModal('modal-unsent');return;}
+  stashAdd('sheet',p.data);
+  gasBaseVersion=p.ver;gasConflict=false;saveSyncMeta();syncPendingRemote=null;
+  closeModal('modal-unsent');
+  await pushToGAS();
+  refreshAll();
+}
+// ② シートの内容で置き換える（先に、この端末の内容を控えに残す）
+function unsentUseSheet(){
+  const p=syncPendingRemote;if(!p){closeModal('modal-unsent');return;}
+  stashAdd('local',S);
+  syncPendingRemote=null;
+  closeModal('modal-unsent');
+  applyRemoteState(p.data,p.ver);
+}
+
+/* ---- 控え（未送信の衝突で、置き換える前の内容を残す）。30日・5件まで。ダウンロードしたJSONは「データをインポート」で戻せる ---- */
+const STASH_KEY='bizapp_stash',STASH_DAYS=30,STASH_MAX=5;
+function stashList(){
+  try{const a=JSON.parse(localStorage.getItem(STASH_KEY)||'[]');return Array.isArray(a)?a.filter(x=>x&&Date.now()-x.at<STASH_DAYS*864e5):[];}catch(e){return [];}
+}
+function stashAdd(kind,data){
+  const json=JSON.stringify(data);
+  let list=[{id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),at:Date.now(),kind,json}].concat(stashList()).slice(0,STASH_MAX);
+  // 容量が足りない時は古い控えから外す。1件も入らなければ、ファイルとして保存する
+  while(list.length){try{localStorage.setItem(STASH_KEY,JSON.stringify(list));renderStashList();return true;}catch(e){list=list.slice(0,-1);}}
+  downloadJson(json,`bizapp_stash_${kind}_${today()}.json`);
+  return false;
+}
+function stashLabel(x){return x.kind==='sheet'?'シートの内容（この端末の内容を送る前）':'この端末の内容（シートで置き換える前）'}
+function downloadJson(json,name){
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([json],{type:'application/json'}));a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+function stashDownload(id){const x=stashList().find(s=>s.id===id);if(x)downloadJson(x.json,`bizapp_stash_${x.kind}_${localYmd(new Date(x.at))}.json`);}
+async function stashCopy(id){
+  const x=stashList().find(s=>s.id===id);if(!x)return;
+  try{await navigator.clipboard.writeText(x.json);alert('控えをコピーしました');}catch(e){alert('コピーできませんでした。ダウンロードを使ってください');}
+}
+function renderStashList(){
+  const box=document.getElementById('stash-list');if(!box)return;
+  const list=stashList();
+  box.innerHTML=list.length?list.map(x=>`<div class="stash-row"><div><div>${stashLabel(x)}</div><div class="stash-sub">${syncTimeStr(new Date(x.at))}・${Math.round(x.json.length/1024)}KB</div></div>`
+    +`<div class="stash-btns"><button class="btn sm" onclick="stashDownload('${x.id}')">ダウンロード</button><button class="btn sm" onclick="stashCopy('${x.id}')">コピー</button></div></div>`).join('')
+    :'<div class="stash-sub">控えはありません。</div>';
+}
+// シートの内容で画面のデータを置き換える
+function applyRemoteState(data,ver){
   // GAS側が古くて新しい項目を返さない場合、手元のデータを消さないように残す
-  S=mergeState(keepLocalWhenMissing(json.data));
+  S=mergeState(keepLocalWhenMissing(data));
   saveLocal();
+  gasBaseVersion=ver||'';gasUnsent=false;gasConflict=false;saveSyncMeta();
   setSyncStatus('ok');
   renderFiscalSelects();
   updatePlanMonthOptions();
@@ -3778,20 +3896,27 @@ async function pushToGAS(manual){
   if(gasSaving){gasPendingSave=true;return;}
   gasSaving=true;
   setSyncStatus('sync');
+  const rev=gasLocalRev;
   try{
     // Content-Type を text/plain にしてプリフライト(OPTIONS)を回避する
+    // baseVersion：読み込んだ時の版（シートの版と違えば、GASは保存を断る）。版が無ければ送らない（今までどおり保存）
     const res=await fetch(GAS_URL,{
       method:'POST',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({action:'save',data:S}),
+      body:JSON.stringify({action:'save',data:S,baseVersion:gasBaseVersion||undefined,writer:gasWriterId}),
       redirect:'follow'
     });
     if(!res.ok)throw new Error('HTTP '+res.status);
     const json=await res.json();
+    if(json&&json.conflict){gasConflict=true;throw new Error(json.error||'別の端末で更新されています。読み込み直してください');}
     if(!json.ok)throw new Error(json.error||'保存に失敗しました');
+    gasConflict=false;
+    if(json.version)gasBaseVersion=String(json.version);
+    if(gasLocalRev===rev)gasUnsent=false;   // 送っている間に変わった分は、次の保存で送る
+    saveSyncMeta();
     setSyncStatus('ok');
   }catch(e){
-    setSyncStatus('err',e.message,'push');
+    setSyncStatus('err',e.message,gasConflict?'conflict':'push');
     if(manual)alert('スプレッドシートへの保存に失敗しました。\n'+e.message);
   }finally{
     gasSaving=false;
@@ -13373,6 +13498,7 @@ function applyPlanToAllMonths(){
 const COMPANY_FIELDS=['name','rep','zip','addr','tel','email','bankName','bankBranch','accountType','accountNumber','accountHolder','invoice','capital','payment','shareWith','note'];
 
 function loadSettingsForm(){
+  renderStashList();
   const rkEl=document.getElementById('s-rinko');if(rkEl)rkEl.checked=rinkoOn();
   const c=S.company;
   COMPANY_FIELDS.forEach(k=>{
