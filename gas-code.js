@@ -31,6 +31,10 @@
 // 保存先スプレッドシートのID（URLの /d/ と /edit の間の文字列）
 var SPREADSHEET_ID = '1gdtg7q3NwG3FQmWGc7lMpNEKROyvyRwuoIRKNSPsi4k';
 
+// このコードの版（YYYY-MM-DD-連番）。gas-code.js を変えたら必ず上げ、アプリの GAS_EXPECTED_VERSION も同じにする。
+// 読み込みの応答に入れ、アプリが「GASが古い版（再デプロイ忘れ）」を知らせる
+var GAS_VERSION = '2026-11-14-1';
+
 // 各シートの列定義（この順番でシートに書き込まれます）
 var SHEET_DEFS = {
   projects: ['id', 'name', 'client', 'amount', 'status', 'start', 'end', 'contract', 'memo',
@@ -91,7 +95,7 @@ function doGet(e) {
     if (action === 'calendarEvents') return respond_(calendarEvents_(params.from, params.to, params.calendarId), callback);
     if (action === 'debitMails') return respond_(debitMails_(params.since, params.until), callback);
     if (action !== 'load') throw new Error('不明なaction: ' + action);
-    return respond_({ ok: true, data: readAll_() }, callback);
+    return respond_({ ok: true, data: readAll_(), gasVersion: GAS_VERSION }, callback);
   } catch (err) {
     return respond_({ ok: false, error: String(err && err.message || err) }, callback);
   }
