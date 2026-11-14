@@ -43,4 +43,5 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 - [docs/ui.md](docs/ui.md)：レイアウト、レスポンシブ、フォント、共通ナビ、一覧の上の操作エリア、スマホの横長ルール、編集・追加の画面の3層（見出し／本文／固定フッター。mfLayoutModals）
 - [docs/ui-cf-projects.md](docs/ui-cf-projects.md)：UI/UX改修指示（CF管理・案件管理）の原文。最重要制約はこれに従う
 - [docs/ui-revamp.md](docs/ui-revamp.md)：UI改修（共通部品 uc-：ヒーロー・KPI 2列・明細の行・進捗行・バッジ・差額。新しい画面の部品はこれを使う）
+- [docs/plan-kpi.md](docs/plan-kpi.md)：計画管理・予実・KPI・振り返り（新しいタブ「計画」の設計案。既存の計画・KPIの棚卸し・カレンダーの自動集計）
 - 進行中の作業：[PROGRESS.md](PROGRESS.md)
