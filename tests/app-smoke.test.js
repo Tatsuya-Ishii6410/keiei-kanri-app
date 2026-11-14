@@ -775,6 +775,85 @@ const SCENARIO = String.raw`(async () => {
       S.ledger = S.ledger.filter(x => x.id !== 995); saveLocal(); setSyncStatus('ok');
     }
   });
+  await step('古い端末の保存を断る・未送信の入力の保護（版・連続保存・選ぶ画面・控え）', async () => {
+    const keepS = JSON.parse(JSON.stringify(S)), sheet = JSON.parse(JSON.stringify(S));
+    const sent = [];
+    // GASの代わり：版 cur と最後に保存した画面 last を持ち、gas-code.js の isStaleSave_ と同じ判定で断る
+    let cur = 'v1', last = '', n = 1;
+    const json = o => new Response(JSON.stringify(o), { status: 200 });
+    window.__gasFail = (a) => null;
+    const server = (a, body) => {
+      if (a === 'load') return json({ ok: true, data: Object.assign(JSON.parse(JSON.stringify(sheet)), cur ? { syncVersion: cur } : {}) });
+      if (a !== 'save') return null;
+      sent.push(body);
+      if (cur && body.baseVersion && body.baseVersion !== cur && !(body.writer && body.writer === last)) return json({ ok: false, conflict: true, version: cur, error: '別の端末で更新されています。読み込み直してください' });
+      cur = 'v' + (++n); last = body.writer || ''; return json({ ok: true, version: cur });
+    };
+    const realFetch = window.fetch;
+    window.fetch = async (input, init) => {
+      const url = String(input && input.url || input);
+      if (/script[.]google[.]com/.test(url)) {
+        let a = (url.match(/[?&]action=([^&]+)/) || [])[1], body = {};
+        if (init && init.body) { body = JSON.parse(init.body); a = a || body.action; }
+        const r = server(a, body); if (r) return r;
+      }
+      return realFetch(input, init);
+    };
+    const ls = t => Object.keys(localStorage).some(k => k !== 'bizapp_stash' && (localStorage.getItem(k) || '').includes(t));
+    const settle = async () => { for (let i = 0; i < 30 && (gasSaving || dv2SyncState === 'sync'); i++) await wait(100); };
+    try {
+      // 読み込み：版を覚える（S には入れない）
+      await loadFromGAS();
+      ok(gasBaseVersion === 'v1' && S.syncVersion === undefined, '読み込みの版を覚えない：' + gasBaseVersion);
+      // 最新の版は通る・連続保存（0.6秒以内に2回）も通る
+      S.company.note = 'edit-1'; saveState(); await wait(200); S.company.note = 'edit-2'; saveState();
+      await wait(900); await settle(); await wait(700); await settle();
+      ok(sent.length >= 1 && sent.every(b => b.writer === gasWriterId) && sent[0].baseVersion === 'v1', '保存に版・画面のIDが付かない');
+      ok(dv2SyncState === 'ok' && !gasUnsent && gasBaseVersion === cur, '連続の保存が断られた：' + dv2SyncState + ' ' + gasBaseVersion + '/' + cur);
+      // 応答が届かなかった保存の再試行：同じ画面なら断られない
+      const prev = gasBaseVersion; cur = 'v' + (++n); last = gasWriterId;  // 前の保存は書けたが応答が届かなかった
+      S.company.note = 'edit-3'; saveState(); await wait(900); await settle();
+      ok(dv2SyncState === 'ok' && sent[sent.length - 1].baseVersion === prev, '同じ画面の再試行が断られた');
+      // 別の端末が保存した → この端末の保存は断られる。入力は画面と端末に残る
+      cur = 'v' + (++n); last = 'other-device'; sheet.company.note = 'from-other';
+      S.company.note = 'stale-edit'; saveState(); await wait(900); await settle();
+      ok(dv2SyncState === 'err' && syncErrInfo.op === 'conflict' && gasUnsent, '古い端末の保存が断られない：' + dv2SyncState);
+      ok(S.company.note === 'stale-edit' && ls('stale-edit'), '断られた入力が消えた');
+      openSyncErr();
+      ok(/別の端末で更新されています/.test(document.getElementById('se-hint').textContent) && document.getElementById('se-retry').textContent === '読み込み直す', '断られた時の案内が出ない');
+      // 読み込み直す → 未送信の変更があるので、黙って置き換えない
+      await retrySyncErr(); await wait(100);
+      ok(document.getElementById('modal-unsent').classList.contains('open') && S.company.note === 'stale-edit', '未送信の変更が、読み込みで黙って置き換わった');
+      // ① この端末の内容を送る：先にシートの内容を控えに残す
+      localStorage.removeItem('bizapp_stash');
+      await unsentSendLocal(); await settle();
+      const st1 = stashList();
+      ok(st1.length === 1 && st1[0].kind === 'sheet' && st1[0].json.includes('from-other'), '①：シートの控えが残らない');
+      ok(dv2SyncState === 'ok' && !gasUnsent && S.company.note === 'stale-edit' && last === gasWriterId, '①：この端末の内容が送れない');
+      // ② シートの内容で置き換える：先にこの端末の内容を控えに残す（未送信のまま開き直した場合）
+      cur = 'v' + (++n); last = 'other-device'; sheet.company.note = 'sheet-latest';
+      S.company.note = 'unsent-edit'; saveState(); await wait(900); await settle();
+      gasUnsent = true; saveSyncMeta();
+      await loadFromGAS();
+      ok(document.getElementById('modal-unsent').classList.contains('open') && S.company.note === 'unsent-edit', '②：未送信の変更が黙って置き換わった');
+      unsentUseSheet();
+      const st2 = stashList();
+      ok(st2.length === 2 && st2[0].kind === 'local' && st2[0].json.includes('unsent-edit'), '②：この端末の控えが残らない');
+      ok(S.company.note === 'sheet-latest' && !gasUnsent && gasBaseVersion === cur && dv2SyncState === 'ok', '②：シートの内容で置き換わらない');
+      nav('settings');
+      ok(document.querySelectorAll('#stash-list .stash-row').length === 2, '設定に控えが出ない');
+      nav('ledger');
+      // 版の無い古いGAS：版を送らない（今までどおり保存）
+      cur = ''; await loadFromGAS(); sent.length = 0;
+      S.company.note = 'old-gas'; saveState(); await wait(900); await settle();
+      ok(sent.length && sent[sent.length - 1].baseVersion === undefined && dv2SyncState === 'ok', '版の無いシートで保存できない');
+    } finally {
+      window.fetch = realFetch; window.__gasFail = null;
+      closeModal('modal-unsent'); closeModal('modal-sync-err');
+      localStorage.removeItem('bizapp_stash');
+      S = keepS; saveLocal(); gasBaseVersion = ''; gasUnsent = false; gasConflict = false; saveSyncMeta(); setSyncStatus('ok'); refreshAll();
+    }
+  });
   // 段階6-a で外した絵文字が戻っていない（モーダルの見出し・サイドバー・CSV取込・月次締め・設定の見出し）
   await step('絵文字を使わない場所', async () => {
     const emo = new RegExp(String.fromCharCode(92) + 'p{Extended_Pictographic}', 'u');   // SCENARIO は文字列なのでバックスラッシュを避ける
