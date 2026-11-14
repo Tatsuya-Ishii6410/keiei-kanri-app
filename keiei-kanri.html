@@ -6880,7 +6880,8 @@ function openPlanConfirm(id){
   document.getElementById('pc-info').innerHTML=
     `<div style="font-weight:600">${l.desc}</div>`
     +`<div style="font-size:12px;color:var(--text-secondary);margin-top:2px">予定日 ${ledgerDateOf(l)}　${fmt(l.amount)}</div>`;
-  document.getElementById('pc-date').value=ledgerDateOf(l)||today();
+  // 日付の初期値は今日（端末のローカル日付。予定日は上の情報に出す）。入力欄は変更できる
+  document.getElementById('pc-date').value=localToday();
   document.getElementById('pc-amount').value=l.amount;
   // 入金予定・出金予定で文言だけ変える（変換の処理は同じ：同じ行の状態を実績にする＝予定と実績が二重に残らない）
   const out=ledgerStatusOf(l)==='planned_out';

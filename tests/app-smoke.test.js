@@ -518,6 +518,32 @@ const SCENARIO = String.raw`(async () => {
       S.ledger = keep; S.projects = keepProj; change('ledger-month', ''); refreshAll();
     }
   });
+  // 日付の初期値は今日（端末のローカル日付）。時刻を日本時間 2026-03-01 00:30（UTC では 2/28）に固定して確かめる
+  await step('予定を実績にする日付の初期値は今日（入金予定・出金予定・振込済みにする。日本時間の0時台）', async () => {
+    const keep = JSON.parse(JSON.stringify(S.ledger)), RealDate = Date;
+    const fixed = RealDate.parse('2026-03-01T00:30:00+09:00');
+    window.Date = class extends RealDate { constructor(...a) { if (a.length) super(...a); else super(fixed); } static now() { return fixed; } };
+    try {
+      S.ledger.push(
+        { id: 9101, date: '2026-03-20', expectedDate: '2026-03-20', type: '売上', desc: '入金予定', amount: 11000, status: 'planned_in' },
+        { id: 9102, date: '2026-03-25', expectedDate: '2026-03-25', type: '外注費', desc: '出金予定', amount: 5500, status: 'planned_out' },
+        { id: 9103, date: '2026-03-25', expectedDate: '2026-03-25', type: '交通費', desc: '交通費精算 2026年1月分', amount: 4321, status: 'planned_out', settlementMonth: '2026-01' });
+      const dt = () => document.getElementById('pc-date').value;
+      for (const id of [9101, 9102, 9103]) {
+        openPlanConfirm(id);
+        ok(dt() === '2026-03-01', id + '：日付の初期値が今日（2026-03-01）でない：' + dt());
+        ok(!document.getElementById('pc-date').disabled && !document.getElementById('pc-date').readOnly, id + '：日付が変更できない');
+        // 直した日付で保存される
+        document.getElementById('pc-date').value = '2026-02-27'; renderSettleDups();
+        confirmPlanned();
+        const l = S.ledger.find(x => x.id === id);
+        ok(l && isActual(l) && l.date === '2026-02-27', id + '：直した日付で保存されない：' + (l && l.date));
+      }
+    } finally {
+      window.Date = RealDate; closeModal('modal-plan-confirm');
+      S.ledger = keep; refreshAll();
+    }
+  });
   await step('CF管理：口座残高の桁区切り（保存する値は数字のまま）', async () => {
     const b0 = S.bankBalance, el = document.getElementById('cf-balance');
     ok(el.value === Number(b0).toLocaleString('ja-JP'), '残高が桁区切りで出ない：' + el.value);
@@ -785,6 +811,7 @@ const SCENARIO = String.raw`(async () => {
     // 外部のフォント・ライブラリは読まない（テストをネットにつながずに動かすため）
     await cdp.send('Network.setBlockedURLs', { urls: ['*fonts.googleapis.com*', '*fonts.gstatic.com*', '*cdn.jsdelivr.net*', '*cdnjs.cloudflare.com*', '*script.google.com*'] });
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 375, height: 760, deviceScaleFactor: 1, mobile: true });
+    await cdp.send('Emulation.setTimezoneOverride', { timezoneId: 'Asia/Tokyo' });   // the app runs on JST devices (local-date checks)
     await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: PRELUDE });
     await cdp.send('Page.navigate', { url: `http://127.0.0.1:${port}/` });
     await new Promise(r => setTimeout(r, 2500));
