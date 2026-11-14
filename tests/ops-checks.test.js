@@ -421,6 +421,16 @@ test('GASとの往復：古い端末の保存を断る（版 updatedAt・画面�
   assert.strictEqual(gas.isStaleSave_('v0', 'w', { updatedAt: '' }), false);
 });
 
+test('GASの版：読み込みの応答に GAS_VERSION が入り、アプリの GAS_EXPECTED_VERSION と同じ（gas-code.js を変えたら両方を上げる）', () => {
+  ss = mockSpreadsheet();
+  gas.ensureSheets_(ss);
+  const r = JSON.parse(gas.doGet({ parameter: { action: 'load' } }).text);
+  assert.ok(r.ok && /^\d{4}-\d\d-\d\d-\d+$/.test(r.gasVersion), JSON.stringify(r.gasVersion));
+  const m = html.match(/const GAS_EXPECTED_VERSION='([^']+)'/);
+  assert.ok(m, 'アプリに GAS_EXPECTED_VERSION がない');
+  assert.strictEqual(m[1], r.gasVersion, 'アプリの期待する版と gas-code.js の GAS_VERSION が違う');
+});
+
 console.log('③ 月次締めチェック');
 
 const YM = '2026-10';

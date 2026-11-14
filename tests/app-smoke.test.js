@@ -112,7 +112,7 @@ const PRELUDE = String.raw`(() => {
   const reply = obj => new Response(JSON.stringify(obj), { status: 200, headers: { 'Content-Type': 'application/json' } });
   const gasReply = action => {
     switch (action) {
-      case 'load': return { ok: true, data: JSON.parse(JSON.stringify(SEED)) };
+      case 'load': return { ok: true, data: JSON.parse(JSON.stringify(SEED)), gasVersion: typeof GAS_EXPECTED_VERSION === 'string' ? GAS_EXPECTED_VERSION : undefined };   // GAS version = the app's expected one
       case 'inboxScan': return { ok: true, read: 1, ready: 1, failed: 0, unsupported: 0, remaining: 0 };
       case 'inboxList': return { ok: true, items: [{ fileId: 'f1', kind: '領収書', status: 'ready', fileName: 'r.jpg', data: { date: ymdOf(now), amount: 1100, payee: '文具店' }, confidence: '高' }] };
       case 'driveList': return { ok: true, files: [{ id: 'o1', name: 'old.pdf', processed: false }] };
@@ -773,6 +773,48 @@ const SCENARIO = String.raw`(async () => {
     } finally {
       window.__gasFail = null; closeModal('modal-sync-err');
       S.ledger = S.ledger.filter(x => x.id !== 995); saveLocal(); setSyncStatus('ok');
+    }
+  });
+  await step('GASの版：古い・無い・一致（上部の注意・手順・同期エラーのモーダル。機能は止めない）', async () => {
+    const note = document.getElementById('gas-ver-note');
+    const shown = () => !note.hidden && note.getClientRects().length > 0;
+    const keepS = JSON.parse(JSON.stringify(S));
+    const realFetch = window.fetch;
+    let ver;   // 読み込みの応答に入れる版（undefined＝無い）
+    window.fetch = async (input, init) => {
+      const url = String(input && input.url || input);
+      if (/script[.]google[.]com/.test(url) && /action=load/.test(url)) return new Response(JSON.stringify({ ok: true, data: JSON.parse(JSON.stringify(keepS)), gasVersion: ver }), { status: 200 });
+      return realFetch(input, init);
+    };
+    try {
+      gasUnsent = false;   // 未送信の選ぶ画面を出さずに、読み込みだけを見る
+      ok(!shown(), '一致している版で注意が出る（起動時）');
+      // 古い版：注意が出る・押すと手順・読み込みは成功する
+      ver = '2026-11-01-1'; await loadFromGAS();
+      ok(shown() && /再デプロイが必要/.test(note.textContent), '古い版で注意が出ない');
+      ok(note.getBoundingClientRect().height >= 44, '注意のタップ領域が44px未満');
+      ok(dv2SyncState === 'ok' && (S.projects || []).length === (keepS.projects || []).length, '古い版で読み込みが止まった');
+      note.click();
+      const help = document.getElementById('modal-gas-ver');
+      ok(help.classList.contains('open') && /新バージョン/.test(help.textContent) && /URLは変わりません/.test(help.textContent) && /古い版/.test(document.getElementById('gv-ver').textContent), '手順の画面が開かない');
+      closeModal('modal-gas-ver');
+      openSyncErr();
+      ok(/古い版.*期待/.test(document.getElementById('se-ver').textContent), '同期エラーのモーダルに版の不一致が出ない');
+      closeModal('modal-sync-err');
+      // 連番の比較（-9 より -10 が新しい）
+      ok(cmpGasVersion('2026-11-14-10', '2026-11-14-9') > 0 && cmpGasVersion('2026-11-13-5', '2026-11-14-1') < 0, '版の比較が違う');
+      // 無い：注意が出る
+      ver = undefined; await loadFromGAS();
+      ok(shown() && /版の番号がありません/.test(gasVersionText()), '版の無いGASで注意が出ない');
+      // 一致・より新しい：注意は出ない
+      ver = GAS_EXPECTED_VERSION; await loadFromGAS();
+      ok(!shown() && /一致/.test(gasVersionText()), '一致しているのに注意が出る');
+      ver = GAS_EXPECTED_VERSION + '0'; await loadFromGAS();
+      ok(!shown(), 'GASのほうが新しい時に注意が出る');
+    } finally {
+      window.fetch = realFetch; ver = GAS_EXPECTED_VERSION; setGasVersion(GAS_EXPECTED_VERSION);
+      closeModal('modal-gas-ver'); closeModal('modal-sync-err');
+      S = keepS; saveLocal(); refreshAll();
     }
   });
   await step('古い端末の保存を断る・未送信の入力の保護（版・連続保存・選ぶ画面・控え）', async () => {
