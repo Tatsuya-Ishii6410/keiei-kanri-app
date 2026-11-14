@@ -26,6 +26,7 @@ GitHubリポジトリ：Tatsuya-Ishii6410/keiei-kanri-app
 ## ★ 必ず守る決まり（アプリ）
 - 編集するのは keiei-kanri.html。直したら `cp keiei-kanri.html index.html`。手順は npm test → git diff --stat（削除が多すぎないか）→ コミット → `git pull --rebase` → push
 - .github/workflows/deploy.yml は手元で変えない（ユーザーがGitHubの画面で直す）。gas-code.js を変えたら GAS の再デプロイが要る
+- gas-code.js を変えるコミットでは、GAS_VERSION（YYYY-MM-DD-連番）を上げ、アプリの GAS_EXPECTED_VERSION も同じ値にする（テストが一致を確かめる。古い版のGASにはアプリが再デプロイの注意を出す）
 - 集計は年＋月（絶対月）。売上は案件ベース（発生ベース）、CF管理は口座ベース（ledger）。2系統を混ぜない。実績は isActual で絞る
 - APIキーは GAS のスクリプト プロパティだけ。カレンダー・Gmail は読み取りのみ。数字を作らない（データ不足は「データ不足」と出す）
 - 判定の範囲（@…-rules-begin〜end）はテストが Node で読む。DOM・S を触らない。body の状態クラスは bs- 接頭辞
