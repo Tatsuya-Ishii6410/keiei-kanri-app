@@ -5115,7 +5115,9 @@ function renderProjects(){
   const forecast=pipeline.reduce((a,p)=>a+(mi===null?projectMonthAmount(p,null):projectDefaultMonthly(p)),0);
   document.getElementById('project-total-label').textContent=(mi===null?'全期間':(mi+1)+'月')+'の売上合計';
   ucCountUp(document.getElementById('project-total'),total);
-  document.getElementById('project-total-sub').textContent='対象: '+(mi===null?allBase.length:inMonth.length)+'件（契約済・進行中・完了）';
+  // 全期間で、合計には入っているが終了の非表示で行が出ていない案件があるときだけ、件数の内訳を足す（数字は変えない）
+  const hiddenEnded=mi===null?allBase.filter(p=>marks[p.id]&&marks[p.id].ended&&!marks[p.id].show).length:0;
+  document.getElementById('project-total-sub').textContent='対象: '+(mi===null?allBase.length:inMonth.length)+'件（契約済・進行中・完了'+(hiddenEnded?'。うち終了した案件'+hiddenEnded+'件を含む':'')+'）';
   document.getElementById('project-forecast').textContent=fmt(forecast);
   document.getElementById('project-forecast-sub').textContent='（商談中 '+pipeline.length+'件）';
 

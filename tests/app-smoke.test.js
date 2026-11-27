@@ -220,8 +220,11 @@ const SCENARIO = String.raw`(async () => {
         view('', false);
         ok(tot() === allTotal && cnt() === '2', name + '：全期間の合計・件数に完了が入らない（終了を隠したとき）' + tot() + ' / ' + cnt());
         ok(!!document.querySelector('#project-cards .uc-row[data-project-id="' + p.id + '"]') === shownByDefault, name + '：全期間の行の表示が違う');
+        const sub = document.getElementById('project-total-sub').textContent;
+        ok(shownByDefault ? !/うち終了した案件/.test(sub) : /うち終了した案件1件を含む/.test(sub), name + '：件数行の内訳が違う：' + sub);
         view('', true);
         ok(tot() === allTotal && cnt() === '2' && !!document.querySelector('#project-cards .uc-row[data-project-id="' + p.id + '"]'), name + '：終了を表示したときの合計・件数・行が違う');
+        ok(!/うち終了した案件/.test(document.getElementById('project-total-sub').textContent), name + '：終了を表示しているのに内訳が出る');
       }
     } finally { S.projects = keep; S.monthlyBillings = keepB; const cb = document.getElementById('project-show-ended'); if (cb) cb.checked = false; change('project-month', String(m)); renderProjects(); }
   });
