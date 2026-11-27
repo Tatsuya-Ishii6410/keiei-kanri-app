@@ -899,6 +899,12 @@ const SCENARIO = String.raw`(async () => {
       // 読み込み直す → 未送信の変更があるので、黙って置き換えない
       await retrySyncErr(); await wait(100);
       ok(document.getElementById('modal-unsent').classList.contains('open') && S.company.note === 'stale-edit', '未送信の変更が、読み込みで黙って置き換わった');
+      // 比較の表（Issue #3）：時刻・件数の表・違いが無い時の一文。この端末にだけある案件は名前＋金額で出す
+      const dtxt = () => document.getElementById('us-diff').textContent;
+      ok(/シートの最終保存：/.test(dtxt()) && /この端末の最終変更：/.test(dtxt()) && /案件.*件.*年度/.test(dtxt().replace(/\s+/g, '')) && /件数に違いはありません/.test(dtxt()), '未送信モーダルに比較（時刻・件数の表）が出ない：' + dtxt());
+      S.projects.push({ id: 99991, name: 'DIFFTEST', amount: 1000 }); openUnsentChoice();
+      ok(/この端末にだけあります/.test(dtxt()) && /DIFFTEST（¥1,000）/.test(dtxt()) && document.querySelector('#us-diff .badge') && !/件数に違いはありません/.test(dtxt()), '片方にだけある案件の表示が違う：' + dtxt());
+      S.projects.pop(); openUnsentChoice();
       // ① この端末の内容を送る：先にシートの内容を控えに残す
       localStorage.removeItem('bizapp_stash');
       await unsentSendLocal(); await settle();

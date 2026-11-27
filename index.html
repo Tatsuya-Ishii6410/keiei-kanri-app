@@ -2286,6 +2286,7 @@ body.bs-docview{overflow:hidden}
   <div class="modal-header"><span class="modal-title" id="us-title">この端末に未送信の変更があります</span><button class="btn sm" onclick="closeModal('modal-unsent')" aria-label="閉じる">✕</button></div>
   <div class="alert alert-warning" style="margin-bottom:12px">スプレッドシートの内容と、この端末の内容が違います。どちらを残すか選んでください。選ばなかった方は「控え」として30日残ります（設定 → 同期の控え から、ダウンロード・コピーできます）。</div>
   <div id="us-info" class="se-note" style="margin:0 0 12px"></div>
+  <div id="us-diff" style="margin:0 0 12px"></div>
   <div class="us-choices">
     <button class="btn primary" id="us-send" onclick="unsentSendLocal()">この端末の内容をシートへ送る</button>
     <button class="btn" id="us-sheet" onclick="unsentUseSheet()">シートの内容で置き換える</button>
@@ -3597,6 +3598,7 @@ function saveState(){
   saveLocal();
   gasLocalRev++;
   if(gasEnabled()&&!gasUnsent){gasUnsent=true;saveSyncMeta();}
+  if(gasEnabled()){gasLastChange=Date.now();saveSyncMeta();}   // 未送信モーダルの「この端末の最終変更」用
   scheduleGasSave();
 }
 
@@ -3605,14 +3607,38 @@ function saveState(){
    gasUnsent：この端末にシートへ送れていない変更がある（開き直した時の読み込みで、黙って置き換えない）
    gasWriterId：この画面のID（応答が届かなかった保存の再試行を、GASが古いと判定しないため） */
 const SYNC_META_KEY='bizapp_sync';
-let gasBaseVersion='',gasUnsent=false,gasLocalRev=0,gasConflict=false;
+let gasBaseVersion='',gasUnsent=false,gasLocalRev=0,gasConflict=false,gasLastChange=0;   // gasLastChange：この端末で最後に変更した時刻（ms。0＝記録なし）
 const gasWriterId='w'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 function loadSyncMeta(){
-  try{const m=JSON.parse(localStorage.getItem(SYNC_META_KEY)||'{}')||{};gasBaseVersion=String(m.base||'');gasUnsent=!!m.unsent;}catch(e){}
+  try{const m=JSON.parse(localStorage.getItem(SYNC_META_KEY)||'{}')||{};gasBaseVersion=String(m.base||'');gasUnsent=!!m.unsent;gasLastChange=Number(m.lastChange)||0;}catch(e){}
 }
 function saveSyncMeta(){
-  try{localStorage.setItem(SYNC_META_KEY,JSON.stringify({base:gasBaseVersion,unsent:gasUnsent}));}catch(e){}
+  try{localStorage.setItem(SYNC_META_KEY,JSON.stringify({base:gasBaseVersion,unsent:gasUnsent,lastChange:gasLastChange}));}catch(e){}
 }
+// ===== 端末とシートの違いの比較（未送信モーダル。表示だけ） ===== @sync-diff-rules-begin
+/* テスト（tests/sync-diff.test.js）が切り出して Node で読む。DOM・S を触らない
+   buildSyncDiff(local, remote)：データ（S と同じ形）2つを比べる。
+   返り値 {rows:[{key,label,local,remote,diff}], onlyLocal:{projects|quotes|ledger:{n,items:[ラベル（最大3）]}}, onlyRemote:同左, same:件数も片方だけの項目も差なし}
+   片方だけの判定は id の集合差（id が無い項目は見ない）。settings などの単一オブジェクトは対象外 */
+const SYNC_DIFF_KEYS=[['projects','案件'],['quotes','見積'],['ledger','収支'],['monthlyBillings','月次請求'],['fixedCosts','固定費'],['fiscalYears','年度']];
+function syncDiffYen(n){return'¥'+Math.round(Number(n)||0).toLocaleString('ja-JP');}
+function syncDiffLabel(key,x){
+  if(key==='projects')return `${x.name||'（名前なし）'}（${syncDiffYen(x.amount)}）`;
+  if(key==='quotes')return `${x.client||x.subject||'（宛先なし）'}（${syncDiffYen(x.amount)}）`;
+  return `${x.date||'日付なし'} ${x.desc||''}（${syncDiffYen(x.amount)}）`.replace(/\s+（/,'（');
+}
+function buildSyncDiff(local,remote){
+  const L=local||{},R=remote||{},arr=v=>Array.isArray(v)?v:[];
+  const rows=SYNC_DIFF_KEYS.map(([key,label])=>({key,label,local:arr(L[key]).length,remote:arr(R[key]).length}));
+  rows.forEach(r=>{r.diff=r.local!==r.remote;});
+  const only=(a,b,key)=>{const ids=new Set(arr(b).filter(x=>x&&x.id!=null).map(x=>String(x.id)));
+    const miss=arr(a).filter(x=>x&&x.id!=null&&!ids.has(String(x.id)));
+    return{n:miss.length,items:miss.slice(0,3).map(x=>syncDiffLabel(key,x))};};
+  const onlyLocal={},onlyRemote={};let any=rows.some(r=>r.diff);
+  ['projects','quotes','ledger'].forEach(k=>{onlyLocal[k]=only(L[k],R[k],k);onlyRemote[k]=only(R[k],L[k],k);if(onlyLocal[k].n||onlyRemote[k].n)any=true;});
+  return{rows,onlyLocal,onlyRemote,same:!any};
+}
+// ===== @sync-diff-rules-end
 loadSyncMeta();
 
 /* ===== Google Sheets 同期 ========================================== */
@@ -3868,7 +3894,27 @@ let syncPendingRemote=null;   // 未送信の変更がある時に読み込ん�
 function openUnsentChoice(){
   const el=document.getElementById('us-info');
   if(el)el.textContent=`この端末の最後の保存：${syncTimeStr(syncLastOkAt)}　／　未送信のまま閉じた、または別の端末で更新されました。`;
+  const dv=document.getElementById('us-diff');
+  if(dv)dv.innerHTML=syncPendingRemote?unsentDiffHtml(buildSyncDiff(S,syncPendingRemote.data),syncPendingRemote.ver):'';
   openModal('modal-unsent');
+}
+// 未送信モーダルの比較（時刻・件数の表・片方にだけある項目）。表示だけ
+function unsentDiffHtml(d,ver){
+  const sheetAt=/^\d{12,}$/.test(String(ver||''))?syncTimeStr(new Date(Number(ver))):(ver||'記録なし');
+  const localAt=gasLastChange?syncTimeStr(new Date(gasLastChange)):'記録なし';
+  let h=`<div class="us-times"><div>シートの最終保存：${escAttr(sheetAt)}</div><div>この端末の最終変更：${escAttr(localAt)}</div></div>`;
+  h+='<table class="us-diff-table" style="width:100%;border-collapse:collapse;margin:8px 0;font-size:13px"><thead><tr><th style="text-align:left">項目</th><th style="text-align:right">この端末</th><th style="text-align:right">シート</th><th></th></tr></thead><tbody>';
+  d.rows.forEach(r=>{h+=`<tr${r.diff?' style="font-weight:700"':''}><td>${r.label}</td><td style="text-align:right">${r.local}件</td><td style="text-align:right">${r.remote}件</td><td>${r.diff?'<span class="badge badge-amber">違い</span>':''}</td></tr>`;});
+  h+='</tbody></table>';
+  const lists=(o,title)=>{
+    const parts=[];
+    [['projects','案件'],['quotes','見積'],['ledger','収支']].forEach(([k,name])=>{const x=o[k];
+      if(x&&x.n)parts.push(`<div>${name}：${x.items.map(escAttr).join('、')}${x.n>x.items.length?`　ほか${x.n-x.items.length}件`:''}</div>`);});
+    return parts.length?`<div class="us-only"><b>${title}</b>${parts.join('')}</div>`:'';
+  };
+  h+=lists(d.onlyLocal,'この端末にだけあります')+lists(d.onlyRemote,'シートにだけあります');
+  if(d.same)h+='<div class="se-note">件数に違いはありません。金額や内容の変更だけの可能性があります。</div>';
+  return h;
 }
 // ① この端末の内容をシートへ送る（先にシートの内容を控えに残す）
 async function unsentSendLocal(){
