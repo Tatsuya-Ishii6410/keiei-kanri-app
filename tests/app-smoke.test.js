@@ -199,6 +199,32 @@ const SCENARIO = String.raw`(async () => {
     deleteProject(1); window.confirm = conf;
     ok(asked && S.projects.length === n0, '案件の削除に確認が出ない');
   });
+  // Issue #1：「完了」の案件は、全期間でも今月に掛かれば通常どおり出て、合計・件数に入る（終了の表示のオンオフに関係なく）。月表示はダッシュボードと一致
+  await step('案件管理：完了案件（Issue #1）', async () => {
+    const keep = S.projects, keepB = S.monthlyBillings, d = new Date(), y = d.getFullYear(), m = d.getMonth(), nowAbs = y * 12 + m;
+    const day = (k) => { const x = new Date(y, m + k, 1); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-01'; };
+    const mk = (id, status, contract, amount, s, e) => ({ id, name: 'ISSUE1-' + id, client: 'Z' + id, status, contract, amount, start: day(s), end: day(e), invoiceStatus: 'uninvoiced' });
+    const tot = () => Number(document.getElementById('project-total').dataset.ucV), cnt = () => (document.getElementById('project-total-sub').textContent.match(/対象: (\d+)件/) || [])[1];
+    const view = (mon, showEnded) => { change('project-month', mon); const cb = document.getElementById('project-show-ended'); if (cb) cb.checked = showEnded; renderProjects(); };
+    try {
+      const base = mk(9100, '進行中', 'monthly', 300000, -3, 6);
+      const cases = [
+        ['(A)完了・月次・今月に掛かる', mk(9101, '完了', 'monthly', 40000, -1, 1), 340000, 3120000, true],
+        ['(B)完了・先月で終了', mk(9102, '完了', 'monthly', 40000, -4, -1), 300000, 3160000, false],
+        ['(C)完了・単発・開始が今月', mk(9103, '完了', 'single', 120000, 0, 0), 420000, 3120000, true],
+        ['(C)完了・単発・開始が先月', mk(9104, '完了', 'single', 120000, -1, -1), 300000, 3120000, false]];
+      for (const [name, p, monthSales, allTotal, shownByDefault] of cases) {
+        S.projects = [JSON.parse(JSON.stringify(base)), p]; S.monthlyBillings = []; syncMonthlyBillings();
+        view(String(m), false);
+        ok(tot() === projectSalesAtAbsTotal(nowAbs) && tot() === monthSales, name + '：月表示の合計がダッシュボードと違う ' + tot() + ' / ' + projectSalesAtAbsTotal(nowAbs));
+        view('', false);
+        ok(tot() === allTotal && cnt() === '2', name + '：全期間の合計・件数に完了が入らない（終了を隠したとき）' + tot() + ' / ' + cnt());
+        ok(!!document.querySelector('#project-cards .uc-row[data-project-id="' + p.id + '"]') === shownByDefault, name + '：全期間の行の表示が違う');
+        view('', true);
+        ok(tot() === allTotal && cnt() === '2' && !!document.querySelector('#project-cards .uc-row[data-project-id="' + p.id + '"]'), name + '：終了を表示したときの合計・件数・行が違う');
+      }
+    } finally { S.projects = keep; S.monthlyBillings = keepB; const cb = document.getElementById('project-show-ended'); if (cb) cb.checked = false; change('project-month', String(m)); renderProjects(); }
+  });
   await step('請求書の下書き作成', async () => {
     syncMonthlyBillings();
     const ym = localToday().slice(0, 7);

@@ -3042,7 +3042,8 @@ const STORAGE_KEY='bizapp_v1';
    ・単発：開始月（＝売上月）だけ
    ・繰越：選択月より前の請求レコードが、請求済み・未入金（invoiced）なら、期間外でも出す（carryMark の印。表示だけで、売上には足さない）
    ・終了した案件も表示（初期はオフ）：選択月より前に期間が終わった案件も出す（ended の印）。
-     全期間では、今月より前に期間が終わった案件と、状態が「完了」の案件を、オンのときだけ出す（繰越があれば出す）
+     全期間では、今月より前に期間が終わった案件だけを終了とし、オンのときだけ出す（繰越があれば出す）。
+     状態が「完了」というだけでは終了にしない（今月に掛かる完了案件は、ほかの案件と同じに出す。Issue #1）
    返り値 {show, inRange, carry:[請求月…], carryMark, noEnd, ended} */
 const PROJECT_LIST_STATUSES=['契約済','進行中','完了'];
 function absYm(a){return Math.floor(a/12)+'-'+String(a%12+1).padStart(2,'0');}
@@ -3056,7 +3057,7 @@ function projectListState(p,abs,range,billings,opt){
   out.carry=refYm?(billings||[]).filter(b=>b.projectId===p.id&&b.invoiceStatus==='invoiced'&&String(b.billingMonth||'')<refYm)
     .map(b=>b.billingMonth).sort():[];
   if(all){
-    out.ended=p.status==='完了'||(!!range&&ref!==null&&ref!==undefined&&range[1]<ref);
+    out.ended=!!range&&ref!==null&&ref!==undefined&&range[1]<ref;
     out.inRange=true;
     out.carryMark=out.ended&&out.carry.length>0;
     out.show=!out.ended||out.carry.length>0||!!o.showEnded;
@@ -5106,14 +5107,15 @@ function renderProjects(){
   });
 
   // 合計カード（表示だけ）：選んだ月は、期間内の案件のその月の売上（projectSalesAtAbs＝ダッシュボードと同じ）。繰越・終了の印の案件は足さない。
-  // 全期間は従来どおり projectMonthAmount。見込み（商談中）は見込みタブの案件で、その月に掛かるもの
+  // 全期間は projectMonthAmount の契約総額。終了案件の表示（showEnded）とは切り離し、billableProject（契約済・進行中・完了）を全部数える（請求状態フィルタだけは従来どおり連動。Issue #1）。見込み（商談中）は見込みタブの案件で、その月に掛かるもの
   const inMonth=list.filter(p=>marks[p.id].inRange);
-  const total=mi===null?list.reduce((a,p)=>a+projectMonthAmount(p,null),0):inMonth.reduce((a,p)=>a+projectSalesAtAbs(p,abs),0);
+  const allBase=mi===null?S.projects.filter(p=>billableProject(p)&&(!inv||invoiceStatusOf(p)===inv)):null;
+  const total=mi===null?allBase.reduce((a,p)=>a+projectMonthAmount(p,null),0):inMonth.reduce((a,p)=>a+projectSalesAtAbs(p,abs),0);
   const pipeline=S.projects.filter(p=>p.status==='商談中'&&(mi===null||projectCoversAbs(p,abs)));
   const forecast=pipeline.reduce((a,p)=>a+(mi===null?projectMonthAmount(p,null):projectDefaultMonthly(p)),0);
   document.getElementById('project-total-label').textContent=(mi===null?'全期間':(mi+1)+'月')+'の売上合計';
   ucCountUp(document.getElementById('project-total'),total);
-  document.getElementById('project-total-sub').textContent='対象: '+inMonth.length+'件（契約済・進行中・完了）';
+  document.getElementById('project-total-sub').textContent='対象: '+(mi===null?allBase.length:inMonth.length)+'件（契約済・進行中・完了）';
   document.getElementById('project-forecast').textContent=fmt(forecast);
   document.getElementById('project-forecast-sub').textContent='（商談中 '+pipeline.length+'件）';
 

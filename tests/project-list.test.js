@@ -113,9 +113,9 @@ test('終了した案件も表示：オンのときだけ、期間が終わっ�
 
 console.log('全期間');
 
-test('全期間：今月より前に終わった案件と「完了」はオフでは出さない。繰越があれば出す', () => {
+test('全期間：今月より前に終わった案件はオフでは出さない（状態が完了でも、今月に掛かれば出す）。繰越があれば出す', () => {
   assert.strictEqual(st(P({ start: '2026-05-01', end: '2026-10-31', status: '進行中' }), null).show, false);
-  assert.strictEqual(st(P({ start: '2026-05-01', end: '2027-03-31', status: '完了' }), null).show, false);
+  assert.strictEqual(st(P({ start: '2026-05-01', end: '2027-03-31', status: '完了' }), null).show, true);
   assert.strictEqual(st(P({ start: '2026-05-01', end: '2027-03-31', status: '進行中' }), null).show, true);
   assert.strictEqual(st(P({ start: '2026-05-01', end: '2026-10-31', status: '完了' }), null, [], { showEnded: true }).show, true);
   const c = st(P({ id: 3, start: '2026-05-01', end: '2026-10-31', status: '完了' }), null, [{ projectId: 3, billingMonth: '2026-10', invoiceStatus: 'invoiced' }]);
@@ -124,6 +124,28 @@ test('全期間：今月より前に終わった案件と「完了」はオフ�
   // 開始日が無い案件（期間が分からない）は、全期間でだけ出す
   assert.strictEqual(st(P({ start: '' }), null).show, true);
   assert.strictEqual(st(P({ start: '' }), NOV).show, false);
+});
+
+test('Issue #1 (A) 全期間：完了でも今月に掛かる案件は終了にしない（月次・単発）', () => {
+  const m = st(P({ start: '2026-10-01', end: '2026-12-31', status: '完了' }), null);
+  assert.strictEqual(m.ended, false); assert.strictEqual(m.show, true);
+  const s = st(P({ contract: 'single', start: '2026-11-10', status: '完了' }), null);
+  assert.strictEqual(s.ended, false); assert.strictEqual(s.show, true);
+  assert.strictEqual(st(P({ start: '2026-10-01', end: '2026-12-31', status: '進行中' }), null).show, true);
+});
+
+test('Issue #1 (B) 月表示：完了の判定は変えない（今月に掛かれば出る・先月で終了なら出ない）', () => {
+  assert.strictEqual(st(P({ start: '2026-10-01', end: '2026-12-31', status: '完了' }), NOV).show, true);
+  assert.strictEqual(st(P({ start: '2026-07-01', end: '2026-10-31', status: '完了' }), NOV).show, false);
+  assert.strictEqual(st(P({ start: '2026-07-01', end: '2026-10-31', status: '完了' }), NOV, [], { showEnded: true }).ended, true);
+});
+
+test('Issue #1 (C) 単発の完了：開始が今月なら今月に出る・先月開始は今月に出ない／全期間では先月開始だけ終了', () => {
+  assert.strictEqual(st(P({ contract: 'single', start: '2026-11-05', status: '完了' }), NOV).inRange, true);
+  assert.strictEqual(st(P({ contract: 'single', start: '2026-10-05', status: '完了' }), NOV).show, false);
+  assert.strictEqual(st(P({ contract: 'single', start: '2026-10-05', status: '完了' }), null).ended, true);
+  assert.strictEqual(st(P({ contract: 'single', start: '2026-10-05', status: '完了' }), null).show, false);
+  assert.strictEqual(st(P({ contract: 'single', start: '2026-11-05', status: '完了' }), null).ended, false);
 });
 
 console.log('一括請求書作成・一括ステータス変更の対象（projectInMonth）');
