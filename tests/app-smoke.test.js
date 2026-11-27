@@ -225,6 +225,10 @@ const SCENARIO = String.raw`(async () => {
         view('', true);
         ok(tot() === allTotal && cnt() === '2' && !!document.querySelector('#project-cards .uc-row[data-project-id="' + p.id + '"]'), name + '：終了を表示したときの合計・件数・行が違う');
         ok(!/うち終了した案件/.test(document.getElementById('project-total-sub').textContent), name + '：終了を表示しているのに内訳が出る');
+        // 売上月の注記：単発で開始月が今月でないときだけ「売上月：YYYY年M月」（カード・表の両方）。月次と今月開始の単発では出ない
+        const sd = new Date(p.start), label = '売上月：' + sd.getFullYear() + '年' + (sd.getMonth() + 1) + '月', wantNote = p.contract === 'single' && (sd.getFullYear() * 12 + sd.getMonth()) !== nowAbs;
+        const cardTxt = (document.querySelector('#project-cards .uc-row[data-project-id="' + p.id + '"]') || {}).textContent || '', tableTxt = [...document.querySelectorAll('#project-list > tr')].filter(tr => tr.textContent.includes('ISSUE1-' + p.id)).map(tr => tr.textContent).join('');
+        ok(wantNote ? (cardTxt.includes(label) && tableTxt.includes(label)) : (!/売上月：/.test(cardTxt) && !/売上月：/.test(tableTxt)), name + '：売上月の注記が違う（' + label + '／' + wantNote + '）');
       }
     } finally { S.projects = keep; S.monthlyBillings = keepB; const cb = document.getElementById('project-show-ended'); if (cb) cb.checked = false; change('project-month', String(m)); renderProjects(); }
   });

@@ -3044,18 +3044,21 @@ const STORAGE_KEY='bizapp_v1';
    ・終了した案件も表示（初期はオフ）：選択月より前に期間が終わった案件も出す（ended の印）。
      全期間では、今月より前に期間が終わった案件だけを終了とし、オンのときだけ出す（繰越があれば出す）。
      状態が「完了」というだけでは終了にしない（今月に掛かる完了案件は、ほかの案件と同じに出す。Issue #1）
-   返り値 {show, inRange, carry:[請求月…], carryMark, noEnd, ended} */
+   ・売上月の注記（saleMonth）：単発で、基準月（月表示＝選んだ月／全期間＝今月）と開始月が違うときだけ、開始月（絶対月）。それ以外は null
+   返り値 {show, inRange, carry:[請求月…], carryMark, saleMonth, noEnd, ended} */
 const PROJECT_LIST_STATUSES=['契約済','進行中','完了'];
 function absYm(a){return Math.floor(a/12)+'-'+String(a%12+1).padStart(2,'0');}
 function projectListState(p,abs,range,billings,opt){
   const o=opt||{};
-  const out={show:false,inRange:false,carry:[],carryMark:false,noEnd:p.contract!=='single'&&!p.end&&!!range,ended:false};
+  const out={show:false,inRange:false,carry:[],carryMark:false,saleMonth:null,noEnd:p.contract!=='single'&&!p.end&&!!range,ended:false};
   if(PROJECT_LIST_STATUSES.indexOf(p.status)<0)return out;
   const all=abs===null||abs===undefined;
   const ref=all?o.nowAbs:abs;
   const refYm=ref===null||ref===undefined?null:absYm(ref);
   out.carry=refYm?(billings||[]).filter(b=>b.projectId===p.id&&b.invoiceStatus==='invoiced'&&String(b.billingMonth||'')<refYm)
     .map(b=>b.billingMonth).sort():[];
+  // 単発で、基準月（月表示＝選んだ月／全期間＝今月）と売上月（開始月）が違うときだけ、売上月（絶対月）を持たせる（注記だけ。判定は変えない）
+  if(p.contract==='single'&&!!range&&ref!==null&&ref!==undefined&&range[0]!==ref)out.saleMonth=range[0];
   if(all){
     out.ended=!!range&&ref!==null&&ref!==undefined&&range[1]<ref;
     out.inRange=true;
@@ -5293,6 +5296,7 @@ function projectMarksHtml(st){
   if(st.carryMark)m.push(`<span class="badge badge-amber">繰越（${st.carry.map(ym=>+ym.slice(5,7)+'月').join('・')}分 請求済・未入金）</span>`);
   else if(st.ended&&!(st.inRange&&currentProjectMonth()!==null))m.push('<span class="badge badge-gray">終了</span>');
   if(st.noEnd)m.push('<span class="badge badge-gray">終了日が未設定（売上は開始月のみ）</span>');
+  if(st.saleMonth!==null&&st.saleMonth!==undefined)m.push(`<span class="badge badge-gray">売上月：${Math.floor(st.saleMonth/12)}年${st.saleMonth%12+1}月</span>`);
   return m.length?`<div class="pj-marks">${m.join('')}</div>`:'';
 }
 

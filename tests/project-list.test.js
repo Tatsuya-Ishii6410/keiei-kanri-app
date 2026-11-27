@@ -148,6 +148,21 @@ test('Issue #1 (C) 単発の完了：開始が今月なら今月に出る・先�
   assert.strictEqual(st(P({ contract: 'single', start: '2026-11-05', status: '完了' }), null).ended, false);
 });
 
+test('Issue #1 売上月の注記（saleMonth）：単発で基準月≠開始月のときだけ。月次・年次は常に対象外。判定は変えない', () => {
+  const s = P({ contract: 'single', start: '2026-10-05', status: '完了' });
+  assert.strictEqual(st(s, NOV).saleMonth, OCT);            // 月表示：選んだ月≠売上月
+  assert.strictEqual(st(s, OCT).saleMonth, null);           // 月表示：同じ月
+  assert.strictEqual(st(s, null).saleMonth, OCT);           // 全期間：基準＝今月（NOV）
+  assert.strictEqual(st(P({ contract: 'single', start: '2026-11-05' }), null).saleMonth, null);
+  assert.strictEqual(st(P({ contract: 'single', start: '2026-11-05' }), NOV).saleMonth, null);
+  ['契約済', '進行中', '完了'].forEach(x => assert.strictEqual(st(P({ contract: 'single', start: '2026-10-05', status: x }), NOV).saleMonth, OCT, x));
+  assert.strictEqual(st(P({ contract: 'single', start: '' }), NOV).saleMonth, null);   // 開始日なし
+  ['monthly', 'yearly'].forEach(c => [NOV, OCT, null].forEach(a => assert.strictEqual(st(P({ contract: c, start: '2026-05-01', end: '2027-03-31' }), a).saleMonth, null, c)));
+  // 表示の判定は注記の有無で変わらない
+  assert.strictEqual(st(s, NOV).show, false);
+  assert.strictEqual(st(s, null).show, false);
+});
+
 console.log('一括請求書作成・一括ステータス変更の対象（projectInMonth）');
 
 test('年＋月で、その月が契約期間に入るときだけ', () => {
